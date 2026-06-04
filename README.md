@@ -110,6 +110,34 @@ smart-contable/
 ```
 
 ---
+=======
+# SmartContable
+
+SmartContable es una plataforma SaaS para automatización fiscal y contable en México.
+
+## Funcionalidades
+
+- Gestión de facturas CFDI
+- Generación de pólizas
+- Conciliación bancaria
+- Reportes financieros
+- Multiempresa
+- Inteligencia Fiscal (Roadmap)
+
+## Tecnologías
+
+### Backend
+
+- FastAPI
+- SQLAlchemy
+- MySQL
+
+### Frontend
+
+- React
+- Vite
+- TailwindCSS
+>>>>>>> 60c71d7 (feat: estructura base para integraciones)
 
 ## Instalación
 
@@ -117,6 +145,7 @@ smart-contable/
 
 ```bash
 cd backend
+<<<<<<< HEAD
 
 python -m venv venv
 
@@ -188,3 +217,7 @@ Actualmente enfocado en:
 **Eduardo Vázquez**
 
 Proyecto desarrollado como plataforma contable moderna para automatizar procesos financieros y fiscales en México.
+=======
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+>>>>>>> 60c71d7 (feat: estructura base para integraciones)
