@@ -5,7 +5,6 @@ class FacturaResponse(BaseModel):
     id: int
     uuid: str
     emisor: str
-    total: float
     fecha: str
     cuenta_contable: str
     total: float

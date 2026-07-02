@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
 import ClassifyModal from '../components/ClassifyModal';
 import FacturaDetailModal from '../components/FacturaDetailModal';
+import ExportPreviewModal from '../components/ExportPreviewModal';
 import PolizasPanel from '../components/PolizasPanel';
 import ComisionesBancoPanel from '../components/ComisionesBancoPanel';
 import ConciliacionBancariaPanel from '../components/ConciliacionBancariaPanel';
@@ -131,6 +132,10 @@ const CompanyDetail = () => {
   const [deletingId, setDeletingId] = useState(null);
   const [filtroMovimiento, setFiltroMovimiento] = useState('todos');
   const [exportandoEmpresa, setExportandoEmpresa] = useState(false);
+  const [tipoExportacion, setTipoExportacion] = useState('todo');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewContent, setPreviewContent] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchDatos = useCallback(async () => {
     try {
@@ -157,14 +162,18 @@ const CompanyDetail = () => {
     fetchDatos();
   }, [fetchDatos]);
 
-  const handleExportarEmpresa = async () => {
+  const downloadExport = async () => {
     setExportandoEmpresa(true);
     try {
-      const res = await api.get(`/empresas/${id}/exportar`, { responseType: 'blob' });
+      const res = await api.get(`/empresas/${id}/exportar-csv`, {
+        params: { tipo: tipoExportacion },
+        responseType: 'blob',
+      });
       const nombre = filenameFromContentDisposition(res.headers['content-disposition'])
-        || `SmartContable_${empresa?.rfc || id}.zip`;
+        || `SmartContable_${empresa?.rfc || id}.csv`;
       downloadBlob(res.data, nombre);
-      toast.success('ZIP con archivos CSV descargado');
+      toast.success('CSV descargado - Listo para Google Sheets');
+      setIsPreviewOpen(false);
     } catch (err) {
       let mensaje = 'No se pudo exportar la empresa';
       const data = err.response?.data;
@@ -181,6 +190,27 @@ const CompanyDetail = () => {
       toast.error(mensaje);
     } finally {
       setExportandoEmpresa(false);
+    }
+  };
+
+  const handlePreviewExport = async () => {
+    setPreviewLoading(true);
+    setPreviewContent('');
+    setIsPreviewOpen(true);
+    try {
+      const res = await api.get(`/empresas/${id}/exportar-csv`, {
+        params: { tipo: tipoExportacion },
+        responseType: 'blob',
+      });
+      const text = await res.data.text();
+      const preview = text.split('\n').slice(0, 80).join('\n');
+      setPreviewContent(preview || 'No hay contenido para mostrar.');
+    } catch (err) {
+      const mensaje = err.response?.data?.detail || 'No se pudo generar la vista previa';
+      setPreviewContent(`Error: ${mensaje}`);
+      toast.error(mensaje);
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -651,20 +681,74 @@ const CompanyDetail = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               {selectorPeriodo}
+              <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5">
+                <label className="text-xs font-semibold text-slate-400">Descargar</label>
+                <select
+                  value={tipoExportacion}
+                  onChange={(e) => setTipoExportacion(e.target.value)}
+                  className="bg-transparent text-sm text-white outline-none"
+                >
+                  <option value="todo">Todo</option>
+                  <option value="resumen">Resumen</option>
+                  <option value="empresa">Empresa</option>
+                  <option value="facturas">Facturas</option>
+                  <option value="ingresos">Ingresos</option>
+                  <option value="egresos">Egresos</option>
+                  <option value="polizas">Pólizas</option>
+                  <option value="movimientos">Movimientos</option>
+                  <option value="mapeos">Mapeos</option>
+                  <option value="comisiones">Comisiones</option>
+                  <option value="contable">Contable</option>
+                </select>
+              </div>
               <button
                 type="button"
-                onClick={handleExportarEmpresa}
+                onClick={handlePreviewExport}
                 disabled={exportandoEmpresa || loading}
                 className="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm text-white disabled:opacity-50"
-                title="ZIP con CSV: empresa, facturas, pólizas y más"
               >
-                {exportandoEmpresa ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Download className="w-5 h-5" />
-                )}
-                Descargar todo
+                <FileText className="w-5 h-5" />
+                Ver en pantalla
               </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={downloadExport}
+                  disabled={exportandoEmpresa || loading}
+                  className="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm text-white disabled:opacity-50"
+                  title="CSV consolidado: empresa, facturas, pólizas, movimientos - Abre en Google Sheets"
+                >
+                  {exportandoEmpresa ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Download className="w-5 h-5" />
+                  )}
+                  CSV
+                </button>
+                <div className="absolute right-0 mt-2 w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+                  <button
+                    type="button"
+                    onClick={() => { setTipoExportacion('todo'); downloadExport(); }}
+                    className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTipoExportacion('ingresos'); downloadExport(); }}
+                    className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                  >
+                    Ingresos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTipoExportacion('egresos'); downloadExport(); }}
+                    className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                  >
+                    Egresos
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(true)}
@@ -736,6 +820,14 @@ const CompanyDetail = () => {
         factura={selectedFactura}
         onPolizaGenerada={handleRefresh}
         onEliminada={handleRefresh}
+      />
+      <ExportPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        title={`Vista previa · ${tipoExportacion}`}
+        content={previewContent}
+        loading={previewLoading}
+        onDownload={downloadExport}
       />
     </div>
   );

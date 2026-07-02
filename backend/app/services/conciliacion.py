@@ -205,17 +205,18 @@ def conciliar_periodo(
     mes: int,
     anio: int,
     tolerancia: float = 1.0,
+    banco_id: int | None = None,
 ) -> dict:
-    movimientos = (
-        db.query(MovimientoBanco)
-        .filter(
-            MovimientoBanco.empresa_id == empresa_id,
-            extract("month", MovimientoBanco.fecha) == mes,
-            extract("year", MovimientoBanco.fecha) == anio,
-        )
-        .order_by(MovimientoBanco.fecha.asc())
-        .all()
+    query = db.query(MovimientoBanco).filter(
+        MovimientoBanco.empresa_id == empresa_id,
+        extract("month", MovimientoBanco.fecha) == mes,
+        extract("year", MovimientoBanco.fecha) == anio,
     )
+    
+    if banco_id:
+        query = query.filter(MovimientoBanco.banco_id == banco_id)
+    
+    movimientos = query.order_by(MovimientoBanco.fecha.asc()).all()
     polizas = _polizas_conciliables(db, empresa_id, mes, anio)
 
     polizas_disponibles = polizas.copy()

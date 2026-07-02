@@ -13,32 +13,99 @@ from app.services.cfdi_helpers import (
     FORMAS_PAGO_TARJETA,
 )
 from app.services.comisiones import calcular_comision_bancaria
+from app.core.logging_config import get_logger
+from app.core.exceptions import UnbalancedVoucherException
 from decimal import Decimal
+
+logger = get_logger(__name__)
 
 # ─────────────────────────────────────────
 # VALIDACIONES CONTABLES
 # ─────────────────────────────────────────
 
 def validar_partida_doble(movimientos):
-    total_debe = sum(Decimal(str(m.debe or 0)) for m in movimientos)
-    total_haber = sum(Decimal(str(m.haber or 0)) for m in movimientos)
-    if round(total_debe, 2) != round(total_haber, 2):
-        raise ValueError(
-            f"Póliza desbalanceada | Debe={total_debe} Haber={total_haber}"
-        )
+    """
+    Validate that voucher (póliza) balances (Debe = Haber)
+    
+    Args:
+        movimientos: List of MovimientoPoliza objects
+    
+    Raises:
+        UnbalancedVoucherException: If Debe != Haber
+    """
+    try:
+        total_debe = sum(Decimal(str(m.debe or 0)) for m in movimientos)
+        total_haber = sum(Decimal(str(m.haber or 0)) for m in movimientos)
+        
+        # Round to 2 decimal places for currency comparison
+        if round(total_debe, 2) != round(total_haber, 2):
+            logger.error(
+                "Unbalanced voucher",
+                extra={
+                    "debe": float(total_debe),
+                    "haber": float(total_haber)
+                }
+            )
+            raise UnbalancedVoucherException(
+                f"Debe: {total_debe}, Haber: {total_haber}"
+            )
+    except UnbalancedVoucherException:
+        raise
+    except Exception as e:
+        logger.error("Error validating double-entry", exc_info=True)
+        raise UnbalancedVoucherException(
+            "Error al validar partida doble"
+        ) from e
 
 
-def obtener_cuenta_inteligente(db: Session, rfc: str, empresa_id: int, clave_sat: str) -> dict:
-    mapeo = db.query(MapeoCuenta).filter(
-        MapeoCuenta.rfc_emisor == rfc,
-        MapeoCuenta.empresa_id == empresa_id,
-    ).first()
-    if mapeo:
+def obtener_cuenta_inteligente(
+    db: Session,
+    rfc: str,
+    empresa_id: int,
+    clave_sat: str
+) -> dict:
+    """
+    Prioridad de clasificación:
+    1. Mapeo manual RFC → cuenta definido por el usuario para esta empresa
+    2. Clasificación automática por clave SAT del catálogo del SAT
+    3. Fallback a Gastos Generales
+    
+    Args:
+        db: Database session
+        rfc: RFC of the issuer
+        empresa_id: ID of the empresa
+        clave_sat: SAT product/service code
+    
+    Returns:
+        Dictionary with "cuenta" and "nombre" keys
+    """
+    try:
+        # 1. Mapeo manual por RFC del proveedor
+        mapeo = db.query(MapeoCuenta).filter(
+            MapeoCuenta.rfc_emisor == rfc,
+            MapeoCuenta.empresa_id == empresa_id,
+        ).first()
+        
+        if mapeo and mapeo.codigo_cuenta:
+            logger.debug(
+                "Account mapped by RFC",
+                extra={"rfc": rfc, "cuenta": mapeo.codigo_cuenta}
+            )
+            return {
+                "cuenta": mapeo.codigo_cuenta,
+                "nombre": mapeo.nombre_cuenta or "Gasto clasificado",
+            }
+
+        # 2. Clasificación por clave SAT
+        return obtener_cuenta_por_clave_sat(db, clave_sat)
+        
+    except Exception as e:
+        logger.error("Error obtaining intelligent account", exc_info=True)
+        # Return fallback account
         return {
-            "cuenta": mapeo.codigo_cuenta or "601.01.01",
-            "nombre": mapeo.nombre_cuenta,
+            "cuenta": "601.01.01",
+            "nombre": "Gastos Generales"
         }
-    return obtener_cuenta_por_clave_sat(db, clave_sat)
 
 
 CUENTAS = {

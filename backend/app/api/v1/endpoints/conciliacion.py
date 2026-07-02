@@ -48,6 +48,7 @@ def obtener_conciliacion(
     empresa_id: int,
     mes: int | None = Query(None, ge=1, le=12),
     anio: int | None = Query(None, ge=2000, le=2100),
+    banco_id: int | None = None,
     tolerancia: float = Query(1.0, ge=0),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
@@ -56,7 +57,7 @@ def obtener_conciliacion(
     _validar_empresa(db, empresa_id, current_user)
     mes_f, anio_f = _periodo_default(mes, anio)
     _validar_periodo(mes_f, anio_f)
-    return conciliar_periodo(db, empresa_id, mes_f, anio_f, tolerancia)
+    return conciliar_periodo(db, empresa_id, mes_f, anio_f, tolerancia, banco_id)
 
 
 @router.post("/estado-cuenta", status_code=201)

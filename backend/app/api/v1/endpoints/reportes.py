@@ -4,6 +4,7 @@ from app.models.usuario import Usuario
 from app.models.empresa import Empresa
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
+from sqlalchemy import distinct
 
 from app.core.database import get_db
 from app.models.poliza import MovimientoPoliza, Poliza
@@ -160,22 +161,11 @@ def obtener_desglose_gastos(
     mes: int,
     anio: int,
     empresa_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
-    # ─────────────────────────────────────
-    # Validaciones
-    # ─────────────────────────────────────
-    if mes < 1 or mes > 12:
-        raise HTTPException(
-            status_code=400,
-            detail="Mes inválido"
-        )
-
-    if anio < 2000 or anio > 2100:
-        raise HTTPException(
-            status_code=400,
-            detail="Año inválido"
-        )
+    validar_empresa_usuario(db, empresa_id, current_user.id)
+    validar_periodo(mes, anio)
 
     # ─────────────────────────────────────
     # Consulta de gastos
@@ -238,171 +228,48 @@ def obtener_kpis(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
+    # 1. Validaciones centralizadas usando las utilidades del core
+    validar_empresa_usuario(db, empresa_id, current_user.id)
+    validar_periodo(mes, anio)
 
-    # ─────────────────────────────────────
-    # VALIDAR EMPRESA DEL USUARIO
-    # ─────────────────────────────────────
-    empresa = db.query(Empresa).filter(
-        Empresa.id == empresa_id,
-        Empresa.usuario_id == current_user.id
-    ).first()
-
-    if not empresa:
-        raise HTTPException(
-            status_code=403,
-            detail="No tienes acceso a esta empresa"
-        )
-
-    # ─────────────────────────────────────
-    # VALIDAR MES
-    # ─────────────────────────────────────
-    if mes < 1 or mes > 12:
-        raise HTTPException(
-            status_code=400,
-            detail="Mes inválido"
-        )
-
-    # ─────────────────────────────────────
-    # VALIDAR AÑO
-    # ─────────────────────────────────────
-    if anio < 2000 or anio > 2100:
-        raise HTTPException(
-            status_code=400,
-            detail="Año inválido"
-        )
-
-    # ─────────────────────────────────────
-    # INGRESOS
-    # ─────────────────────────────────────
-    ingresos = db.query(
-        func.sum(MovimientoPoliza.haber)
-    ).join(
-        Poliza
-    ).filter(
-        Poliza.empresa_id == empresa_id,
-        Poliza.mes == mes,
-        Poliza.anio == anio,
-        MovimientoPoliza.cuenta.like('4%')
-    ).scalar() or 0
-
-    # ─────────────────────────────────────
-    # GASTOS
-    # ─────────────────────────────────────
-    gastos = db.query(
-        func.sum(MovimientoPoliza.debe)
-    ).join(
-        Poliza
-    ).filter(
-        Poliza.empresa_id == empresa_id,
-        Poliza.mes == mes,
-        Poliza.anio == anio,
-        MovimientoPoliza.cuenta.like('6%')
-    ).scalar() or 0
-
-    # ─────────────────────────────────────
-    # IVA TRASLADADO
-    # ─────────────────────────────────────
-    iva_trasladado = db.query(
-        func.sum(MovimientoPoliza.haber)
-    ).join(
-        Poliza
-    ).filter(
-        Poliza.empresa_id == empresa_id,
-        Poliza.mes == mes,
-        Poliza.anio == anio,
-        MovimientoPoliza.cuenta.like('216.01%')
-    ).scalar() or 0
-
-    # ─────────────────────────────────────
-    # IMPUESTOS LOCALES
-    # ─────────────────────────────────────
-    impuestos_locales = db.query(
-        func.sum(MovimientoPoliza.haber)
-    ).join(
-        Poliza
-    ).filter(
-        Poliza.empresa_id == empresa_id,
-        Poliza.mes == mes,
-        Poliza.anio == anio,
-        MovimientoPoliza.cuenta.like('216.04%')
-    ).scalar() or 0
-
-    # ─────────────────────────────────────
-    # FACTURAS EMITIDAS
-    # ─────────────────────────────────────
-    facturas_emitidas = db.query(
-        func.count(Poliza.id) # pylint: disable=not-callable
-    ).filter(
+    # 2. Consulta unificada mediante agregación condicional (case)
+    # Añadimos el comentario para que Pylint ignore el falso positivo en la generación de funciones SQL.
+    datos = db.query(
+        func.sum(case((MovimientoPoliza.cuenta.like('4%'), MovimientoPoliza.haber), else_=0)).label("ingresos"),
+        func.sum(case((MovimientoPoliza.cuenta.like('6%'), MovimientoPoliza.debe), else_=0)).label("gastos"),
+        func.sum(case((MovimientoPoliza.cuenta.like('216.01%'), MovimientoPoliza.haber), else_=0)).label("iva_trasladado"),
+        func.sum(case((MovimientoPoliza.cuenta.like('216.04%'), MovimientoPoliza.haber), else_=0)).label("impuestos_locales"),
+        func.count(func.distinct(Poliza.id)).label("facturas_emitidas")  # pylint: disable=not-callable
+    ).select_from(Poliza).join(MovimientoPoliza).filter(
         Poliza.empresa_id == empresa_id,
         Poliza.mes == mes,
         Poliza.anio == anio
-    ).scalar() or 0
+    ).first()
 
-    # ─────────────────────────────────────
-    # CÁLCULOS
-    # ─────────────────────────────────────
-    ingresos = round(
-        float(ingresos),
-        2
-    )
+    # 3. Formateo y operaciones aritméticas seguras en memoria
+    ingresos_monto = round(float(datos.ingresos or 0), 2)
+    gastos_monto = round(float(datos.gastos or 0), 2)
+    utilidad = round(ingresos_monto - gastos_monto, 2)
 
-    gastos = round(
-        float(gastos),
-        2
-    )
+    margen_utilidad = 0.0
+    if ingresos_monto > 0:
+        margen_utilidad = round((utilidad / ingresos_monto) * 100, 2)
 
-    utilidad = round(
-        ingresos - gastos,
-        2
-    )
+    iva_trasladado = round(float(datos.iva_trasladado or 0), 2)
+    impuestos_locales = round(float(datos.impuestos_locales or 0), 2)
 
-    margen_utilidad = 0
-
-    if ingresos > 0:
-        margen_utilidad = round(
-            (utilidad / ingresos) * 100,
-            2
-        )
-
-    iva_trasladado = round(
-        float(iva_trasladado),
-        2
-    )
-
-    impuestos_locales = round(
-        float(impuestos_locales),
-        2
-    )
-
-    iva_estimado = round(
-        iva_trasladado * 0.16,
-        2
-    )
-
-    # ─────────────────────────────────────
-    # RESPUESTA FINAL
-    # ─────────────────────────────────────
     return {
         "mes": mes,
         "anio": anio,
-
         "kpis": {
-
-            "ingresos_mes": ingresos,
-
-            "gastos_mes": gastos,
-
+            "ingresos_mes": ingresos_monto,
+            "gastos_mes": gastos_monto,
             "utilidad": utilidad,
-
             "margen_utilidad": margen_utilidad,
-
             "iva_trasladado": iva_trasladado,
-
             "impuestos_locales": impuestos_locales,
-
-            "iva_estimado": iva_estimado,
-
-            "facturas_emitidas": facturas_emitidas
+            "iva_estimado": round(iva_trasladado * 0.16, 2),
+            "facturas_emitidas": datos.facturas_emitidas or 0
         }
     }
 
@@ -413,61 +280,25 @@ def obtener_kpis_globales(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
-    # Sumamos ingresos y gastos de todas las empresas del usuario en el mes/año
-    ingresos = db.query(func.sum(MovimientoPoliza.haber)).join(Poliza).join(Empresa).filter(
-        Empresa.usuario_id == current_user.id,
-        Poliza.mes == mes,
-        Poliza.anio == anio,
-        MovimientoPoliza.cuenta.like('4%')
-    ).scalar() or 0
+    # 1. Validación del período de consulta
+    validar_periodo(mes, anio)
 
-    gastos = db.query(func.sum(MovimientoPoliza.debe)).join(Poliza).join(Empresa).filter(
-        Empresa.usuario_id == current_user.id,
-        Poliza.mes == mes,
-        Poliza.anio == anio,
-        MovimientoPoliza.cuenta.like('6%')
-    ).scalar() or 0
-
-    return {
-        "ingresos": round(float(ingresos), 2),
-        "gastos": round(float(gastos), 2),
-        "utilidad": round(float(ingresos - gastos), 2)
-    }
-
-@router.get("/tendencias")
-def obtener_tendencias(
-    anio: int,
-    empresa_id: int,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
-):
-    validar_empresa_usuario(db, empresa_id, current_user.id)
-
-    # Una sola consulta eficiente que agrupa por mes
+    # 2. Una sola consulta eficiente que cruza Empresa -> Poliza -> Movimiento
     datos = db.query(
-        Poliza.mes,
         func.sum(case((MovimientoPoliza.cuenta.like('4%'), MovimientoPoliza.haber), else_=0)).label("ingresos"),
         func.sum(case((MovimientoPoliza.cuenta.like('6%'), MovimientoPoliza.debe), else_=0)).label("gastos")
-    ).join(MovimientoPoliza).filter(
-        Poliza.empresa_id == empresa_id,
+    ).select_from(MovimientoPoliza).join(Poliza).join(Empresa).filter(
+        Empresa.usuario_id == current_user.id,
+        Poliza.mes == mes,
         Poliza.anio == anio
-    ).group_by(Poliza.mes).all()
+    ).first()
 
-    # Convertimos los resultados en un diccionario para acceso rápido
-    mapa_datos = {d.mes: {"ingresos": float(d.ingresos or 0), "gastos": float(d.gastos or 0)} for d in datos}
+    # 3. Formateo de montos
+    ingresos_monto = round(float(datos.ingresos or 0), 2)
+    gastos_monto = round(float(datos.gastos or 0), 2)
 
-    # Completamos los 12 meses
-    resultados =[]
-    for mes in range(1, 13):
-        data = mapa_datos.get(mes, {"ingresos": 0, "gastos": 0})
-        ingresos = round(data["ingresos"], 2)
-        gastos = round(data["gastos"], 2)
-        
-        resultados.append({
-            "mes": mes,
-            "ingresos": ingresos,
-            "gastos": gastos,
-            "utilidad": round(ingresos - gastos, 2)
-        })
-
-    return {"anio": anio, "tendencias": resultados}
+    return {
+        "ingresos": ingresos_monto,
+        "gastos": gastos_monto,
+        "utilidad": round(ingresos_monto - gastos_monto, 2)
+    }

@@ -9,6 +9,31 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models.comision_banco import ComisionBanco
+
+
+def obtener_secciones_exportacion(tipo: str | None) -> list[str]:
+    """Devuelve las secciones que deben incluirse en la exportación solicitada."""
+    tipo_normalizado = (tipo or "todo").strip().lower()
+
+    if tipo_normalizado in {"resumen", "empresa", "facturas", "polizas", "movimientos", "mapeos", "comisiones"}:
+        return [tipo_normalizado]
+
+    if tipo_normalizado in {"todo", "completo", "full", "all"}:
+        return ["resumen", "empresa", "facturas", "polizas", "movimientos", "mapeos", "comisiones"]
+
+    if tipo_normalizado in {"facturas_polizas", "facturas-y-polizas", "facturasypolizas"}:
+        return ["facturas", "polizas"]
+
+    if tipo_normalizado in {"ingresos", "ingreso"}:
+        return ["resumen", "empresa", "facturas"]
+
+    if tipo_normalizado in {"egresos", "egreso"}:
+        return ["resumen", "empresa", "facturas"]
+
+    if tipo_normalizado in {"contable", "contabilidad"}:
+        return ["resumen", "empresa", "polizas", "movimientos", "mapeos", "comisiones"]
+
+    return ["resumen", "empresa", "facturas", "polizas", "movimientos", "mapeos", "comisiones"]
 from app.models.empresa import Empresa
 from app.models.factura import Factura
 from app.models.mapeo_cuenta import MapeoCuenta
@@ -190,6 +215,84 @@ def _recolectar_datos_exportacion(db: Session, empresa: Empresa) -> dict:
         "filas_comisiones": filas_comisiones,
         "filas_resumen": filas_resumen,
     }
+
+
+def generar_csv_consolidado_exportacion(db: Session, empresa: Empresa, tipo: str | None = None) -> tuple[bytes, str]:
+    """Genera un CSV consolidado con la información seleccionada por el usuario."""
+    datos = _recolectar_datos_exportacion(db, empresa)
+    empresa_obj = datos["empresa"]
+    secciones = obtener_secciones_exportacion(tipo)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+
+    if "resumen" in secciones:
+        writer.writerow(["=== RESUMEN DE EMPRESA ==="])
+        writer.writerow(["Campo", "Valor"])
+        for fila in datos["filas_resumen"]:
+            writer.writerow([fila["concepto"], fila["valor"]])
+        writer.writerow([])
+
+    if "empresa" in secciones:
+        writer.writerow(["=== DATOS DE EMPRESA ==="])
+        if datos["filas_empresa"]:
+            headers = list(datos["filas_empresa"][0].keys())
+            writer.writerow(headers)
+            for fila in datos["filas_empresa"]:
+                writer.writerow([fila.get(h, "") for h in headers])
+        writer.writerow([])
+
+    if "facturas" in secciones:
+        writer.writerow(["=== FACTURAS (CFDI) ==="])
+        if datos["filas_facturas"]:
+            headers = list(datos["filas_facturas"][0].keys())
+            writer.writerow(headers)
+            for fila in datos["filas_facturas"]:
+                writer.writerow([fila.get(h, "") for h in headers])
+        writer.writerow([])
+
+    if "polizas" in secciones:
+        writer.writerow(["=== PÓLIZAS CONTABLES ==="])
+        if datos["filas_polizas"]:
+            headers = list(datos["filas_polizas"][0].keys())
+            writer.writerow(headers)
+            for fila in datos["filas_polizas"]:
+                writer.writerow([fila.get(h, "") for h in headers])
+        writer.writerow([])
+
+    if "movimientos" in secciones:
+        writer.writerow(["=== MOVIMIENTOS DE PÓLIZAS ==="])
+        if datos["filas_movimientos"]:
+            headers = list(datos["filas_movimientos"][0].keys())
+            writer.writerow(headers)
+            for fila in datos["filas_movimientos"]:
+                writer.writerow([fila.get(h, "") for h in headers])
+        writer.writerow([])
+
+    if "mapeos" in secciones:
+        writer.writerow(["=== CLASIFICACIÓN DE PROVEEDORES (MAPEO CUENTA) ==="])
+        if datos["filas_mapeos"]:
+            headers = list(datos["filas_mapeos"][0].keys())
+            writer.writerow(headers)
+            for fila in datos["filas_mapeos"]:
+                writer.writerow([fila.get(h, "") for h in headers])
+        writer.writerow([])
+
+    if "comisiones" in secciones:
+        writer.writerow(["=== COMISIONES BANCARIAS ==="])
+        if datos["filas_comisiones"]:
+            headers = list(datos["filas_comisiones"][0].keys())
+            writer.writerow(headers)
+            for fila in datos["filas_comisiones"]:
+                writer.writerow([fila.get(h, "") for h in headers])
+
+    csv_str = buf.getvalue()
+    csv_bytes = f"\ufeff{csv_str}".encode("utf-8")
+
+    fecha_archivo = datetime.now().strftime("%Y%m%d")
+    sufijo = tipo or "todo"
+    nombre = f"SmartContable_{empresa_obj.rfc}_{fecha_archivo}_{sufijo}.csv"
+    return csv_bytes, nombre
 
 
 def generar_zip_exportacion_empresa(db: Session, empresa: Empresa) -> tuple[bytes, str]:
