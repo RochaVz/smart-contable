@@ -274,7 +274,10 @@ async def subir_zip(
                             except UnicodeDecodeError:
                                 xml_str = xml_bytes.decode('latin-1')
 
-                            # Llamamos a la lógica interna (Parsing + Creación de objetos)
+                        # Each file runs in its own savepoint so that a failed
+                        # db.flush() (IntegrityError) only rolls back that file's
+                        # changes without corrupting the outer transaction.
+                        with db.begin_nested():
                             procesar_xml_interno(
                                 empresa_id,
                                 xml_str,
@@ -283,8 +286,8 @@ async def subir_zip(
                                 empresa_razon_social=empresa.razon_social,
                                 uuids_en_lote=uuids_en_lote,
                             )
-                            resultados.append({"archivo": nombre_archivo, "status": "ok"})
-                            exitos += 1
+                        resultados.append({"archivo": nombre_archivo, "status": "ok"})
+                        exitos += 1
                     except HTTPException as e:
                         detalle = e.detail if isinstance(e.detail, str) else str(e.detail)
                         es_dup = e.status_code == 409 or "registrada" in str(detalle).lower()
@@ -295,13 +298,21 @@ async def subir_zip(
                             "status": "duplicado" if es_dup else "error",
                             "detalle": detalle,
                         })
-                    except OSError as e:
+                    except Exception as e:
                         resultados.append({"archivo": nombre_archivo, "status": "error", "detalle": str(e)})
 
         # --- AQUÍ ESTÁ EL TRUCO ---
         # Si hubo al menos un éxito, guardamos todo en la base de datos
         if exitos > 0:
-            db.commit()
+            try:
+                db.commit()
+            except Exception as commit_err:
+                db.rollback()
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error al confirmar las facturas en la base de datos: {commit_err}",
+                ) from commit_err
+
             from app.services.polizas import generar_polizas_automaticas
 
             banco_id = obtener_banco_default_id(db, empresa_id)
@@ -313,6 +324,11 @@ async def subir_zip(
 
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail="Archivo ZIP inválido o corrupto") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     if exitos == 0:
         return {

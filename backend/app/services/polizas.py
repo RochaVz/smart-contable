@@ -586,7 +586,8 @@ def generar_polizas_automaticas(
                 nuevas = generar_poliza_desde_factura(factura, db, banco_id)
                 creadas_total.extend(nuevas)
                 count_mes += len(nuevas)
-            except ValueError as exc:
+            except Exception as exc:
+                db.rollback()
                 errores.append({
                     "factura_id": factura.id,
                     "uuid": factura.uuid,
