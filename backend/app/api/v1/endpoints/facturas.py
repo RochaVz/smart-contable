@@ -308,7 +308,7 @@ async def subir_zip(
             try:
                 generar_polizas_automaticas(db, empresa_id, banco_id=banco_id)
                 db.commit()
-            except ValueError:
+            except Exception:
                 db.rollback()
 
     except zipfile.BadZipFile as exc:

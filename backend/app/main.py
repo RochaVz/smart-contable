@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.logging_config import get_logger
 from app.core.exceptions import SmartContableException
 from app.api.v1.router import api_router
+from typing import Optional
 
 # Importamos los modelos explícitamente para que SQLAlchemy los registre
 from app.models.usuario import Usuario  # noqa: F401
@@ -20,6 +21,17 @@ from app.models.comision_banco import ComisionBanco # noqa: F401
 from app.models.conciliacion import EstadoCuentaCarga, MovimientoBanco # noqa: F401
 
 logger = get_logger(__name__)
+
+
+def _cors_headers(request: Request) -> dict:
+    """Return CORS headers when the origin is in the allowed list."""
+    origin: Optional[str] = request.headers.get("origin")
+    if origin and origin in settings.CORS_ORIGINS:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    return {}
 
 
 # ─────────────────────────────────────────
@@ -84,7 +96,8 @@ async def smartcontable_exception_handler(request: Request, exc: SmartContableEx
                 "code": exc.code,
                 "message": exc.message,
             }
-        }
+        },
+        headers=_cors_headers(request),
     )
 
 
@@ -99,7 +112,8 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
                 "code": "INTEGRITY_ERROR",
                 "message": "Los datos violan restricciones de integridad",
             }
-        }
+        },
+        headers=_cors_headers(request),
     )
 
 
@@ -120,7 +134,8 @@ async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
                 "code": "DATABASE_ERROR",
                 "message": message,
             }
-        }
+        },
+        headers=_cors_headers(request),
     )
 
 
@@ -136,7 +151,8 @@ async def general_exception_handler(request: Request, exc: Exception):
                 "code": "INTERNAL_SERVER_ERROR",
                 "message": "Error interno del servidor" if not settings.DEBUG else str(exc),
             }
-        }
+        },
+        headers=_cors_headers(request),
     )
 
 
