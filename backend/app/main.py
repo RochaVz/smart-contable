@@ -86,8 +86,7 @@ app.add_middleware(
 async def smartcontable_exception_handler(request: Request, exc: SmartContableException):
     """Handle SmartContableException"""
     logger.error(
-        f"SmartContableException: {exc.code}",
-        extra={"message": exc.message}
+        f"SmartContableException: {exc.code} — {exc.message}",
     )
     return JSONResponse(
         status_code=exc.status_code,
