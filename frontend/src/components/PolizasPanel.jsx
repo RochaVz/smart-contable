@@ -108,6 +108,7 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
   };
 
   const items = data[tab] || [];
+  const pendientesCount = data.pendientes_count ?? 0;
   const pendientesTab = data.pendientes?.filter((p) => {
     if (tab === 'diario') return p.categoria === 'diario';
     if (tab === 'egresos') return p.categoria === 'egreso';
@@ -266,7 +267,7 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
         <div>
           <h2 className="text-2xl font-black text-white">Pólizas contables</h2>
           <p className="text-slate-500 text-sm mt-1">
-            Numeración y fecha según mes del CFDI · {data.pendientes_count ?? 0} pendiente(s)
+            Numeración y fecha según mes del CFDI · {pendientesCount} pendiente(s)
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -291,19 +292,25 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
               ))}
             </select>
           </div>
-          <button
-            type="button"
-            disabled={autoGenerando || (data.pendientes_count ?? 0) === 0}
-            onClick={handleGenerarAutomatico}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
-          >
-            {autoGenerando ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Zap className="w-4 h-4" />
-            )}
-            Generar del mes
-          </button>
+          {pendientesCount > 0 ? (
+            <button
+              type="button"
+              disabled={autoGenerando}
+              onClick={handleGenerarAutomatico}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
+            >
+              {autoGenerando ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Zap className="w-4 h-4" />
+              )}
+              Generar del mes
+            </button>
+          ) : (
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-500 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
+              Sin pendientes en este mes
+            </span>
+          )}
         </div>
       </div>
 

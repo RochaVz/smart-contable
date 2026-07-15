@@ -710,45 +710,20 @@ const CompanyDetail = () => {
                 <FileText className="w-5 h-5" />
                 Ver en pantalla
               </button>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={downloadExport}
-                  disabled={exportandoEmpresa || loading}
-                  className="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm text-white disabled:opacity-50"
-                  title="CSV consolidado: empresa, facturas, pólizas, movimientos - Abre en Google Sheets"
-                >
-                  {exportandoEmpresa ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Download className="w-5 h-5" />
-                  )}
-                  CSV
-                </button>
-                <div className="absolute right-0 mt-2 w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
-                  <button
-                    type="button"
-                    onClick={() => { setTipoExportacion('todo'); }}
-                    className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
-                  >
-                    Todos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setTipoExportacion('ingresos'); }}
-                    className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
-                  >
-                    Ingresos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setTipoExportacion('egresos'); }}
-                    className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
-                  >
-                    Egresos
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={downloadExport}
+                disabled={exportandoEmpresa || loading}
+                className="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm text-white disabled:opacity-50"
+                title="CSV consolidado: empresa, facturas, pólizas, movimientos - Abre en Google Sheets"
+              >
+                {exportandoEmpresa ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Download className="w-5 h-5" />
+                )}
+                CSV
+              </button>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(true)}

@@ -28,8 +28,16 @@ const Login = ({ onLoginSuccess }) => {
       // Avisamos a la App que el login fue exitoso
       onLoginSuccess();
     } catch (err) {
-    console.error("Error en el login:", err); // <--- Al poner esto, ya estás "usando" la variable
-    setError('Credenciales inválidas. Revisa tu correo y contraseña.');
+      console.error('Error en el login:', err);
+
+      const isNetworkError = err?.code === 'ERR_NETWORK' || !err?.response;
+      if (isNetworkError) {
+        setError('No se pudo conectar al servidor. Verifica que el backend esté activo en el puerto 8000.');
+      } else if (err.response?.status === 401) {
+        setError('Credenciales inválidas. Revisa tu correo y contraseña.');
+      } else {
+        setError('No se pudo iniciar sesión. Inténtalo nuevamente.');
+      }
     } finally {
       setLoading(false);
     }

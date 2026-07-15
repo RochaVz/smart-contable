@@ -77,7 +77,7 @@ async def smartcontable_exception_handler(request: Request, exc: SmartContableEx
     """Handle SmartContableException"""
     logger.error(
         f"SmartContableException: {exc.code}",
-        extra={"message": exc.message}
+        extra={"error_message": exc.message}
     )
     return JSONResponse(
         status_code=exc.status_code,
