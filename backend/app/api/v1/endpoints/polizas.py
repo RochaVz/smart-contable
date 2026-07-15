@@ -89,31 +89,78 @@ def listar_polizas_organizadas(
     q_polizas = db.query(Poliza).filter(Poliza.empresa_id == empresa_id)
     if mes is not None and anio is not None:
         q_polizas = q_polizas.filter(Poliza.mes == mes, Poliza.anio == anio)
-    polizas = q_polizas.order_by(Poliza.anio.desc(), Poliza.mes.desc(), Poliza.numero.asc()).all()
+    polizas = q_polizas.order_by(
+        Poliza.anio.asc(), Poliza.mes.asc(), Poliza.tipo.asc(), Poliza.numero.asc()
+    ).all()
 
-    diario, ingresos, egresos = [], [], []
+    # ── Agrupar por período ──────────────────────────────────────────────────
+    from collections import defaultdict
+
+    periodos: dict[str, dict] = {}
+
     for p in polizas:
-        factura = db.query(Factura).filter(Factura.id == p.factura_id).first() if p.factura_id else None
+        clave = f"{p.anio}-{p.mes:02d}" if p.mes and p.anio else "sin-periodo"
+        if clave not in periodos:
+            periodos[clave] = {
+                "periodo": clave,
+                "mes": p.mes,
+                "anio": p.anio,
+                "diario": [],
+                "ingresos": [],
+                "egresos": [],
+                "resumen": {
+                    "total_ingresos": 0.0,
+                    "total_egresos": 0.0,
+                    "total_diario": 0.0,
+                    "count_diario": 0,
+                    "count_ingresos": 0,
+                    "count_egresos": 0,
+                },
+            }
+        factura = (
+            db.query(Factura).filter(Factura.id == p.factura_id).first()
+            if p.factura_id
+            else None
+        )
         item = serializar_poliza(p, factura, rfc, db)
-        if p.tipo == TipoPoliza.diario:
-            diario.append(item)
-        elif p.tipo == TipoPoliza.ingreso:
-            ingresos.append(item)
-        elif p.tipo == TipoPoliza.egreso:
-            egresos.append(item)
+        total_p = float(p.total or 0)
+        resumen = periodos[clave]["resumen"]
 
-    facturas_pendientes = obtener_facturas_pendientes_poliza(
-        db, empresa_id, rfc, mes, anio
-    )
+        if p.tipo == TipoPoliza.diario:
+            periodos[clave]["diario"].append(item)
+            resumen["total_diario"] = round(resumen["total_diario"] + total_p, 2)
+            resumen["count_diario"] += 1
+        elif p.tipo == TipoPoliza.ingreso:
+            periodos[clave]["ingresos"].append(item)
+            resumen["total_ingresos"] = round(resumen["total_ingresos"] + total_p, 2)
+            resumen["count_ingresos"] += 1
+        elif p.tipo == TipoPoliza.egreso:
+            periodos[clave]["egresos"].append(item)
+            resumen["total_egresos"] = round(resumen["total_egresos"] + total_p, 2)
+            resumen["count_egresos"] += 1
+
+    # ── Pendientes ────────────────────────────────────────────────────────────
+    facturas_pendientes = obtener_facturas_pendientes_poliza(db, empresa_id, rfc, mes, anio)
     pendientes = [preview_poliza_desde_factura(f, rfc, db) for f in facturas_pendientes]
 
+    # ── Resumen global ────────────────────────────────────────────────────────
+    total_polizas = sum(
+        p["resumen"]["count_diario"]
+        + p["resumen"]["count_ingresos"]
+        + p["resumen"]["count_egresos"]
+        for p in periodos.values()
+    )
+
     return {
-        "diario": diario,
-        "ingresos": ingresos,
-        "egresos": egresos,
+        "por_periodo": periodos,
         "pendientes": pendientes,
-        "filtro": {"mes": mes, "anio": anio},
         "pendientes_count": len(pendientes),
+        "filtro": {"mes": mes, "anio": anio},
+        "resumen_global": {
+            "total_periodos": len(periodos),
+            "total_polizas": total_polizas,
+            "total_pendientes": len(pendientes),
+        },
     }
 
 
@@ -140,9 +187,45 @@ def generar_polizas_automatico(
                 detail="No hay facturas pendientes de póliza para el periodo indicado",
             )
         db.commit()
+
+        # ── Enriquecer el desglose por mes con totales ─────────────────────
+        for item_mes in resultado.get("por_mes", []):
+            polizas_mes = (
+                db.query(Poliza)
+                .filter(
+                    Poliza.empresa_id == empresa_id,
+                    Poliza.mes == item_mes["mes"],
+                    Poliza.anio == item_mes["anio"],
+                )
+                .all()
+            )
+            total_ingresos = sum(
+                float(p.total or 0)
+                for p in polizas_mes
+                if p.tipo.value in ("diario", "ingreso")
+            )
+            total_egresos = sum(
+                float(p.total or 0)
+                for p in polizas_mes
+                if p.tipo.value == "egreso"
+            )
+            item_mes["periodo"] = f"{item_mes['anio']}-{item_mes['mes']:02d}"
+            item_mes["total_ingresos"] = round(total_ingresos, 2)
+            item_mes["total_egresos"] = round(total_egresos, 2)
+            item_mes["errores_mes"] = [
+                e for e in resultado.get("errores", [])
+                if e.get("mes") == item_mes["mes"] and e.get("anio") == item_mes["anio"]
+            ]
+
         return {
-            "mensaje": f"{resultado['total_polizas']} póliza(s) generada(s) en {resultado['facturas_procesadas']} factura(s)",
-            **resultado,
+            "mensaje": (
+                f"{resultado['total_polizas']} póliza(s) generada(s) "
+                f"en {resultado['facturas_procesadas']} factura(s)"
+            ),
+            "total_polizas": resultado["total_polizas"],
+            "facturas_procesadas": resultado["facturas_procesadas"],
+            "por_mes": resultado["por_mes"],
+            "errores": resultado["errores"],
         }
     except HTTPException:
         raise

@@ -172,13 +172,18 @@ def _parsear_fecha(fecha_str: Optional[str]) -> Optional[datetime]:
 def _determinar_tipo(tipo_comprobante: str) -> str:
     """
     Determina el tipo de factura para el sistema contable.
-    I=Ingreso, E=Egreso, T=Traslado, N=Nómina, P=Pago
+    I=Ingreso, E=Egreso, T=Traslado, N=Nómina, P=Complemento de Pago.
+
+    T (Traslado) y P (Pago) no representan un nuevo ingreso ni egreso propio:
+    T es movimiento de mercancía, P es el registro del cobro de una factura PPD.
+    Se mapean a sus tipos fiscales reales para que la lógica de pólizas
+    pueda tratarlos correctamente en lugar de inflar los totales del mes.
     """
     mapa = {
         'I': 'ingreso',
         'E': 'egreso',
-        'T': 'ingreso',
+        'T': 'traslado',
         'N': 'egreso',
-        'P': 'ingreso',
+        'P': 'pago',
     }
     return mapa.get(tipo_comprobante, 'ingreso')

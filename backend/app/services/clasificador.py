@@ -76,9 +76,10 @@ def _clasificar_por_clave_sat(clave_sat: str) -> dict:
     return {"cuenta": "601.01.01", "nombre": "Gastos Generales"}
 
 
-def obtener_cuenta_por_clave_sat(db: Session, clave_sat: str) -> dict:
+def obtener_cuenta_por_clave_sat(db: Session | None, clave_sat: str) -> dict:
     """
     Clasifica un gasto por su clave SAT.
     Usa el catálogo interno de prefijos SAT como fuente de verdad.
+    El parámetro db se mantiene por compatibilidad pero no se utiliza.
     """
     return _clasificar_por_clave_sat(clave_sat)

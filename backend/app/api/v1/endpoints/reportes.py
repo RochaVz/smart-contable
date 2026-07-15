@@ -239,7 +239,7 @@ def obtener_kpis(
         func.sum(case((MovimientoPoliza.cuenta.like('6%'), MovimientoPoliza.debe), else_=0)).label("gastos"),
         func.sum(case((MovimientoPoliza.cuenta.like('216.01%'), MovimientoPoliza.haber), else_=0)).label("iva_trasladado"),
         func.sum(case((MovimientoPoliza.cuenta.like('216.04%'), MovimientoPoliza.haber), else_=0)).label("impuestos_locales"),
-        func.count(func.distinct(Poliza.id)).label("facturas_emitidas")  # pylint: disable=not-callable
+        func.count(func.distinct(Poliza.factura_id)).label("facturas_emitidas")  # pylint: disable=not-callable
     ).select_from(Poliza).join(MovimientoPoliza).filter(
         Poliza.empresa_id == empresa_id,
         Poliza.mes == mes,
