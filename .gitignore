@@ -1,0 +1,15 @@
+# IDE
+.idea/
+.vs/
+.vscode/
+
+# Copilot CLI runtime
+.agents/
+
+# Env files raíz (cada subcarpeta tiene el suyo)
+.env
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
