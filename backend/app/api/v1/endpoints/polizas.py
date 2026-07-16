@@ -151,7 +151,18 @@ def listar_polizas_organizadas(
         for p in periodos.values()
     )
 
+    diario = []
+    ingresos = []
+    egresos = []
+    for periodo in periodos.values():
+        diario.extend(periodo["diario"])
+        ingresos.extend(periodo["ingresos"])
+        egresos.extend(periodo["egresos"])
+
     return {
+        "diario": diario,
+        "ingresos": ingresos,
+        "egresos": egresos,
         "por_periodo": periodos,
         "pendientes": pendientes,
         "pendientes_count": len(pendientes),
@@ -235,6 +246,73 @@ def generar_polizas_automatico(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/descargar-csv", status_code=200)
+def descargar_polizas_csv(
+    empresa_id: int,
+    tipo: str,  # diario | ingreso | egreso
+    mes: int | None = None,
+    anio: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    from fastapi.responses import StreamingResponse
+    import csv, io
+    from app.models.poliza import TipoPoliza
+
+    empresa = _validar_empresa(db, empresa_id, current_user)
+
+    tipo_map = {"diario": TipoPoliza.diario, "ingreso": TipoPoliza.ingreso, "egreso": TipoPoliza.egreso}
+    if tipo not in tipo_map:
+        raise HTTPException(status_code=400, detail="tipo debe ser: diario, ingreso o egreso")
+
+    q = db.query(Poliza).filter(
+        Poliza.empresa_id == empresa_id,
+        Poliza.tipo == tipo_map[tipo],
+    )
+    if mes and anio:
+        q = q.filter(Poliza.mes == mes, Poliza.anio == anio)
+    polizas = q.order_by(Poliza.anio.asc(), Poliza.mes.asc(), Poliza.numero.asc()).all()
+
+    # Aplanar pólizas + movimientos en filas
+    filas = []
+    for p in polizas:
+        factura = db.query(Factura).filter(Factura.id == p.factura_id).first() if p.factura_id else None
+        for m in p.movimientos:
+            filas.append({
+                "periodo": f"{p.anio}-{p.mes:02d}" if p.mes and p.anio else "",
+                "poliza_id": p.id,
+                "tipo": p.tipo.value,
+                "numero": p.numero,
+                "fecha": str(p.fecha or ""),
+                "concepto_poliza": p.concepto or "",
+                "total_poliza": float(p.total or 0),
+                "uuid": factura.uuid if factura else "",
+                "cuenta": m.cuenta or "",
+                "nombre_cuenta": m.nombre_cuenta or "",
+                "debe": float(m.debe or 0),
+                "haber": float(m.haber or 0),
+                "concepto_movimiento": m.concepto or "",
+            })
+
+    buf = io.StringIO()
+    if filas:
+        writer = csv.DictWriter(buf, fieldnames=list(filas[0].keys()))
+        writer.writeheader()
+        writer.writerows(filas)
+    contenido = f"\ufeff{buf.getvalue()}".encode("utf-8")
+
+    from datetime import datetime
+    fecha_hoy = datetime.now().strftime("%Y%m%d")
+    sufijo_mes = f"_{anio}-{mes:02d}" if mes and anio else ""
+    nombre = f"polizas_{tipo}_{empresa.rfc}{sufijo_mes}_{fecha_hoy}.csv"
+
+    return StreamingResponse(
+        io.BytesIO(contenido),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+    )
 
 
 @router.get("/", status_code=200)
