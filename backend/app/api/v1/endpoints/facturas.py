@@ -273,6 +273,10 @@ async def subir_zip(
                             except UnicodeDecodeError:
                                 xml_str = xml_bytes.decode('latin-1')
 
+                        # Each file runs in its own savepoint so that a failed
+                        # db.flush() (IntegrityError) only rolls back that file's
+                        # changes without corrupting the outer transaction.
+                        with db.begin_nested():
                             factura = procesar_xml_interno(
                                 empresa_id,
                                 xml_str,
@@ -281,19 +285,19 @@ async def subir_zip(
                                 empresa_razon_social=empresa.razon_social,
                                 uuids_en_lote=uuids_en_lote,
                             )
-                            fecha_f = factura.fecha_emision
-                            resultados.append({
-                                "archivo": nombre_archivo,
-                                "status": "ok",
-                                "uuid": factura.uuid,
-                                "periodo": (
-                                    f"{fecha_f.year}-{fecha_f.month:02d}"
-                                    if fecha_f else None
-                                ),
-                                "tipo_comprobante": factura.tipo_comprobante,
-                                "total": float(factura.total or 0),
-                            })
-                            exitos += 1
+                        fecha_f = factura.fecha_emision
+                        resultados.append({
+                            "archivo": nombre_archivo,
+                            "status": "ok",
+                            "uuid": factura.uuid,
+                            "periodo": (
+                                f"{fecha_f.year}-{fecha_f.month:02d}"
+                                if fecha_f else None
+                            ),
+                            "tipo_comprobante": factura.tipo_comprobante,
+                            "total": float(factura.total or 0),
+                        })
+                        exitos += 1
                     except HTTPException as e:
                         detalle = e.detail if isinstance(e.detail, str) else str(e.detail)
                         es_dup = e.status_code == 409 or "registrada" in str(detalle).lower()
@@ -304,7 +308,7 @@ async def subir_zip(
                             "status": "duplicado" if es_dup else "error",
                             "detalle": detalle,
                         })
-                    except OSError as e:
+                    except Exception as e:
                         resultados.append({
                             "archivo": nombre_archivo,
                             "status": "error",
@@ -312,7 +316,15 @@ async def subir_zip(
                         })
 
         if exitos > 0:
-            db.commit()
+            try:
+                db.commit()
+            except Exception as commit_err:
+                db.rollback()
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error al confirmar las facturas en la base de datos: {commit_err}",
+                ) from commit_err
+
             from app.services.polizas import generar_polizas_automaticas  # noqa: PLC0415
 
             banco_id = obtener_banco_default_id(db, empresa_id)
@@ -320,7 +332,7 @@ async def subir_zip(
             try:
                 resultado_polizas = generar_polizas_automaticas(db, empresa_id, banco_id=banco_id)
                 db.commit()
-            except ValueError:
+            except Exception:
                 db.rollback()
 
             # ── Desglose por período ─────────────────────────────────────────
@@ -357,6 +369,11 @@ async def subir_zip(
 
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail="Archivo ZIP inválido o corrupto") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return {
         "mensaje": "No se guardó nada nuevo. Revisa si son duplicados o archivos vacíos.",
