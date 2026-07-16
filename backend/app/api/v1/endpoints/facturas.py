@@ -248,7 +248,7 @@ async def subir_zip(
 
     await archivo.seek(0)
     contenido = await archivo.read()
-    resultados = []
+    resultados: list[dict] = []
     exitos = 0
     duplicados = 0
     uuids_en_lote: set[str] = set()
@@ -260,7 +260,6 @@ async def subir_zip(
             for ruta_completa in lista_de_nombres:
                 nombre_archivo = os.path.basename(ruta_completa)
 
-                # Filtros de validación
                 es_xml = nombre_archivo.lower().endswith('.xml')
                 es_basura = nombre_archivo.startswith('.') or "__MACOSX" in ruta_completa
                 es_carpeta = ruta_completa.endswith('/')
@@ -274,8 +273,7 @@ async def subir_zip(
                             except UnicodeDecodeError:
                                 xml_str = xml_bytes.decode('latin-1')
 
-                            # Llamamos a la lógica interna (Parsing + Creación de objetos)
-                            procesar_xml_interno(
+                            factura = procesar_xml_interno(
                                 empresa_id,
                                 xml_str,
                                 db,
@@ -283,7 +281,18 @@ async def subir_zip(
                                 empresa_razon_social=empresa.razon_social,
                                 uuids_en_lote=uuids_en_lote,
                             )
-                            resultados.append({"archivo": nombre_archivo, "status": "ok"})
+                            fecha_f = factura.fecha_emision
+                            resultados.append({
+                                "archivo": nombre_archivo,
+                                "status": "ok",
+                                "uuid": factura.uuid,
+                                "periodo": (
+                                    f"{fecha_f.year}-{fecha_f.month:02d}"
+                                    if fecha_f else None
+                                ),
+                                "tipo_comprobante": factura.tipo_comprobante,
+                                "total": float(factura.total or 0),
+                            })
                             exitos += 1
                     except HTTPException as e:
                         detalle = e.detail if isinstance(e.detail, str) else str(e.detail)
@@ -296,38 +305,64 @@ async def subir_zip(
                             "detalle": detalle,
                         })
                     except OSError as e:
-                        resultados.append({"archivo": nombre_archivo, "status": "error", "detalle": str(e)})
+                        resultados.append({
+                            "archivo": nombre_archivo,
+                            "status": "error",
+                            "detalle": str(e),
+                        })
 
-        # --- AQUÍ ESTÁ EL TRUCO ---
-        # Si hubo al menos un éxito, guardamos todo en la base de datos
         if exitos > 0:
             db.commit()
-            from app.services.polizas import generar_polizas_automaticas
+            from app.services.polizas import generar_polizas_automaticas  # noqa: PLC0415
 
             banco_id = obtener_banco_default_id(db, empresa_id)
+            resultado_polizas: dict = {}
             try:
-                generar_polizas_automaticas(db, empresa_id, banco_id=banco_id)
+                resultado_polizas = generar_polizas_automaticas(db, empresa_id, banco_id=banco_id)
                 db.commit()
             except ValueError:
                 db.rollback()
 
+            # ── Desglose por período ─────────────────────────────────────────
+            from collections import defaultdict  # noqa: PLC0415
+
+            por_periodo: dict[str, dict] = defaultdict(
+                lambda: {"periodo": "", "facturas_ok": 0, "total_importe": 0.0}
+            )
+            for r in resultados:
+                if r.get("status") == "ok" and r.get("periodo"):
+                    p = r["periodo"]
+                    por_periodo[p]["periodo"] = p
+                    por_periodo[p]["facturas_ok"] += 1
+                    por_periodo[p]["total_importe"] = round(
+                        por_periodo[p]["total_importe"] + r.get("total", 0.0), 2
+                    )
+
+            # Añadir pólizas generadas al desglose
+            for item_mes in resultado_polizas.get("por_mes", []):
+                clave = f"{item_mes['anio']}-{item_mes['mes']:02d}"
+                if clave in por_periodo:
+                    por_periodo[clave]["polizas_generadas"] = item_mes.get("polizas_generadas", 0)
+
+            return {
+                "mensaje": "Procesamiento masivo completado y guardado en BD",
+                "exitos": exitos,
+                "duplicados": duplicados,
+                "errores": len([r for r in resultados if r.get("status") == "error"]),
+                "polizas_generadas": resultado_polizas.get("total_polizas", 0),
+                "errores_polizas": resultado_polizas.get("errores", []),
+                "por_periodo": dict(sorted(por_periodo.items())),
+                "detalles": resultados,
+            }
+
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail="Archivo ZIP inválido o corrupto") from exc
 
-    if exitos == 0:
-        return {
-            "mensaje": "No se guardó nada nuevo. Revisa si son duplicados o archivos vacíos.",
-            "exitos": 0,
-            "duplicados": duplicados,
-            "errores": len(resultados) - duplicados,
-            "detalles": resultados,
-        }
-
     return {
-        "mensaje": "Procesamiento masivo completado y guardado en BD",
-        "exitos": exitos,
+        "mensaje": "No se guardó nada nuevo. Revisa si son duplicados o archivos vacíos.",
+        "exitos": 0,
         "duplicados": duplicados,
-        "errores": len([r for r in resultados if r.get("status") == "error"]),
+        "errores": len(resultados) - duplicados,
         "detalles": resultados,
     }
 

@@ -495,9 +495,13 @@ def generar_poliza_desde_factura(
     if es_venta(factura, rfc_empresa):
         if not _tiene_poliza_tipo(db, factura.id, TipoPoliza.diario):
             creadas.append(generar_poliza_diario_venta(factura, db))
-        ingreso = generar_poliza_ingreso_cobro(factura, db, banco_id)
-        if ingreso and not _tiene_poliza_tipo(db, factura.id, TipoPoliza.ingreso):
-            creadas.append(ingreso)
+        # Verificar ANTES de crear: generar_poliza_ingreso_cobro hace db.flush()
+        # internamente, por lo que llamarla cuando ya existe produce una póliza
+        # duplicada silenciosa en la sesión que sería persistida en el commit.
+        if not _tiene_poliza_tipo(db, factura.id, TipoPoliza.ingreso):
+            ingreso = generar_poliza_ingreso_cobro(factura, db, banco_id)
+            if ingreso:
+                creadas.append(ingreso)
         return creadas
 
     if not _tiene_poliza_tipo(db, factura.id, TipoPoliza.egreso):
@@ -586,7 +590,7 @@ def generar_polizas_automaticas(
                 nuevas = generar_poliza_desde_factura(factura, db, banco_id)
                 creadas_total.extend(nuevas)
                 count_mes += len(nuevas)
-            except ValueError as exc:
+            except (ValueError, UnbalancedVoucherException) as exc:
                 errores.append({
                     "factura_id": factura.id,
                     "uuid": factura.uuid,
@@ -615,7 +619,7 @@ def auto_generar_poliza_factura(
     """Genera pólizas al registrar un CFDI (no lanza si ya están completas)."""
     try:
         return generar_poliza_desde_factura(factura, db, banco_id)
-    except ValueError:
+    except (ValueError, UnbalancedVoucherException):
         return []
 
 
@@ -761,11 +765,19 @@ def preview_poliza_desde_factura(
             }
     else:
         item["categoria"] = "egreso"
-        mapeo = None
+        clave_sat = _clave_sat_desde_factura(factura)
+        if db is not None:
+            info_cuenta = obtener_cuenta_inteligente(
+                db, factura.rfc_emisor or "", factura.empresa_id, clave_sat
+            )
+        else:
+            from app.services.clasificador import obtener_cuenta_por_clave_sat  # noqa: PLC0415
+            info_cuenta = obtener_cuenta_por_clave_sat(None, clave_sat)
         item["egreso"] = {
             "proveedor": factura.nombre_emisor,
             "rfc_proveedor": factura.rfc_emisor,
-            "clasificacion_gasto": "Pendiente de clasificar",
+            "clasificacion_gasto": info_cuenta["nombre"],
+            "cuenta_gasto": info_cuenta["cuenta"],
             "desglose_impuestos": desglose_impuestos(factura),
             "deducible": bool(factura.es_deducible),
         }

@@ -214,10 +214,12 @@ def ver_empresa(
 )
 def exportar_empresa(
     empresa_id: int,
+    mes: int | None = Query(default=None, ge=1, le=12, description="Mes a exportar (1-12)"),
+    anio: int | None = Query(default=None, ge=2000, le=2100, description="Año a exportar"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Exporta todos los datos de una empresa como archivo ZIP."""
+    """Exporta todos los datos de una empresa como archivo ZIP, opcionalmente filtrado por mes y año."""
     try:
         empresa = validar_empresa_pertenece_usuario(
             empresa_id,
@@ -225,7 +227,7 @@ def exportar_empresa(
             db
         )
 
-        zip_bytes, nombre_archivo = generar_zip_exportacion_empresa(db, empresa)
+        zip_bytes, nombre_archivo = generar_zip_exportacion_empresa(db, empresa, mes=mes, anio=anio)
         
         logger.info(
             "Empresa exportada",
@@ -256,10 +258,12 @@ def exportar_empresa(
 def exportar_empresa_csv(
     empresa_id: int,
     tipo: str | None = Query(default=None, description="Tipo de exportación: todo, facturas, polizas, movimientos, mapeos, comisiones o contable"),
+    mes: int | None = Query(default=None, ge=1, le=12, description="Mes a exportar (1-12)"),
+    anio: int | None = Query(default=None, ge=2000, le=2100, description="Año a exportar"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Exporta los datos de una empresa como CSV consolidado, con opción de seleccionar el tipo de información."""
+    """Exporta los datos de una empresa como CSV consolidado agrupado por mes, con opción de filtrar período."""
     try:
         empresa = validar_empresa_pertenece_usuario(
             empresa_id,
@@ -267,7 +271,7 @@ def exportar_empresa_csv(
             db
         )
 
-        csv_bytes, nombre_archivo = generar_csv_consolidado_exportacion(db, empresa, tipo)
+        csv_bytes, nombre_archivo = generar_csv_consolidado_exportacion(db, empresa, tipo, mes=mes, anio=anio)
         
         logger.info(
             "Empresa exportada como CSV",

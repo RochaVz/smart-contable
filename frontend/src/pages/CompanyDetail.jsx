@@ -166,11 +166,11 @@ const CompanyDetail = () => {
     setExportandoEmpresa(true);
     try {
       const res = await api.get(`/empresas/${id}/exportar-csv`, {
-        params: { tipo: tipoExportacion },
+        params: { tipo: tipoExportacion, mes: mesFiltro, anio: anioFiltro },
         responseType: 'blob',
       });
       const nombre = filenameFromContentDisposition(res.headers['content-disposition'])
-        || `SmartContable_${empresa?.rfc || id}.csv`;
+        || `SmartContable_${empresa?.rfc || id}_${anioFiltro}-${String(mesFiltro).padStart(2, '0')}.csv`;
       downloadBlob(res.data, nombre);
       toast.success('CSV descargado - Listo para Google Sheets');
       setIsPreviewOpen(false);
@@ -199,7 +199,7 @@ const CompanyDetail = () => {
     setIsPreviewOpen(true);
     try {
       const res = await api.get(`/empresas/${id}/exportar-csv`, {
-        params: { tipo: tipoExportacion },
+        params: { tipo: tipoExportacion, mes: mesFiltro, anio: anioFiltro },
         responseType: 'blob',
       });
       const text = await res.data.text();
@@ -728,21 +728,21 @@ const CompanyDetail = () => {
                 <div className="absolute right-0 mt-2 w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
                   <button
                     type="button"
-                    onClick={() => { setTipoExportacion('todo'); downloadExport(); }}
+                    onClick={() => { setTipoExportacion('todo'); }}
                     className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
                   >
                     Todos
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setTipoExportacion('ingresos'); downloadExport(); }}
+                    onClick={() => { setTipoExportacion('ingresos'); }}
                     className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
                   >
                     Ingresos
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setTipoExportacion('egresos'); downloadExport(); }}
+                    onClick={() => { setTipoExportacion('egresos'); }}
                     className="flex w-full items-center justify-start rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
                   >
                     Egresos
