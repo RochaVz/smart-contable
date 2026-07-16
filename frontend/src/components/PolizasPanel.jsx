@@ -2,20 +2,44 @@ import { memo, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import {
-  BookOpen, TrendingUp, TrendingDown, Loader2, FilePlus, ChevronRight, Zap, Calendar,
+  BookOpen, TrendingUp, TrendingDown, Loader2, FilePlus, ChevronRight, Zap, Calendar, Download,
 } from 'lucide-react';
+import PolizaDetailModal from './PolizaDetailModal';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
-import PolizaDetailModal from './PolizaDetailModal';
 
 const TABS = [
-  { id: 'diario', label: 'Diario', icon: BookOpen, desc: 'Ventas: nombre, forma de pago, productos e impuestos' },
-  { id: 'ingresos', label: 'Ingresos', icon: TrendingUp, desc: 'Cobros y comisiones bancarias (tarjeta)' },
-  { id: 'egresos', label: 'Egresos', icon: TrendingDown, desc: 'Gastos clasificados y desglose fiscal' },
+  {
+    id: 'diario',
+    label: 'Diario',
+    icon: BookOpen,
+    desc: 'Registro de ventas: nombre, forma de pago, productos e impuestos',
+    acento: 'blue',
+  },
+  {
+    id: 'ingresos',
+    label: 'Ingresos',
+    icon: TrendingUp,
+    desc: 'Cobros y comisiones bancarias por pago con tarjeta',
+    acento: 'emerald',
+  },
+  {
+    id: 'egresos',
+    label: 'Egresos',
+    icon: TrendingDown,
+    desc: 'Gastos clasificados con desglose fiscal por proveedor',
+    acento: 'rose',
+  },
 ];
+
+const ACENTO = {
+  blue:    { badge: 'text-blue-400',    border: 'border-blue-500/20',    total: 'text-blue-400'    },
+  emerald: { badge: 'text-emerald-400', border: 'border-emerald-500/20', total: 'text-emerald-400' },
+  rose:    { badge: 'text-rose-400',    border: 'border-rose-500/20',    total: 'text-rose-400'    },
+};
 
 const itemKey = (item, tab) =>
   item.poliza_id
@@ -34,6 +58,7 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
   const [selected, setSelected] = useState(null);
   const [generating, setGenerating] = useState(null);
   const [autoGenerando, setAutoGenerando] = useState(false);
+  const [descargando, setDescargando] = useState(false);
 
   const fetchPolizas = useCallback(async () => {
     try {
@@ -41,8 +66,7 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
         `/polizas/organizadas?empresa_id=${empresaId}&mes=${mes}&anio=${anio}`
       );
       setData(res.data);
-    } catch (err) {
-      console.error(err);
+    } catch {
       toast.error('No se pudieron cargar las pólizas');
     } finally {
       setLoading(false);
@@ -61,6 +85,30 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
       .catch(() => {});
   }, [fetchPolizas, empresaId]);
 
+  const handleDescargarCsv = async () => {
+    setDescargando(true);
+    try {
+      const params = new URLSearchParams({ empresa_id: empresaId, tipo: tab });
+      if (mes) params.set('mes', mes);
+      if (anio) params.set('anio', anio);
+      const res = await api.get(`/polizas/descargar-csv?${params}`, { responseType: 'blob' });
+      const cd = res.headers['content-disposition'] || '';
+      const match = cd.match(/filename="?([^"]+)"?/);
+      const nombre = match?.[1] || `polizas_${tab}.csv`;
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombre;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`CSV de ${tabInfo?.label} descargado`);
+    } catch {
+      toast.error('No se pudo descargar el CSV');
+    } finally {
+      setDescargando(false);
+    }
+  };
+
   const handleGenerarAutomatico = async () => {
     setAutoGenerando(true);
     try {
@@ -73,16 +121,11 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
       const res = await api.post(`/polizas/generar-automatico?${params}`);
       const { por_mes, total_polizas, errores } = res.data;
       toast.success(res.data.mensaje || `${total_polizas} póliza(s) generadas`);
-      if (por_mes?.length) {
-        por_mes.forEach((p) => {
-          if (p.polizas_generadas > 0) {
-            toast(`${MESES[p.mes - 1]} ${p.anio}: ${p.polizas_generadas} póliza(s)`, { icon: '📅' });
-          }
-        });
-      }
-      if (errores?.length) {
-        toast.error(`${errores.length} factura(s) con error al contabilizar`);
-      }
+      por_mes?.forEach((p) => {
+        if (p.polizas_generadas > 0)
+          toast(`${MESES[p.mes - 1]} ${p.anio}: ${p.polizas_generadas} póliza(s)`, { icon: '📅' });
+      });
+      if (errores?.length) toast.error(`${errores.length} factura(s) con error`);
       await fetchPolizas();
       onRefreshFacturas?.();
     } catch (err) {
@@ -107,15 +150,27 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
     }
   };
 
-  const items = data[tab] || [];
-  const pendientesCount = data.pendientes_count ?? 0;
-  const pendientesTab = data.pendientes?.filter((p) => {
-    if (tab === 'diario') return p.categoria === 'diario';
-    if (tab === 'egresos') return p.categoria === 'egreso';
-    if (tab === 'ingresos') return p.ingreso;
+  // ── Pendientes filtrados por tab ──────────────────────────────────────────
+  const pendientesTab = (data.pendientes || []).filter((p) => {
+    if (tab === 'diario')   return p.categoria === 'diario';
+    if (tab === 'egresos')  return p.categoria === 'egreso';
+    if (tab === 'ingresos') return !!p.ingreso;
     return false;
-  }) || [];
+  });
 
+  const items = data[tab] || [];
+  const seenFacturas = new Set(items.map((i) => i.factura_id).filter(Boolean));
+  const allItems = [
+    ...items,
+    ...pendientesTab.filter((p) => p.factura_id && !seenFacturas.has(p.factura_id)),
+  ];
+
+  const totalPeriodo = items.reduce((s, i) => s + (i.total || 0), 0);
+  const pendientesCount = data.pendientes_count ?? 0;
+  const tabInfo = TABS.find((t) => t.id === tab);
+  const col = ACENTO[tabInfo.acento];
+
+  // ── Renders de impuestos ──────────────────────────────────────────────────
   const renderImpuestos = (lista) => (
     <ul className="text-xs text-slate-400 space-y-0.5 mt-2">
       {(lista || []).slice(0, 4).map((imp, i) => (
@@ -129,15 +184,41 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
     </ul>
   );
 
+  // ── Botones de acción ─────────────────────────────────────────────────────
+  const renderActions = (item) => (
+    <div className="flex gap-2 mt-4 pt-3 border-t border-slate-800">
+      {item.poliza_id ? (
+        <button
+          type="button"
+          onClick={() => setSelected(item)}
+          className="flex items-center gap-1 text-blue-400 text-sm font-bold hover:underline"
+        >
+          Ver partida <ChevronRight className="w-4 h-4" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={generating === item.factura_id}
+          onClick={() => handleGenerar(item.factura_id)}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-xl"
+        >
+          {generating === item.factura_id
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <FilePlus className="w-4 h-4" />}
+          Generar póliza
+        </button>
+      )}
+    </div>
+  );
+
+  // ── Cards por tipo ────────────────────────────────────────────────────────
   const renderDiarioCard = (item) => (
     <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5">
       <div className="flex justify-between items-start gap-4">
         <div>
           <p className="text-[10px] font-black uppercase text-blue-400 tracking-widest">
-            {item.poliza_id ? `Póliza #${item.numero}` : 'Sin póliza'}
-            {item.periodo && (
-              <span className="ml-2 text-slate-500">{item.periodo}</span>
-            )}
+            {item.poliza_id ? `Póliza Diario #${item.numero}` : 'Sin póliza'}
+            {item.periodo && <span className="ml-2 text-slate-500">{item.periodo}</span>}
           </p>
           <h4 className="text-white font-bold mt-1">
             {item.diario?.nombre || item.nombre_cliente || '—'}
@@ -166,7 +247,7 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
       <div className="flex justify-between">
         <div>
           <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">
-            {item.poliza_id ? `Ingreso #${item.numero}` : 'Cobro pendiente'}
+            {item.poliza_id ? `Póliza Ingreso #${item.numero}` : 'Cobro pendiente'}
           </p>
           <h4 className="text-white font-bold mt-1">
             {item.ingreso?.forma_pago || item.forma_pago?.etiqueta}
@@ -205,10 +286,10 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
       <div className="flex justify-between">
         <div>
           <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest">
-            {item.poliza_id ? `Egreso #${item.numero}` : 'Gasto sin póliza'}
+            {item.poliza_id ? `Póliza Egreso #${item.numero}` : 'Gasto sin póliza'}
           </p>
           <h4 className="text-white font-bold mt-1">
-            {item.egreso?.proveedor || item.egreso?.clasificacion_gasto || 'Proveedor'}
+            {item.egreso?.proveedor || '—'}
           </h4>
           <p className="text-emerald-400 text-xs font-bold mt-1">
             {item.egreso?.clasificacion_gasto || 'Por clasificar'}
@@ -221,53 +302,20 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
     </div>
   );
 
-  const renderActions = (item) => (
-    <div className="flex gap-2 mt-4 pt-3 border-t border-slate-800">
-      {item.poliza_id ? (
-        <button
-          type="button"
-          onClick={() => setSelected(item)}
-          className="flex items-center gap-1 text-blue-400 text-sm font-bold hover:underline"
-        >
-          Ver partida <ChevronRight className="w-4 h-4" />
-        </button>
-      ) : (
-        <button
-          type="button"
-          disabled={generating === item.factura_id}
-          onClick={() => handleGenerar(item.factura_id)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-xl"
-        >
-          {generating === item.factura_id ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <FilePlus className="w-4 h-4" />
-          )}
-          Generar póliza
-        </button>
-      )}
-    </div>
-  );
-
   const renderCard = (item) => {
-    if (tab === 'diario') return renderDiarioCard(item);
+    if (tab === 'diario')   return renderDiarioCard(item);
     if (tab === 'ingresos') return renderIngresoCard(item);
     return renderEgresoCard(item);
   };
 
-  const seenFacturas = new Set(items.map((i) => i.factura_id).filter(Boolean));
-  const allItems = [
-    ...items,
-    ...pendientesTab.filter((p) => p.factura_id && !seenFacturas.has(p.factura_id)),
-  ];
-
   return (
     <section className="mb-10">
+      {/* ── Cabecera ── */}
       <div className="mb-6 flex flex-wrap justify-between items-start gap-4">
         <div>
           <h2 className="text-2xl font-black text-white">Pólizas contables</h2>
           <p className="text-slate-500 text-sm mt-1">
-            Numeración y fecha según mes del CFDI · {pendientesCount} pendiente(s)
+            Numeración por mes del CFDI · {pendientesCount} pendiente(s)
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -299,44 +347,65 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
               onClick={handleGenerarAutomatico}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
             >
-              {autoGenerando ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Zap className="w-4 h-4" />
-              )}
+              {autoGenerando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               Generar del mes
             </button>
           ) : (
             <span className="text-xs font-bold uppercase tracking-wide text-slate-500 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
-              Sin pendientes en este mes
+              Sin pendientes
             </span>
           )}
+          <button
+            type="button"
+            disabled={descargando || loading || items.length === 0}
+            onClick={handleDescargarCsv}
+            title={`Descargar pólizas de ${tabInfo?.label} (${MESES[mes - 1]} ${anio})`}
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 disabled:opacity-40 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
+          >
+            {descargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            CSV {tabInfo?.label}
+          </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              tab === id
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-            <span className="opacity-60 text-xs">
-              ({id === 'diario' ? data.diario?.length : id === 'ingresos' ? data.ingresos?.length : data.egresos?.length})
-            </span>
-          </button>
-        ))}
+      {/* ── Tabs ── */}
+      <div className="grid grid-cols-3 gap-2 mb-6 p-1.5 bg-slate-900/80 border border-slate-800 rounded-2xl">
+        {TABS.map(({ id, label, icon: Icon, acento }) => {
+          const count = data[id]?.length ?? 0;
+          const c = ACENTO[acento];
+          const activo = tab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`flex flex-col items-start gap-1 px-4 py-3 rounded-xl text-left transition-all ${
+                activo ? 'bg-slate-800 shadow-inner' : 'hover:bg-slate-800/50'
+              }`}
+            >
+              <span className={`flex items-center gap-2 font-bold text-sm ${activo ? c.badge : 'text-slate-400'}`}>
+                <Icon className="w-4 h-4 shrink-0" />
+                {label}
+              </span>
+              <span className={`text-xs font-black ${activo ? c.total : 'text-slate-600'}`}>
+                {count} póliza{count !== 1 ? 's' : ''}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <p className="text-slate-600 text-xs mb-4">{TABS.find((t) => t.id === tab)?.desc}</p>
+      {/* ── Descripción + total del tab activo ── */}
+      <div className={`flex items-center justify-between mb-4 px-4 py-3 rounded-xl border ${col.border} bg-slate-900/40`}>
+        <p className="text-slate-400 text-xs">{tabInfo.desc}</p>
+        {items.length > 0 && (
+          <p className={`text-sm font-black ${col.total}`}>
+            Total: ${totalPeriodo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          </p>
+        )}
+      </div>
 
+      {/* ── Selector banco (solo ingresos) ── */}
       {tab === 'ingresos' && bancos.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <label className="text-xs text-slate-500 font-bold uppercase">Banco para comisión:</label>
@@ -354,13 +423,17 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
         </div>
       )}
 
+      {/* ── Contenido ── */}
       {loading ? (
         <div className="py-16 text-center text-slate-500">
           <Loader2 className="w-8 h-8 animate-spin mx-auto" />
         </div>
       ) : allItems.length === 0 ? (
         <div className="py-12 text-center text-slate-500 bg-slate-900/50 rounded-2xl border border-slate-800">
-          No hay registros en esta categoría. Sube CFDI y genera pólizas.
+          No hay pólizas de {tabInfo.label.toLowerCase()} en {MESES[mes - 1]} {anio}.
+          {pendientesCount > 0 && (
+            <p className="mt-2 text-xs">Hay {pendientesCount} factura(s) pendiente(s) — usa "Generar del mes".</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
