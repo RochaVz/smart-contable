@@ -15,6 +15,7 @@ const fmt = (value) => `$${(Number(value) || 0).toLocaleString('es-MX', { minimu
 const ConciliacionBancariaPanel = ({ empresaId }) => {
   const hoy = new Date();
   const fileRef = useRef(null);
+  const fileCsvRef = useRef(null);
   const [mes, setMes] = useState(hoy.getMonth() + 1);
   const [anio, setAnio] = useState(hoy.getFullYear());
   const [bancoId, setBancoId] = useState('');
@@ -61,8 +62,11 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
   const handleUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.xml')) {
-      toast.error('Selecciona un XML de estado de cuenta');
+    const name = file.name.toLowerCase();
+    const isXml = name.endsWith('.xml');
+    const isCsv = name.endsWith('.csv');
+    if (!isXml && !isCsv) {
+      toast.error('Selecciona un XML o CSV de estado de cuenta');
       return;
     }
 
@@ -76,6 +80,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
         anio: String(anio),
       });
       if (bancoId) params.set('banco_id', bancoId);
+      // El backend debe aceptar tanto XML como CSV en este endpoint
       const res = await api.post(
         `/conciliacion/estado-cuenta?${params}`,
         formData,
@@ -89,6 +94,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
+      if (fileCsvRef.current) fileCsvRef.current.value = '';
     }
   };
 
@@ -158,6 +164,22 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
             ref={fileRef}
             type="file"
             accept=".xml,text/xml"
+            onChange={handleUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileCsvRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl"
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+            Cargar CSV banco
+          </button>
+          <input
+            ref={fileCsvRef}
+            type="file"
+            accept=".csv,text/csv"
             onChange={handleUpload}
             className="hidden"
           />
