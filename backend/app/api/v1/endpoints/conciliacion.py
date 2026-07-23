@@ -13,7 +13,9 @@ from app.services.conciliacion import (
     conciliar_periodo,
     hash_archivo,
     hash_movimiento,
+    parsear_estado_cuenta_pdf,
     parsear_estado_cuenta_xml,
+    parsear_estado_cuenta_csv,
 )
 
 router = APIRouter()
@@ -74,34 +76,60 @@ async def cargar_estado_cuenta(
     mes_f, anio_f = _periodo_default(mes, anio)
     _validar_periodo(mes_f, anio_f)
 
-    if not archivo.filename or not archivo.filename.lower().endswith(".xml"):
-        raise HTTPException(status_code=400, detail="Solo se aceptan estados de cuenta en XML")
+    if not archivo.filename:
+        raise HTTPException(status_code=400, detail="Archivo sin nombre")
 
-    xml_bytes = await archivo.read()
-    if not xml_bytes.strip():
-        raise HTTPException(status_code=400, detail="El archivo XML está vacío")
+    fname = archivo.filename.lower()
+    if fname.endswith('.xml'):
+        archivo_bytes = await archivo.read()
+        if not archivo_bytes.strip():
+            raise HTTPException(status_code=400, detail="El archivo XML está vacío")
 
-    snippet = xml_bytes[:4000].lower()
-    if b"cfdi:comprobante" in snippet or b"tipodecomprobante" in snippet:
-        raise HTTPException(
-            status_code=400,
-            detail="Este XML parece ser un CFDI de factura. Carga el estado de cuenta del banco, no facturas.",
-        )
+        snippet = archivo_bytes[:4000].lower()
+        if b"cfdi:comprobante" in snippet or b"tipodecomprobante" in snippet:
+            raise HTTPException(
+                status_code=400,
+                detail="Este XML parece ser un CFDI de factura. Carga el estado de cuenta del banco, no facturas.",
+            )
 
-    try:
-        movimientos = parsear_estado_cuenta_xml(xml_bytes)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No se pudo leer el XML del estado de cuenta: {exc}",
-        ) from exc
+        try:
+            movimientos = parsear_estado_cuenta_xml(archivo_bytes)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se pudo leer el XML del estado de cuenta: {exc}",
+            ) from exc
+    elif fname.endswith('.csv'):
+        archivo_bytes = await archivo.read()
+        if not archivo_bytes.strip():
+            raise HTTPException(status_code=400, detail="El archivo CSV está vacío")
+        try:
+            movimientos = parsear_estado_cuenta_csv(archivo_bytes)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se pudo leer el CSV del estado de cuenta: {exc}",
+            ) from exc
+    elif fname.endswith('.pdf'):
+        archivo_bytes = await archivo.read()
+        if not archivo_bytes.strip():
+            raise HTTPException(status_code=400, detail="El archivo PDF está vacío")
+        try:
+            movimientos = parsear_estado_cuenta_pdf(archivo_bytes)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se pudo leer el PDF del estado de cuenta: {exc}",
+            ) from exc
+    else:
+        raise HTTPException(status_code=400, detail="Solo se aceptan estados de cuenta en XML, CSV o PDF")
 
     if not movimientos:
         raise HTTPException(
             status_code=400,
             detail=(
-                "No se encontraron movimientos bancarios en el XML. "
-                "Verifica que sea el estado de cuenta exportado por tu banco."
+                "No se encontraron movimientos bancarios en el estado de cuenta. "
+                "Verifica que sea el archivo exportado por tu banco."
             ),
         )
 
@@ -109,7 +137,7 @@ async def cargar_estado_cuenta(
         empresa_id=empresa_id,
         banco_id=banco_id,
         nombre_archivo=archivo.filename,
-        hash_archivo=hash_archivo(xml_bytes),
+        hash_archivo=hash_archivo(archivo_bytes),
         movimientos_count=0,
     )
     db.add(carga)

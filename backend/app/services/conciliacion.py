@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+import csv
 import hashlib
+import io
 import re
 import xml.etree.ElementTree as ET
 
@@ -121,6 +123,250 @@ def parsear_estado_cuenta_xml(xml_bytes: bytes) -> list[MovimientoEstadoCuenta]:
 
     for node in root.iter():
         data = _node_data(node)
+        movimiento = _movimiento_desde_data(data)
+        if not movimiento:
+            continue
+
+        key = (
+            movimiento.fecha.date().isoformat(),
+            movimiento.tipo,
+            str(movimiento.monto),
+            movimiento.referencia or "",
+            movimiento.descripcion,
+        )
+        if key in vistos:
+            continue
+        vistos.add(key)
+        movimientos.append(movimiento)
+
+    return sorted(movimientos, key=lambda m: (m.fecha, m.tipo, m.monto))
+
+
+def _read_pdf_rows(pdf_bytes: bytes) -> list[dict[str, str]]:
+    def _parse_text_pages(text_pages: list[str | None]) -> list[dict[str, str]]:
+        def _parse_unstructured_rows(lines: list[str]) -> list[dict[str, str]]:
+            def _looks_like_amount(line: str) -> bool:
+                cleaned = line.strip()
+                if not cleaned:
+                    return False
+                if re.fullmatch(r"[-+]?(?:\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?", cleaned):
+                    return True
+                if re.fullmatch(r"[-+]?(?:\d+)(?:\.\d+)?", cleaned):
+                    return True
+                return False
+
+            rows: list[dict[str, str]] = []
+            date_pattern = re.compile(r"\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}")
+            current_block: list[str] = []
+
+            for line in lines:
+                if date_pattern.search(line):
+                    if current_block:
+                        rows.append(current_block)
+                    current_block = [line]
+                elif current_block and line.strip():
+                    current_block.append(line)
+            if current_block:
+                rows.append(current_block)
+
+            parsed: list[dict[str, str]] = []
+            for block in rows:
+                if not block:
+                    continue
+                first = block[0]
+                match = date_pattern.search(first)
+                if not match:
+                    continue
+                fecha = match.group(0)
+                remainder = first[match.end():].strip()
+                referencia = None
+                if remainder:
+                    possible_ref = remainder.rsplit(" ", 1)
+                    if len(possible_ref) == 2 and re.fullmatch(r"[A-Za-z0-9]{3,}", possible_ref[1]) and not _looks_like_amount(possible_ref[1]):
+                        referencia = possible_ref[1]
+                        remainder = possible_ref[0]
+                monto = None
+                descripcion_parts = [remainder] if remainder else []
+
+                for line in block[1:]:
+                    if monto is None and _looks_like_amount(line):
+                        posible_monto = _to_decimal(line)
+                        if posible_monto is not None:
+                            monto = line.strip()
+                            continue
+                    if referencia is None and len(line.split()) == 1 and re.search(r"[A-Za-z0-9]{3,}", line):
+                        referencia = line.strip()
+                        continue
+                    descripcion_parts.append(line.strip())
+
+                if monto is None and descripcion_parts:
+                    last_line = descripcion_parts[-1]
+                    if _looks_like_amount(last_line):
+                        posible_monto = _to_decimal(last_line)
+                        if posible_monto is not None:
+                            monto = last_line.strip()
+                            descripcion_parts = descripcion_parts[:-1]
+
+                descripcion = " ".join(part for part in descripcion_parts if part).strip()
+                if not descripcion:
+                    descripcion = "Movimiento bancario"
+
+                parsed.append({
+                    "fecha": fecha,
+                    "descripcion": descripcion,
+                    "referencia": referencia or "",
+                    "monto": monto or "",
+                })
+            return parsed
+
+        rows: list[dict[str, str]] = []
+        for text in text_pages:
+            if not text:
+                continue
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            if not lines:
+                continue
+            header_start = None
+            for i, line in enumerate(lines):
+                if any(word in line.lower() for word in ("fecha", "date")):
+                    header_start = i
+                    break
+            if header_start is None:
+                continue
+            headers = [lines[header_start].strip().lower()]
+            data_start = header_start + 1
+            while data_start < len(lines):
+                candidate = lines[data_start]
+                if re.search(r"\d{4}[-/]\d{2}[-/]\d{2}", candidate) or re.search(r"\d{2}[-/]\d{2}[-/]\d{4}", candidate):
+                    break
+                headers.append(candidate.strip().lower())
+                data_start += 1
+
+            rest_lines = lines[data_start:]
+            if not headers or not rest_lines:
+                continue
+
+            for line in rest_lines:
+                parts = re.split(r"\s{2,}", line)
+                if len(parts) >= 2:
+                    data = {
+                        headers[j]: parts[j].strip() if j < len(parts) else ""
+                        for j in range(len(headers))
+                    }
+                    if any(value for value in data.values()):
+                        rows.append(data)
+
+            if len(rest_lines) >= len(headers):
+                for idx in range(0, len(rest_lines), len(headers)):
+                    row_lines = rest_lines[idx : idx + len(headers)]
+                    if len(row_lines) < len(headers):
+                        break
+                    data = {headers[j]: row_lines[j].strip() for j in range(len(headers))}
+                    if any(value for value in data.values()):
+                        rows.append(data)
+
+            if rest_lines:
+                rows.extend(_parse_unstructured_rows(rest_lines))
+        return rows
+
+    def _extract_text_pages_from_pdf_bytes(pdf_bytes: bytes) -> list[str | None]:
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+            return [page.extract_text() for page in reader.pages]
+        except Exception:
+            pass
+
+        try:
+            from pdfminer.high_level import extract_text
+            text = extract_text(io.BytesIO(pdf_bytes))
+            return [text] if text is not None else []
+        except Exception as exc:
+            raise RuntimeError(
+                "La lectura de PDF requiere pdfplumber, PyPDF2 o pdfminer.six. Instala una de estas dependencias."
+            ) from exc
+
+    try:
+        import pdfplumber  # type: ignore
+    except Exception:
+        text_pages = _extract_text_pages_from_pdf_bytes(pdf_bytes)
+        return _parse_text_pages(text_pages)
+
+    rows: list[dict[str, str]] = []
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            pages = list(pdf.pages)
+            for page in pages:
+                try:
+                    tables = page.extract_tables()
+                except Exception:
+                    tables = None
+                if tables:
+                    for table in tables:
+                        if not table or len(table) < 2:
+                            continue
+                        headers = [str(h).strip().lower() if h is not None else "" for h in table[0]]
+                        for row in table[1:]:
+                            if not any(cell for cell in row if cell):
+                                continue
+                            data = {
+                                headers[i]: str(row[i]).strip() if i < len(row) and row[i] is not None else ""
+                                for i in range(len(headers))
+                            }
+                            rows.append(data)
+            if rows:
+                return rows
+
+            text_pages = [page.extract_text() for page in pages]
+        return _parse_text_pages(text_pages)
+    except Exception:
+        text_pages = _extract_text_pages_from_pdf_bytes(pdf_bytes)
+        return _parse_text_pages(text_pages)
+
+
+def convertir_estado_cuenta_pdf_a_xml(pdf_bytes: bytes) -> bytes:
+    rows = _read_pdf_rows(pdf_bytes)
+    root = ET.Element("EstadoCuenta")
+    for row in rows:
+        movimiento_el = ET.SubElement(root, "Movimiento")
+        for key, value in row.items():
+            if value is None or str(value).strip() == "":
+                continue
+            tag = re.sub(r"[^0-9a-zA-Z_-]", "_", str(key).strip().lower())
+            if not tag:
+                continue
+            child = ET.SubElement(movimiento_el, tag)
+            child.text = str(value)
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def parsear_estado_cuenta_pdf(pdf_bytes: bytes) -> list[MovimientoEstadoCuenta]:
+    xml_bytes = convertir_estado_cuenta_pdf_a_xml(pdf_bytes)
+    return parsear_estado_cuenta_xml(xml_bytes)
+
+
+def parsear_estado_cuenta_csv(csv_bytes: bytes) -> list[MovimientoEstadoCuenta]:
+    """Parsea un CSV de estado de cuenta. Se espera que el CSV tenga una fila de cabecera
+    con nombres como fecha, descripcion, monto, abono, cargo, referencia, saldo, etc.
+    El parser intentará mapear columnas usando las mismas claves que el parser XML.
+    """
+    text = csv_bytes.decode("utf-8", errors="replace")
+    # Detect delimiter: accept tab-separated exports (TSV) as well as comma-separated CSV
+    first_line = text.splitlines()[0] if text.splitlines() else ""
+    delimiter = '\t' if '\t' in first_line else ','
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    movimientos: list[MovimientoEstadoCuenta] = []
+    vistos = set()
+
+    for row in reader:
+        # Normalize keys and values: keep as simple mapping for _movimiento_desde_data
+        data = {}
+        for k, v in row.items():
+            if k is None:
+                continue
+            key = k.strip().lower()
+            data[key] = (v.strip() if v is not None else "")
+
         movimiento = _movimiento_desde_data(data)
         if not movimiento:
             continue
