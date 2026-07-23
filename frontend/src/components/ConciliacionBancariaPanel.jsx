@@ -16,6 +16,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
   const hoy = new Date();
   const fileRef = useRef(null);
   const fileCsvRef = useRef(null);
+  const filePdfRef = useRef(null);
   const [mes, setMes] = useState(hoy.getMonth() + 1);
   const [anio, setAnio] = useState(hoy.getFullYear());
   const [bancoId, setBancoId] = useState('');
@@ -65,8 +66,9 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
     const name = file.name.toLowerCase();
     const isXml = name.endsWith('.xml');
     const isCsv = name.endsWith('.csv');
-    if (!isXml && !isCsv) {
-      toast.error('Selecciona un XML o CSV de estado de cuenta');
+    const isPdf = name.endsWith('.pdf');
+    if (!isXml && !isCsv && !isPdf) {
+      toast.error('Selecciona un XML, CSV o PDF de estado de cuenta');
       return;
     }
 
@@ -80,7 +82,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
         anio: String(anio),
       });
       if (bancoId) params.set('banco_id', bancoId);
-      // El backend debe aceptar tanto XML como CSV en este endpoint
+      // El backend acepta XML, CSV y PDF en este endpoint
       const res = await api.post(
         `/conciliacion/estado-cuenta?${params}`,
         formData,
@@ -95,6 +97,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
       if (fileCsvRef.current) fileCsvRef.current.value = '';
+      if (filePdfRef.current) filePdfRef.current.value = '';
     }
   };
 
@@ -164,6 +167,22 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
             ref={fileRef}
             type="file"
             accept=".xml,text/xml"
+            onChange={handleUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => filePdfRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl"
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+            Cargar PDF banco
+          </button>
+          <input
+            ref={filePdfRef}
+            type="file"
+            accept=".pdf,application/pdf"
             onChange={handleUpload}
             className="hidden"
           />
