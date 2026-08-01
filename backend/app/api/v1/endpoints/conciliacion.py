@@ -1,6 +1,9 @@
 from datetime import date
+import io
+import csv
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -9,13 +12,18 @@ from app.core.dependencies import get_current_user
 from app.models.conciliacion import EstadoCuentaCarga, MovimientoBanco
 from app.models.empresa import Empresa
 from app.models.usuario import Usuario
+
+# 1. IMPORTAMOS TU NUEVA ARQUITECTURA LIMPIA DE PARSERS
+from app.services.bank_parser.analyzer import DocumentAnalyzer, PDFExtractor
+from app.services.bank_parser.factory import BankParserFactory
+
 from app.services.conciliacion import (
     conciliar_periodo,
     hash_archivo,
     hash_movimiento,
-    parsear_estado_cuenta_pdf,
     parsear_estado_cuenta_xml,
     parsear_estado_cuenta_csv,
+    # parsear_estado_cuenta_pdf, -> Ya no lo necesitamos para PDF, lo maneja bank_parser
 )
 
 router = APIRouter()
@@ -80,49 +88,78 @@ async def cargar_estado_cuenta(
         raise HTTPException(status_code=400, detail="Archivo sin nombre")
 
     fname = archivo.filename.lower()
-    if fname.endswith('.xml'):
-        archivo_bytes = await archivo.read()
-        if not archivo_bytes.strip():
-            raise HTTPException(status_code=400, detail="El archivo XML está vacío")
+    
+    try:
+        if fname.endswith('.xml'):
+            archivo_bytes = await archivo.read()
+            if not archivo_bytes.strip():
+                raise HTTPException(status_code=400, detail="El archivo XML está vacío")
 
-        snippet = archivo_bytes[:4000].lower()
-        if b"cfdi:comprobante" in snippet or b"tipodecomprobante" in snippet:
-            raise HTTPException(
-                status_code=400,
-                detail="Este XML parece ser un CFDI de factura. Carga el estado de cuenta del banco, no facturas.",
-            )
-
-        try:
+            snippet = archivo_bytes[:4000].lower()
+            if b"cfdi:comprobante" in snippet or b"tipodecomprobante" in snippet:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Este XML parece ser un CFDI de factura. Carga el estado de cuenta del banco, no facturas.",
+                )
             movimientos = parsear_estado_cuenta_xml(archivo_bytes)
-        except Exception as exc:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No se pudo leer el XML del estado de cuenta: {exc}",
-            ) from exc
-    elif fname.endswith('.csv'):
-        archivo_bytes = await archivo.read()
-        if not archivo_bytes.strip():
-            raise HTTPException(status_code=400, detail="El archivo CSV está vacío")
-        try:
+
+        elif fname.endswith('.csv'):
+            archivo_bytes = await archivo.read()
+            if not archivo_bytes.strip():
+                raise HTTPException(status_code=400, detail="El archivo CSV está vacío")
             movimientos = parsear_estado_cuenta_csv(archivo_bytes)
-        except Exception as exc:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No se pudo leer el CSV del estado de cuenta: {exc}",
-            ) from exc
-    elif fname.endswith('.pdf'):
-        archivo_bytes = await archivo.read()
-        if not archivo_bytes.strip():
-            raise HTTPException(status_code=400, detail="El archivo PDF está vacío")
-        try:
-            movimientos = parsear_estado_cuenta_pdf(archivo_bytes)
-        except Exception as exc:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No se pudo leer el PDF del estado de cuenta: {exc}",
-            ) from exc
-    else:
-        raise HTTPException(status_code=400, detail="Solo se aceptan estados de cuenta en XML, CSV o PDF")
+
+        elif fname.endswith('.pdf'):
+            archivo_bytes = await archivo.read()
+            if not archivo_bytes.strip():
+                raise HTTPException(status_code=400, detail="El archivo PDF está vacío")
+            
+            raw_text = PDFExtractor.extract_text(archivo_bytes)
+            parser = BankParserFactory().get_parser(raw_text)
+            statement_data = parser.parse(raw_text, pdf_bytes=archivo_bytes)
+            print(f"[DEBUG] Parser usado: {parser.__class__.__name__}")
+            print(f"[DEBUG] Texto extraído (500 chars): {raw_text[:500]}")
+            print(f"[DEBUG] Movimientos encontrados: {len(statement_data.movimientos)}")
+            
+            # Mapeamos los movimientos estándar del parser a un formato compatible 
+            # con los objetos que espera tu bucle de base de datos más abajo.
+            class MovimientoAdaptado:
+                def __init__(self, m):
+                    try:
+                        self.fecha = datetime.strptime(m.fecha, "%d/%m/%Y").date()
+                    except ValueError:
+                        try:
+                            self.fecha = datetime.strptime(m.fecha, "%Y-%m-%d").date()
+                        except ValueError:
+                            self.fecha = date.today()
+                            
+                    self.descripcion = m.descripcion
+                    self.referencia = m.referencia
+                    # Si tiene cargo es egreso/cargo, si tiene abono es ingreso/abono
+                    if m.cargo > 0:
+                        self.tipo = "cargo"
+                        self.monto = m.cargo
+                    else:
+                        self.tipo = "abono"
+                        self.monto = m.abono
+                    self.saldo = m.saldo
+
+            movimientos = [MovimientoAdaptado(m) for m in statement_data.movimientos]
+
+        else:
+            raise HTTPException(status_code=400, detail="Solo se aceptan estados de cuenta en XML, CSV o PDF")
+
+    except HTTPException:
+        raise
+    except RuntimeError as re_err:
+        raise HTTPException(status_code=500, detail=f"Error de configuración del servicio: {re_err}")
+    except ValueError as val_err:
+        raise HTTPException(status_code=422, detail=str(val_err))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se pudo procesar el archivo del estado de cuenta: {exc}",
+        ) from exc
 
     if not movimientos:
         raise HTTPException(
@@ -182,7 +219,7 @@ async def cargar_estado_cuenta(
         ) from None
 
     return {
-        "mensaje": "Estado de cuenta cargado",
+        "mensaje": "Estado de cuenta cargado con éxito",
         "carga_id": carga.id,
         "archivo": archivo.filename,
         "periodo_referencia": {"mes": mes_f, "anio": anio_f},
@@ -190,3 +227,59 @@ async def cargar_estado_cuenta(
         "movimientos_nuevos": nuevos,
         "duplicados": duplicados,
     }
+
+
+@router.post("/convertir-pdf-csv")
+async def convertir_pdf_a_csv(
+    archivo: UploadFile = File(...),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Convierte cualquier estado de cuenta PDF a un archivo CSV estructurado."""
+    if not archivo.filename or not archivo.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un PDF válido")
+
+    try:
+        archivo_bytes = await archivo.read()
+        
+        raw_text = PDFExtractor.extract_text(archivo_bytes)
+        parser = BankParserFactory().get_parser(raw_text)
+        statement_data = parser.parse(raw_text, pdf_bytes=archivo_bytes)
+        
+        # Mapeamos al formato que espera el escritor de CSV
+        class MovimientoCSVAdaptado:
+            def __init__(self, m):
+                try:
+                    self.fecha = datetime.strptime(m.fecha, "%d/%m/%Y").date()
+                except ValueError:
+                    self.fecha = date.today()
+                self.tipo = "Cargo" if m.cargo > 0 else "Abono"
+                self.descripcion = m.descripcion
+                self.referencia = m.referencia
+                self.monto = m.cargo if m.cargo > 0 else m.abono
+                self.saldo = m.saldo
+
+        movimientos = [MovimientoCSVAdaptado(m) for m in statement_data.movimientos]
+
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"No se pudo procesar el PDF para conversión: {exc}")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Fecha", "Tipo", "Descripcion", "Referencia", "Monto", "Saldo"])
+
+    for mov in movimientos:
+        writer.writerow([
+            mov.fecha.strftime("%Y-%m-%d"),
+            mov.tipo,
+            mov.descripcion,
+            mov.referencia or "",
+            mov.monto,
+            mov.saldo if mov.saldo is not None else ""
+        ])
+
+    csv_nombre = archivo.filename.rsplit('.', 1)[0] + ".csv"
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={csv_nombre}"}
+    )

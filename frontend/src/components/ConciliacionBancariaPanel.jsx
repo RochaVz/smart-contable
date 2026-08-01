@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useState, useTransition } from 'react';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle, CheckCircle2, FileUp, Landmark, Loader2, RefreshCw, UploadCloud,
@@ -14,51 +14,71 @@ const fmt = (value) => `$${(Number(value) || 0).toLocaleString('es-MX', { minimu
 
 const ConciliacionBancariaPanel = ({ empresaId }) => {
   const hoy = new Date();
-  const fileRef = useRef(null);
-  const fileCsvRef = useRef(null);
-  const filePdfRef = useRef(null);
+  
   const [mes, setMes] = useState(hoy.getMonth() + 1);
   const [anio, setAnio] = useState(hoy.getFullYear());
   const [bancoId, setBancoId] = useState('');
   const [bancos, setBancos] = useState([]);
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const fetchConciliacion = useCallback(async () => {
+  // Función principal de carga sincronizada sin romper las reglas de React
+  const cargarDatos = useCallback(async (targetMes, targetAnio) => {
     setLoading(true);
     try {
-      const res = await api.get(
-        `/conciliacion/resumen?empresa_id=${empresaId}&mes=${mes}&anio=${anio}`
-      );
-      setData(res.data);
+      const [resBancos, resConciliacion] = await Promise.all([
+        api.get(`/configuracion/comisiones-banco/${empresaId}`).catch(() => ({ data: [] })),
+        api.get(`/conciliacion/resumen?empresa_id=${empresaId}&mes=${targetMes}&anio=${targetAnio}`)
+      ]);
+
+      const listaBancos = resBancos.data || [];
+      setBancos(listaBancos);
+
+      setBancoId((prevBanco) => {
+        if (!prevBanco && listaBancos.length > 0) {
+          const def = listaBancos.find((b) => b.es_default) || listaBancos[0];
+          return String(def.id);
+        }
+        return prevBanco;
+      });
+
+      setData(resConciliacion.data);
     } catch (err) {
       const detail = err.response?.data?.detail;
       const msg = typeof detail === 'string'
         ? detail
         : Array.isArray(detail)
           ? detail.map((d) => d.msg).join(', ')
-          : 'No se pudo cargar la conciliación';
+          : 'No se pudieron sincronizar los datos';
       toast.error(msg);
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [empresaId, mes, anio]);
-
-  useEffect(() => {
-    api.get(`/configuracion/comisiones-banco/${empresaId}`)
-      .then((res) => {
-        setBancos(res.data);
-        const def = res.data.find((b) => b.es_default);
-        if (def) setBancoId(String(def.id));
-      })
-      .catch(() => {});
   }, [empresaId]);
 
-  useEffect(() => {
-    fetchConciliacion();
-  }, [fetchConciliacion]);
+  // Inicialización controlada mediante transición de estado diferida
+  const [inicializado, setInicializado] = useState(false);
+  if (!inicializado && !loading) {
+    setInicializado(true);
+    cargarDatos(mes, anio);
+  }
+
+  const handleCambioMes = (nuevoMes) => {
+    setMes(nuevoMes);
+    startTransition(() => {
+      cargarDatos(nuevoMes, anio);
+    });
+  };
+
+  const handleCambioAnio = (nuevoAnio) => {
+    setAnio(nuevoAnio);
+    startTransition(() => {
+      cargarDatos(mes, nuevoAnio);
+    });
+  };
 
   const handleUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -82,26 +102,25 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
         anio: String(anio),
       });
       if (bancoId) params.set('banco_id', bancoId);
-      // El backend acepta XML, CSV y PDF en este endpoint
+      
       const res = await api.post(
         `/conciliacion/estado-cuenta?${params}`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
       toast.success(`${res.data.movimientos_nuevos} movimiento(s) bancario(s) cargado(s)`);
-      await fetchConciliacion();
+      await cargarDatos(mes, anio);
     } catch (err) {
       const detail = err.response?.data?.detail;
       toast.error(typeof detail === 'string' ? detail : 'No se pudo cargar el estado de cuenta');
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
-      if (fileCsvRef.current) fileCsvRef.current.value = '';
-      if (filePdfRef.current) filePdfRef.current.value = '';
+      event.target.value = '';
     }
   };
 
   const resumen = data?.resumen || {};
+  const estaCargando = loading || isPending;
 
   return (
     <section className="mb-10 bg-slate-900/80 border border-slate-800 rounded-3xl p-6">
@@ -111,7 +130,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
           <div>
             <h2 className="text-lg font-black text-white">Conciliación bancaria</h2>
             <p className="text-slate-500 text-xs">
-              Sube el XML del banco (no CFDI de facturas). Se concilia con pólizas del mes seleccionado.
+              Sube el XML, CSV o PDF del banco. Se concilia con pólizas del mes seleccionado.
             </p>
           </div>
         </div>
@@ -119,7 +138,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5">
             <select
               value={mes}
-              onChange={(e) => setMes(Number(e.target.value))}
+              onChange={(e) => handleCambioMes(Number(e.target.value))}
               className="bg-transparent text-white text-sm outline-none"
             >
               {MESES.map((nombre, i) => (
@@ -129,17 +148,17 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
             <input
               type="number"
               value={anio}
-              onChange={(e) => setAnio(Number(e.target.value))}
+              onChange={(e) => handleCambioAnio(Number(e.target.value))}
               className="w-20 bg-transparent text-white text-sm outline-none"
             />
           </div>
           <button
             type="button"
-            onClick={fetchConciliacion}
-            disabled={loading}
+            onClick={() => cargarDatos(mes, anio)}
+            disabled={estaCargando}
             className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            {estaCargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Actualizar
           </button>
           {bancos.length > 0 && (
@@ -154,58 +173,25 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
               ))}
             </select>
           )}
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl"
-          >
+          <label className="flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl cursor-pointer">
             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-            Cargar XML banco
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xml,text/xml"
-            onChange={handleUpload}
-            className="hidden"
-          />
-          <button
-            type="button"
-            onClick={() => filePdfRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl"
-          >
+            Cargar XML
+            <input type="file" accept=".xml,text/xml" onChange={handleUpload} className="hidden" />
+          </label>
+          <label className="flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl cursor-pointer">
             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
-            Cargar PDF banco
-          </button>
-          <input
-            ref={filePdfRef}
-            type="file"
-            accept=".pdf,application/pdf"
-            onChange={handleUpload}
-            className="hidden"
-          />
-          <button
-            type="button"
-            onClick={() => fileCsvRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl"
-          >
+            Cargar PDF
+            <input type="file" accept=".pdf,application/pdf" onChange={handleUpload} className="hidden" />
+          </label>
+          <label className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-xl cursor-pointer">
             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
-            Cargar CSV banco
-          </button>
-          <input
-            ref={fileCsvRef}
-            type="file"
-            accept=".csv,text/csv"
-            onChange={handleUpload}
-            className="hidden"
-          />
+            Cargar CSV
+            <input type="file" accept=".csv,text/csv" onChange={handleUpload} className="hidden" />
+          </label>
         </div>
       </div>
 
-      {loading ? (
+      {estaCargando && !data ? (
         <div className="py-12 flex justify-center text-slate-500">
           <Loader2 className="w-7 h-7 animate-spin" />
         </div>

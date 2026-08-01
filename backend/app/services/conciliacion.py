@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.models.conciliacion import MovimientoBanco
 from app.models.poliza import MovimientoPoliza, Poliza, TipoPoliza
+from app.core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -142,207 +145,90 @@ def parsear_estado_cuenta_xml(xml_bytes: bytes) -> list[MovimientoEstadoCuenta]:
     return sorted(movimientos, key=lambda m: (m.fecha, m.tipo, m.monto))
 
 
-def _read_pdf_rows(pdf_bytes: bytes) -> list[dict[str, str]]:
-    def _parse_text_pages(text_pages: list[str | None]) -> list[dict[str, str]]:
-        def _parse_unstructured_rows(lines: list[str]) -> list[dict[str, str]]:
-            def _looks_like_amount(line: str) -> bool:
-                cleaned = line.strip()
-                if not cleaned:
-                    return False
-                if re.fullmatch(r"[-+]?(?:\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?", cleaned):
-                    return True
-                if re.fullmatch(r"[-+]?(?:\d+)(?:\.\d+)?", cleaned):
-                    return True
-                return False
-
-            rows: list[dict[str, str]] = []
-            date_pattern = re.compile(r"\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}")
-            current_block: list[str] = []
-
-            for line in lines:
-                if date_pattern.search(line):
-                    if current_block:
-                        rows.append(current_block)
-                    current_block = [line]
-                elif current_block and line.strip():
-                    current_block.append(line)
-            if current_block:
-                rows.append(current_block)
-
-            parsed: list[dict[str, str]] = []
-            for block in rows:
-                if not block:
-                    continue
-                first = block[0]
-                match = date_pattern.search(first)
-                if not match:
-                    continue
-                fecha = match.group(0)
-                remainder = first[match.end():].strip()
-                referencia = None
-                if remainder:
-                    possible_ref = remainder.rsplit(" ", 1)
-                    if len(possible_ref) == 2 and re.fullmatch(r"[A-Za-z0-9]{3,}", possible_ref[1]) and not _looks_like_amount(possible_ref[1]):
-                        referencia = possible_ref[1]
-                        remainder = possible_ref[0]
-                monto = None
-                descripcion_parts = [remainder] if remainder else []
-
-                for line in block[1:]:
-                    if monto is None and _looks_like_amount(line):
-                        posible_monto = _to_decimal(line)
-                        if posible_monto is not None:
-                            monto = line.strip()
-                            continue
-                    if referencia is None and len(line.split()) == 1 and re.search(r"[A-Za-z0-9]{3,}", line):
-                        referencia = line.strip()
-                        continue
-                    descripcion_parts.append(line.strip())
-
-                if monto is None and descripcion_parts:
-                    last_line = descripcion_parts[-1]
-                    if _looks_like_amount(last_line):
-                        posible_monto = _to_decimal(last_line)
-                        if posible_monto is not None:
-                            monto = last_line.strip()
-                            descripcion_parts = descripcion_parts[:-1]
-
-                descripcion = " ".join(part for part in descripcion_parts if part).strip()
-                if not descripcion:
-                    descripcion = "Movimiento bancario"
-
-                parsed.append({
-                    "fecha": fecha,
-                    "descripcion": descripcion,
-                    "referencia": referencia or "",
-                    "monto": monto or "",
-                })
-            return parsed
-
-        rows: list[dict[str, str]] = []
-        for text in text_pages:
-            if not text:
-                continue
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            if not lines:
-                continue
-            header_start = None
-            for i, line in enumerate(lines):
-                if any(word in line.lower() for word in ("fecha", "date")):
-                    header_start = i
-                    break
-            if header_start is None:
-                continue
-            headers = [lines[header_start].strip().lower()]
-            data_start = header_start + 1
-            while data_start < len(lines):
-                candidate = lines[data_start]
-                if re.search(r"\d{4}[-/]\d{2}[-/]\d{2}", candidate) or re.search(r"\d{2}[-/]\d{2}[-/]\d{4}", candidate):
-                    break
-                headers.append(candidate.strip().lower())
-                data_start += 1
-
-            rest_lines = lines[data_start:]
-            if not headers or not rest_lines:
-                continue
-
-            for line in rest_lines:
-                parts = re.split(r"\s{2,}", line)
-                if len(parts) >= 2:
-                    data = {
-                        headers[j]: parts[j].strip() if j < len(parts) else ""
-                        for j in range(len(headers))
-                    }
-                    if any(value for value in data.values()):
-                        rows.append(data)
-
-            if len(rest_lines) >= len(headers):
-                for idx in range(0, len(rest_lines), len(headers)):
-                    row_lines = rest_lines[idx : idx + len(headers)]
-                    if len(row_lines) < len(headers):
-                        break
-                    data = {headers[j]: row_lines[j].strip() for j in range(len(headers))}
-                    if any(value for value in data.values()):
-                        rows.append(data)
-
-            if rest_lines:
-                rows.extend(_parse_unstructured_rows(rest_lines))
-        return rows
-
-    def _extract_text_pages_from_pdf_bytes(pdf_bytes: bytes) -> list[str | None]:
-        try:
-            from PyPDF2 import PdfReader
-            reader = PdfReader(io.BytesIO(pdf_bytes))
-            return [page.extract_text() for page in reader.pages]
-        except Exception:
-            pass
-
-        try:
-            from pdfminer.high_level import extract_text
-            text = extract_text(io.BytesIO(pdf_bytes))
-            return [text] if text is not None else []
-        except Exception as exc:
-            raise RuntimeError(
-                "La lectura de PDF requiere pdfplumber, PyPDF2 o pdfminer.six. Instala una de estas dependencias."
-            ) from exc
+def parsear_estado_cuenta_pdf(pdf_bytes: bytes) -> list[MovimientoEstadoCuenta]:
+    """
+    Parsea un estado de cuenta PDF mediante pdfplumber e Inteligencia Artificial
+    garantizando precisión con validación aritmética de saldos.
+    """
+    try:
+        import pdfplumber
+    except ImportError as exc:
+        raise RuntimeError("Instala pdfplumber con: pip install pdfplumber") from exc
 
     try:
-        import pdfplumber  # type: ignore
-    except Exception:
-        text_pages = _extract_text_pages_from_pdf_bytes(pdf_bytes)
-        return _parse_text_pages(text_pages)
+        from app.ai.bank_statement_agent import extraer_movimientos_pdf_ai
+    except ImportError as exc:
+        raise RuntimeError("No se encontró el agente de IA en app.ai.bank_statement_agent") from exc
 
-    rows: list[dict[str, str]] = []
+    # 1. Extraer capa de texto plano
+    texto_completo = ""
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            pages = list(pdf.pages)
-            for page in pages:
-                try:
-                    tables = page.extract_tables()
-                except Exception:
-                    tables = None
-                if tables:
-                    for table in tables:
-                        if not table or len(table) < 2:
-                            continue
-                        headers = [str(h).strip().lower() if h is not None else "" for h in table[0]]
-                        for row in table[1:]:
-                            if not any(cell for cell in row if cell):
-                                continue
-                            data = {
-                                headers[i]: str(row[i]).strip() if i < len(row) and row[i] is not None else ""
-                                for i in range(len(headers))
-                            }
-                            rows.append(data)
-            if rows:
-                return rows
+            for page in pdf.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    texto_completo += extracted + "\n"
+    except Exception as exc:
+        raise ValueError(f"Error al abrir o leer las páginas del PDF: {exc}") from exc
 
-            text_pages = [page.extract_text() for page in pages]
-        return _parse_text_pages(text_pages)
-    except Exception:
-        text_pages = _extract_text_pages_from_pdf_bytes(pdf_bytes)
-        return _parse_text_pages(text_pages)
+    if not texto_completo.strip():
+        raise ValueError("El archivo PDF no contiene texto legible (puede estar escaneado o protegido).")
 
+    # 2. Extracción mediante IA
+    extraido = extraer_movimientos_pdf_ai(texto_completo)
 
-def convertir_estado_cuenta_pdf_a_xml(pdf_bytes: bytes) -> bytes:
-    rows = _read_pdf_rows(pdf_bytes)
-    root = ET.Element("EstadoCuenta")
-    for row in rows:
-        movimiento_el = ET.SubElement(root, "Movimiento")
-        for key, value in row.items():
-            if value is None or str(value).strip() == "":
-                continue
-            tag = re.sub(r"[^0-9a-zA-Z_-]", "_", str(key).strip().lower())
-            if not tag:
-                continue
-            child = ET.SubElement(movimiento_el, tag)
-            child.text = str(value)
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    # 3. Validación de balance financiero (Check Cero-Error)
+    if extraido.saldo_inicial and extraido.saldo_final and extraido.saldo_inicial > 0:
+        total_abonos = sum(m.monto for m in extraido.movimientos if m.tipo == "abono")
+        total_cargos = sum(m.monto for m in extraido.movimientos if m.tipo == "cargo")
+        
+        calculado = round(extraido.saldo_inicial + total_abonos - total_cargos, 2)
+        esperado = round(extraido.saldo_final, 2)
+        
+        if abs(calculado - esperado) > 0.10:
+            logger.warning(
+                f"Desbalance detectado en PDF. Inicial={extraido.saldo_inicial}, "
+                f"+Abonos={total_abonos}, -Cargos={total_cargos} => Calc: {calculado} vs Final: {esperado}. "
+                "Ejecutando reintento con ajuste de prompt..."
+            )
+            error_hint = f"Suma errónea: Inicial({extraido.saldo_inicial}) + Abonos({total_abonos}) - Cargos({total_cargos}) != Final({esperado})"
+            extraido = extraer_movimientos_pdf_ai(texto_completo, reintento=True, error_previo=error_hint)
 
+    # 4. Transformar a objetos MovimientoEstadoCuenta
+    movimientos: list[MovimientoEstadoCuenta] = []
+    vistos = set()
 
-def parsear_estado_cuenta_pdf(pdf_bytes: bytes) -> list[MovimientoEstadoCuenta]:
-    xml_bytes = convertir_estado_cuenta_pdf_a_xml(pdf_bytes)
-    return parsear_estado_cuenta_xml(xml_bytes)
+    for m in extraido.movimientos:
+        fecha_obj = _to_date(m.fecha)
+        if not fecha_obj:
+            continue
+
+        tipo_norm = "abono" if m.tipo.lower() in ("abono", "deposito", "ingreso") else "cargo"
+        monto_dec = Decimal(str(m.monto)).quantize(Decimal("0.01"))
+        saldo_dec = Decimal(str(m.saldo)).quantize(Decimal("0.01")) if m.saldo is not None else None
+
+        mov = MovimientoEstadoCuenta(
+            fecha=fecha_obj,
+            tipo=tipo_norm,
+            descripcion=m.descripcion,
+            referencia=m.referencia or "",
+            monto=monto_dec,
+            saldo=saldo_dec,
+        )
+
+        key = (
+            mov.fecha.date().isoformat(),
+            mov.tipo,
+            str(mov.monto),
+            mov.referencia or "",
+            mov.descripcion,
+        )
+        if key in vistos:
+            continue
+        vistos.add(key)
+        movimientos.append(mov)
+
+    return sorted(movimientos, key=lambda m: (m.fecha, m.tipo, m.monto))
 
 
 def parsear_estado_cuenta_csv(csv_bytes: bytes) -> list[MovimientoEstadoCuenta]:
@@ -351,7 +237,6 @@ def parsear_estado_cuenta_csv(csv_bytes: bytes) -> list[MovimientoEstadoCuenta]:
     El parser intentará mapear columnas usando las mismas claves que el parser XML.
     """
     text = csv_bytes.decode("utf-8", errors="replace")
-    # Detect delimiter: accept tab-separated exports (TSV) as well as comma-separated CSV
     first_line = text.splitlines()[0] if text.splitlines() else ""
     delimiter = '\t' if '\t' in first_line else ','
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
@@ -359,7 +244,6 @@ def parsear_estado_cuenta_csv(csv_bytes: bytes) -> list[MovimientoEstadoCuenta]:
     vistos = set()
 
     for row in reader:
-        # Normalize keys and values: keep as simple mapping for _movimiento_desde_data
         data = {}
         for k, v in row.items():
             if k is None:
@@ -390,10 +274,12 @@ def hash_archivo(xml_bytes: bytes) -> str:
     return hashlib.sha256(xml_bytes).hexdigest()
 
 
-def hash_movimiento(empresa_id: int, mov: MovimientoEstadoCuenta) -> str:
+def hash_movimiento(empresa_id: int, mov) -> str:
+    fecha = mov.fecha
+    fecha_str = fecha.date().isoformat() if hasattr(fecha, "date") else fecha.isoformat()
     raw = "|".join([
         str(empresa_id),
-        mov.fecha.date().isoformat(),
+        fecha_str,
         mov.tipo,
         str(mov.monto),
         mov.referencia or "",
@@ -402,16 +288,34 @@ def hash_movimiento(empresa_id: int, mov: MovimientoEstadoCuenta) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def _monto_bancos(poliza: Poliza, tipo: str) -> float:
-    movimientos_banco = [
-        m for m in poliza.movimientos
-        if (m.cuenta or "").startswith("102")
-    ]
-    if tipo == "abono":
-        total = sum(float(m.debe or 0) for m in movimientos_banco)
-    else:
-        total = sum(float(m.haber or 0) for m in movimientos_banco)
-    return round(total, 2)
+def _fecha_date(fecha) -> "date":
+    from datetime import date
+    return fecha.date() if hasattr(fecha, "date") else fecha
+
+
+# Prefijos de cuentas bancarias y de pago reconocidas
+_CUENTAS_BANCO = ("102", "105")
+_CUENTAS_PAGO = ("201",)
+
+
+def _monto_banco_poliza(poliza: Poliza) -> float:
+    """Extrae el monto bancario de la póliza.
+    - Ingreso: suma debe de cuentas 102/105
+    - Egreso: suma haber de cuentas 102/105; si no hay, suma haber de cuentas 201
+    """
+    movs_banco = [m for m in poliza.movimientos if (m.cuenta or "").startswith(_CUENTAS_BANCO)]
+    if poliza.tipo == TipoPoliza.ingreso:
+        if movs_banco:
+            return round(sum(float(m.debe or 0) for m in movs_banco), 2)
+        return round(float(poliza.total or 0), 2)
+    # egreso
+    if movs_banco:
+        return round(sum(float(m.haber or 0) for m in movs_banco), 2)
+    # fallback: cuenta de proveedores/pago
+    movs_pago = [m for m in poliza.movimientos if (m.cuenta or "").startswith(_CUENTAS_PAGO)]
+    if movs_pago:
+        return round(sum(float(m.haber or 0) for m in movs_pago), 2)
+    return round(float(poliza.total or 0), 2)
 
 
 def _polizas_conciliables(db: Session, empresa_id: int, mes: int, anio: int) -> list[dict]:
@@ -426,23 +330,32 @@ def _polizas_conciliables(db: Session, empresa_id: int, mes: int, anio: int) -> 
         .order_by(Poliza.fecha.asc(), Poliza.numero.asc())
         .all()
     )
-
     resultado = []
     for p in polizas:
         tipo_banco = "abono" if p.tipo == TipoPoliza.ingreso else "cargo"
-        monto_banco = _monto_bancos(p, tipo_banco)
-        monto = monto_banco if monto_banco > 0 else float(p.total or 0)
+        monto = _monto_banco_poliza(p)
+        print(f"[DEBUG] Poliza {p.id} tipo={p.tipo.value} monto={monto}")
+        if monto <= 0:
+            continue
         resultado.append({
             "poliza_id": p.id,
             "tipo": p.tipo.value,
             "tipo_banco": tipo_banco,
             "numero": p.numero,
-            "fecha": str(p.fecha.date() if hasattr(p.fecha, "date") else p.fecha),
-            "concepto": p.concepto,
-            "monto": round(monto, 2),
-            "usa_cuenta_bancos": monto_banco > 0,
+            "fecha": str(_fecha_date(p.fecha)),
+            "concepto": p.concepto or "",
+            "monto": monto,
         })
     return resultado
+
+
+def _concepto_similar(concepto_banco: str, concepto_poliza: str) -> bool:
+    """Verifica si dos conceptos comparten al menos una palabra significativa (>=4 chars)."""
+    if not concepto_banco or not concepto_poliza:
+        return True
+    palabras_banco = {w.upper() for w in re.split(r"\W+", concepto_banco) if len(w) >= 4}
+    palabras_poliza = {w.upper() for w in re.split(r"\W+", concepto_poliza) if len(w) >= 4}
+    return bool(palabras_banco & palabras_poliza)
 
 
 def conciliar_periodo(
@@ -450,37 +363,50 @@ def conciliar_periodo(
     empresa_id: int,
     mes: int,
     anio: int,
-    tolerancia: float = 1.0,
+    tolerancia: float = 0.0,
     banco_id: int | None = None,
 ) -> dict:
+    # 1. Movimientos del estado de cuenta bancario
     query = db.query(MovimientoBanco).filter(
         MovimientoBanco.empresa_id == empresa_id,
         extract("month", MovimientoBanco.fecha) == mes,
         extract("year", MovimientoBanco.fecha) == anio,
     )
-    
     if banco_id:
         query = query.filter(MovimientoBanco.banco_id == banco_id)
-    
-    movimientos = query.order_by(MovimientoBanco.fecha.asc()).all()
-    polizas = _polizas_conciliables(db, empresa_id, mes, anio)
+    movimientos_banco = query.order_by(MovimientoBanco.fecha.asc()).all()
 
+    # 2. Movimientos bancarios extraídos de pólizas (cuenta 102)
+    polizas = _polizas_conciliables(db, empresa_id, mes, anio)
     polizas_disponibles = polizas.copy()
+
     conciliados = []
     banco_sin_poliza = []
 
-    for mov in movimientos:
-        monto = float(mov.monto or 0)
+    for mov in movimientos_banco:
+        monto_mov = round(float(mov.monto or 0), 2)
+
+        # Match: mismo tipo + monto exacto (tolerancia=0) + concepto similar
         candidatas = [
             p for p in polizas_disponibles
-            if p["tipo_banco"] == mov.tipo and abs(p["monto"] - monto) <= tolerancia
+            if p["tipo_banco"] == mov.tipo
+            and abs(p["monto"] - monto_mov) <= tolerancia
+            and _concepto_similar(mov.descripcion or "", p["concepto"])
         ]
-        def _diff_dias(poliza: dict) -> int:
+
+        # Si no hay match por concepto, intentar solo por tipo + monto exacto
+        if not candidatas:
+            candidatas = [
+                p for p in polizas_disponibles
+                if p["tipo_banco"] == mov.tipo
+                and abs(p["monto"] - monto_mov) <= tolerancia
+            ]
+
+        # Ordenar candidatas por diferencia de días (menor diferencia primero)
+        def _diff_dias(p: dict) -> int:
             try:
-                pf = datetime.fromisoformat(str(poliza["fecha"])[:10]).date()
-                mf = mov.fecha.date() if hasattr(mov.fecha, "date") else mov.fecha
-                return abs((mf - pf).days)
-            except (ValueError, TypeError, AttributeError):
+                return abs((_fecha_date(mov.fecha) - datetime.fromisoformat(p["fecha"]).date()).days)
+            except Exception:
                 return 9999
 
         candidatas.sort(key=_diff_dias)
@@ -491,25 +417,32 @@ def conciliar_periodo(
             conciliados.append({
                 "movimiento_banco": _serializar_movimiento(mov),
                 "poliza": poliza,
-                "diferencia": round(monto - poliza["monto"], 2),
+                "diferencia_dias": _diff_dias(poliza),
             })
         else:
             banco_sin_poliza.append(_serializar_movimiento(mov))
 
-    total_banco = round(sum(float(m.monto or 0) for m in movimientos), 2)
-    total_polizas = round(sum(p["monto"] for p in polizas), 2)
-    total_conciliado = round(sum(c["poliza"]["monto"] for c in conciliados), 2)
+    # 3. Validación de cuadre: cargos y abonos deben coincidir
+    total_cargos_banco = round(sum(float(m.monto or 0) for m in movimientos_banco if m.tipo == "cargo"), 2)
+    total_abonos_banco = round(sum(float(m.monto or 0) for m in movimientos_banco if m.tipo == "abono"), 2)
+    total_cargos_polizas = round(sum(p["monto"] for p in polizas if p["tipo_banco"] == "cargo"), 2)
+    total_abonos_polizas = round(sum(p["monto"] for p in polizas if p["tipo_banco"] == "abono"), 2)
 
     return {
         "resumen": {
-            "movimientos_banco": len(movimientos),
+            "movimientos_banco": len(movimientos_banco),
             "polizas": len(polizas),
             "conciliados": len(conciliados),
             "banco_sin_poliza": len(banco_sin_poliza),
             "polizas_sin_banco": len(polizas_disponibles),
-            "total_banco": total_banco,
-            "total_polizas": total_polizas,
-            "total_conciliado": total_conciliado,
+            "total_cargos_banco": total_cargos_banco,
+            "total_abonos_banco": total_abonos_banco,
+            "total_cargos_polizas": total_cargos_polizas,
+            "total_abonos_polizas": total_abonos_polizas,
+            "diferencia_cargos": round(total_cargos_banco - total_cargos_polizas, 2),
+            "diferencia_abonos": round(total_abonos_banco - total_abonos_polizas, 2),
+            "cuadre_cargos": total_cargos_banco == total_cargos_polizas,
+            "cuadre_abonos": total_abonos_banco == total_abonos_polizas,
         },
         "conciliados": conciliados,
         "banco_sin_poliza": banco_sin_poliza,
