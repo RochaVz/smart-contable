@@ -297,18 +297,35 @@ def _fecha_date(fecha) -> "date":
 _CUENTAS_BANCO = ("102", "105")
 _CUENTAS_PAGO = ("201",)
 
+# Patrones de descripción que identifican comisiones/IVA bancarios
+# ya contabilizados dentro de la póliza de ingreso correspondiente
+_PATRONES_COMISION = (
+    "APLI TASA DE DES",
+    "IVA TASA DE DESC",
+    "COM. VTA. NAL.",
+    "IVA COM. VTA.",
+    "COM VTA",
+    "IVA COM VTA",
+    "COMISION BANCARIA",
+    "IVA COMISION",
+)
+
+
+def _es_comision_bancaria(descripcion: str) -> bool:
+    """True si el movimiento es una comisión/IVA bancario ya incluido en póliza de ingreso."""
+    desc = (descripcion or "").upper()
+    return any(patron in desc for patron in _PATRONES_COMISION)
+
 
 def _monto_banco_poliza(poliza: Poliza) -> float:
     """Extrae el monto bancario de la póliza.
-    - Ingreso: suma debe de cuentas 102/105
+    - Ingreso: usa poliza.total (monto bruto = lo que pagó el cliente = lo que abona el banco)
     - Egreso: suma haber de cuentas 102/105; si no hay, suma haber de cuentas 201
     """
-    movs_banco = [m for m in poliza.movimientos if (m.cuenta or "").startswith(_CUENTAS_BANCO)]
     if poliza.tipo == TipoPoliza.ingreso:
-        if movs_banco:
-            return round(sum(float(m.debe or 0) for m in movs_banco), 2)
         return round(float(poliza.total or 0), 2)
     # egreso
+    movs_banco = [m for m in poliza.movimientos if (m.cuenta or "").startswith(_CUENTAS_BANCO)]
     if movs_banco:
         return round(sum(float(m.haber or 0) for m in movs_banco), 2)
     # fallback: cuenta de proveedores/pago
@@ -334,7 +351,7 @@ def _polizas_conciliables(db: Session, empresa_id: int, mes: int, anio: int) -> 
     for p in polizas:
         tipo_banco = "abono" if p.tipo == TipoPoliza.ingreso else "cargo"
         monto = _monto_banco_poliza(p)
-        print(f"[DEBUG] Poliza {p.id} tipo={p.tipo.value} monto={monto}")
+        logger.debug("Poliza %s tipo=%s monto=%s", p.id, p.tipo.value, monto)
         if monto <= 0:
             continue
         resultado.append({
@@ -382,8 +399,14 @@ def conciliar_periodo(
 
     conciliados = []
     banco_sin_poliza = []
+    comisiones_en_poliza = []  # cargos de comisión ya contabilizados en póliza ingreso
 
     for mov in movimientos_banco:
+        # Separar comisiones bancarias antes del matching
+        if mov.tipo == "cargo" and _es_comision_bancaria(mov.descripcion or ""):
+            comisiones_en_poliza.append(_serializar_movimiento(mov))
+            continue
+
         monto_mov = round(float(mov.monto or 0), 2)
 
         # Match: mismo tipo + monto exacto (tolerancia=0) + concepto similar
@@ -423,10 +446,18 @@ def conciliar_periodo(
             banco_sin_poliza.append(_serializar_movimiento(mov))
 
     # 3. Validación de cuadre: cargos y abonos deben coincidir
+    # Los totales del banco incluyen comisiones (son movimientos reales del estado de cuenta)
     total_cargos_banco = round(sum(float(m.monto or 0) for m in movimientos_banco if m.tipo == "cargo"), 2)
     total_abonos_banco = round(sum(float(m.monto or 0) for m in movimientos_banco if m.tipo == "abono"), 2)
     total_cargos_polizas = round(sum(p["monto"] for p in polizas if p["tipo_banco"] == "cargo"), 2)
     total_abonos_polizas = round(sum(p["monto"] for p in polizas if p["tipo_banco"] == "abono"), 2)
+
+    total_banco = round(total_cargos_banco + total_abonos_banco, 2)
+    total_polizas = round(total_cargos_polizas + total_abonos_polizas, 2)
+    total_conciliado = round(
+        sum(float(c["movimiento_banco"]["monto"]) for c in conciliados), 2
+    )
+    total_comisiones = round(sum(float(m["monto"]) for m in comisiones_en_poliza), 2)
 
     return {
         "resumen": {
@@ -435,6 +466,11 @@ def conciliar_periodo(
             "conciliados": len(conciliados),
             "banco_sin_poliza": len(banco_sin_poliza),
             "polizas_sin_banco": len(polizas_disponibles),
+            "comisiones_en_poliza": len(comisiones_en_poliza),
+            "total_banco": total_banco,
+            "total_polizas": total_polizas,
+            "total_conciliado": total_conciliado,
+            "total_comisiones": total_comisiones,
             "total_cargos_banco": total_cargos_banco,
             "total_abonos_banco": total_abonos_banco,
             "total_cargos_polizas": total_cargos_polizas,
@@ -447,6 +483,7 @@ def conciliar_periodo(
         "conciliados": conciliados,
         "banco_sin_poliza": banco_sin_poliza,
         "polizas_sin_banco": polizas_disponibles,
+        "comisiones_en_poliza": comisiones_en_poliza,
     }
 
 

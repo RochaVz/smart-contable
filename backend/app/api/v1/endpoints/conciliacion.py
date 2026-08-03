@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.logging_config import get_logger
 from app.models.conciliacion import EstadoCuentaCarga, MovimientoBanco
 from app.models.empresa import Empresa
 from app.models.usuario import Usuario
@@ -27,6 +28,7 @@ from app.services.conciliacion import (
 )
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 def _validar_empresa(db: Session, empresa_id: int, user: Usuario) -> Empresa:
@@ -117,12 +119,10 @@ async def cargar_estado_cuenta(
             raw_text = PDFExtractor.extract_text(archivo_bytes)
             parser = BankParserFactory().get_parser(raw_text)
             statement_data = parser.parse(raw_text, pdf_bytes=archivo_bytes)
-            print(f"[DEBUG] Parser usado: {parser.__class__.__name__}")
-            print(f"[DEBUG] Texto extraído (500 chars): {raw_text[:500]}")
-            print(f"[DEBUG] Movimientos encontrados: {len(statement_data.movimientos)}")
-            
-            # Mapeamos los movimientos estándar del parser a un formato compatible 
-            # con los objetos que espera tu bucle de base de datos más abajo.
+            logger.debug("Parser usado: %s", parser.__class__.__name__)
+            logger.debug("Texto extraído (500 chars): %s", raw_text[:500])
+            logger.debug("Movimientos encontrados: %s", len(statement_data.movimientos))
+
             class MovimientoAdaptado:
                 def __init__(self, m):
                     try:
