@@ -6,6 +6,7 @@ import zipfile
 import io
 import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -32,6 +33,36 @@ from app.schemas.factura import FacturaResponse
 
 router = APIRouter()
 
+
+class ComplementoPagoOmitido(Exception):
+    def __init__(self, uuid: str | None = None):
+        self.uuid = uuid
+        super().__init__("Complemento de pago omitido")
+
+
+def _es_complemento_pago(datos: dict) -> bool:
+    return str(datos.get("tipo_comprobante") or "").upper() == "P"
+
+
+def _respuesta_complemento_pago_omitido(uuid: str | None = None) -> dict:
+    detalle = "El CFDI es un complemento de pago y no se registra en facturas."
+    if uuid:
+        detalle = f"{detalle} UUID: {uuid}"
+    return {
+        "mensaje": "Complemento de pago omitido",
+        "omitido": True,
+        "motivo": "complemento_pago",
+        "tipo_comprobante": "P",
+        "uuid": uuid,
+        "detalle": detalle,
+        "exitos": 0,
+        "duplicados": 0,
+        "omitidos_complemento_pago": 1,
+        "errores": 0,
+        "polizas_generadas": 0,
+    }
+
+
 # --- FUNCIÓN COMPARTIDA PARA GUARDAR XML ---
 def procesar_xml_interno(
     empresa_id: int,
@@ -46,6 +77,9 @@ def procesar_xml_interno(
         datos = parsear_xml_sat(xml_str)
 
         validar_cfdi_empresa(datos, empresa_rfc, empresa_razon_social)
+
+        if _es_complemento_pago(datos):
+            raise ComplementoPagoOmitido(datos.get("uuid"))
 
         uuid_norm = validar_factura_no_duplicada(
             db,
@@ -107,6 +141,8 @@ def procesar_xml_interno(
         return factura
 
     except HTTPException:
+        raise
+    except ComplementoPagoOmitido:
         raise
 
     except ValueError as e:
@@ -214,6 +250,13 @@ async def subir_xml(
             "poliza_ids": [p.id for p in polizas_creadas],
         }
 
+    except ComplementoPagoOmitido as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=200,
+            content=_respuesta_complemento_pago_omitido(exc.uuid),
+        )
+
     except HTTPException:
         db.rollback()
         raise
@@ -251,6 +294,7 @@ async def subir_zip(
     resultados: list[dict] = []
     exitos = 0
     duplicados = 0
+    omitidos_complemento_pago = 0
     uuids_en_lote: set[str] = set()
 
     try:
@@ -298,6 +342,14 @@ async def subir_zip(
                             "total": float(factura.total or 0),
                         })
                         exitos += 1
+                    except ComplementoPagoOmitido as exc:
+                        omitidos_complemento_pago += 1
+                        resultados.append({
+                            "archivo": nombre_archivo,
+                            "status": "omitido_complemento_pago",
+                            "uuid": exc.uuid,
+                            "detalle": _respuesta_complemento_pago_omitido(exc.uuid)["detalle"],
+                        })
                     except HTTPException as e:
                         detalle = e.detail if isinstance(e.detail, str) else str(e.detail)
                         es_dup = e.status_code == 409 or "registrada" in str(detalle).lower()
@@ -360,6 +412,7 @@ async def subir_zip(
                 "mensaje": "Procesamiento masivo completado y guardado en BD",
                 "exitos": exitos,
                 "duplicados": duplicados,
+                "omitidos_complemento_pago": omitidos_complemento_pago,
                 "errores": len([r for r in resultados if r.get("status") == "error"]),
                 "polizas_generadas": resultado_polizas.get("total_polizas", 0),
                 "errores_polizas": resultado_polizas.get("errores", []),
@@ -379,7 +432,8 @@ async def subir_zip(
         "mensaje": "No se guardó nada nuevo. Revisa si son duplicados o archivos vacíos.",
         "exitos": 0,
         "duplicados": duplicados,
-        "errores": len(resultados) - duplicados,
+        "omitidos_complemento_pago": omitidos_complemento_pago,
+        "errores": len([r for r in resultados if r.get("status") == "error"]),
         "detalles": resultados,
     }
 
@@ -623,4 +677,3 @@ def listar_facturas_global(
     ).all()
     
     return facturas
-
