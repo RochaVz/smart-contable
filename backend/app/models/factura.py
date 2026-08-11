@@ -37,7 +37,7 @@ class Factura(Base):
 
     # Datos del CFDI
     uuid             = Column(String(36), index=True, nullable=False)
-    serie            = Column(String(10))
+    serie            = Column(String(50))
     folio            = Column(String(20))
     version_cfdi     = Column(String(5), default="4.0")
     tipo_comprobante = Column(Enum(TipoFactura), nullable=False)

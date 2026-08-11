@@ -1,6 +1,7 @@
 import pytest
 
 from app.api.v1.endpoints import facturas
+from app.models.factura import Factura
 
 
 def test_procesar_xml_interno_omite_complemento_pago(monkeypatch):
@@ -36,3 +37,7 @@ def test_respuesta_complemento_pago_omitido_incluye_contadores():
     assert respuesta["exitos"] == 0
     assert respuesta["duplicados"] == 0
     assert respuesta["errores"] == 0
+
+
+def test_factura_serie_permite_valores_largos_de_cfdi():
+    assert Factura.__table__.c.serie.type.length == 50

@@ -295,6 +295,8 @@ async def subir_zip(
     exitos = 0
     duplicados = 0
     omitidos_complemento_pago = 0
+    no_xml = 0
+    archivos_no_xml: list[str] = []
     uuids_en_lote: set[str] = set()
 
     try:
@@ -307,6 +309,17 @@ async def subir_zip(
                 es_xml = nombre_archivo.lower().endswith('.xml')
                 es_basura = nombre_archivo.startswith('.') or "__MACOSX" in ruta_completa
                 es_carpeta = ruta_completa.endswith('/')
+
+                if not es_carpeta and not es_basura and not es_xml:
+                    no_xml += 1
+                    if nombre_archivo:
+                        archivos_no_xml.append(nombre_archivo)
+                    resultados.append({
+                        "archivo": nombre_archivo or ruta_completa,
+                        "status": "no_xml",
+                        "detalle": "Archivo omitido: no es XML.",
+                    })
+                    continue
 
                 if es_xml and not es_basura and not es_carpeta:
                     try:
@@ -413,6 +426,8 @@ async def subir_zip(
                 "exitos": exitos,
                 "duplicados": duplicados,
                 "omitidos_complemento_pago": omitidos_complemento_pago,
+                "no_xml": no_xml,
+                "archivos_no_xml": archivos_no_xml,
                 "errores": len([r for r in resultados if r.get("status") == "error"]),
                 "polizas_generadas": resultado_polizas.get("total_polizas", 0),
                 "errores_polizas": resultado_polizas.get("errores", []),
@@ -428,12 +443,26 @@ async def subir_zip(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    errores = len([r for r in resultados if r.get("status") == "error"])
+    if duplicados > 0 and errores == 0 and omitidos_complemento_pago == 0:
+        mensaje = "No se guardo nada nuevo: todos los XML del ZIP ya estaban registrados (UUID duplicados)."
+    elif errores > 0:
+        mensaje = "No se guardo nada nuevo: se detectaron XML con error o vacios dentro del ZIP."
+    elif no_xml > 0 and duplicados == 0 and errores == 0 and omitidos_complemento_pago == 0:
+        mensaje = "ZIP invalido para CFDI: contiene archivos que no son XML."
+    elif omitidos_complemento_pago > 0:
+        mensaje = "No se guardo nada nuevo: los XML del ZIP eran complementos de pago y se omitieron."
+    else:
+        mensaje = "No se guardo nada nuevo. Revisa el contenido del ZIP."
+
     return {
-        "mensaje": "No se guardó nada nuevo. Revisa si son duplicados o archivos vacíos.",
+        "mensaje": mensaje,
         "exitos": 0,
         "duplicados": duplicados,
         "omitidos_complemento_pago": omitidos_complemento_pago,
-        "errores": len([r for r in resultados if r.get("status") == "error"]),
+        "no_xml": no_xml,
+        "archivos_no_xml": archivos_no_xml,
+        "errores": errores,
         "detalles": resultados,
     }
 
