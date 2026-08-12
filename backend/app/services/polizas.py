@@ -4,7 +4,10 @@ from app.models.poliza import Poliza, MovimientoPoliza, TipoPoliza
 from app.models.mapeo_cuenta import MapeoCuenta
 from app.models.empresa import Empresa
 from datetime import date
-from app.services.clasificador import obtener_cuenta_por_clave_sat
+from app.services.clasificador import (
+    obtener_cuenta_por_clave_sat,
+    obtener_cuenta_por_concepto,
+)
 from app.services.cfdi_helpers import (
     es_venta,
     extraer_datos_xml,
@@ -16,8 +19,19 @@ from app.services.comisiones import calcular_comision_bancaria
 from app.core.logging_config import get_logger
 from app.core.exceptions import UnbalancedVoucherException
 from decimal import Decimal
+import re
+import unicodedata
 
 logger = get_logger(__name__)
+
+
+def _normalizar_texto(texto: str | None) -> str:
+    if not texto:
+        return ""
+    base = unicodedata.normalize("NFKD", texto)
+    sin_acentos = "".join(ch for ch in base if not unicodedata.combining(ch))
+    limpio = re.sub(r"[^a-zA-Z0-9\s]", " ", sin_acentos).lower()
+    return re.sub(r"\s+", " ", limpio).strip()
 
 # ─────────────────────────────────────────
 # VALIDACIONES CONTABLES
@@ -62,12 +76,14 @@ def obtener_cuenta_inteligente(
     db: Session,
     rfc: str,
     empresa_id: int,
-    clave_sat: str
+    clave_sat: str,
+    concepto: str | None = None,
 ) -> dict:
     """
     Prioridad de clasificación:
     1. Mapeo manual RFC → cuenta definido por el usuario para esta empresa
-    2. Clasificación automática por clave SAT del catálogo del SAT
+    2. Clasificación automática por concepto/descripción de la factura
+    3. Clasificación automática por clave SAT del catálogo del SAT
     3. Fallback a Gastos Generales
     
     Args:
@@ -81,9 +97,11 @@ def obtener_cuenta_inteligente(
     """
     try:
         # 1. Mapeo manual por RFC del proveedor
+        rfc_norm = (rfc or "").strip().upper()
         mapeo = db.query(MapeoCuenta).filter(
-            MapeoCuenta.rfc_emisor == rfc,
+            MapeoCuenta.rfc_emisor == rfc_norm,
             MapeoCuenta.empresa_id == empresa_id,
+            MapeoCuenta.tipo_regla == "rfc",
         ).first()
         
         if mapeo and mapeo.codigo_cuenta:
@@ -96,10 +114,54 @@ def obtener_cuenta_inteligente(
                 "nombre": mapeo.nombre_cuenta or "Gasto clasificado",
             }
 
-        # 2. Clasificación por clave SAT
+        # Compatibilidad con registros legacy (sin tipo_regla)
+        legacy = db.query(MapeoCuenta).filter(
+            MapeoCuenta.rfc_emisor == rfc_norm,
+            MapeoCuenta.empresa_id == empresa_id,
+        ).first()
+        if legacy and legacy.codigo_cuenta:
+            return {
+                "cuenta": legacy.codigo_cuenta,
+                "nombre": legacy.nombre_cuenta or "Gasto clasificado",
+            }
+
+        # 2. Clasificación por concepto de la factura
+        concepto_norm = _normalizar_texto(concepto)
+        if concepto_norm:
+            reglas_concepto = db.query(MapeoCuenta).filter(
+                MapeoCuenta.empresa_id == empresa_id,
+                MapeoCuenta.tipo_regla == "concepto",
+            ).all()
+            for regla in reglas_concepto:
+                patron = _normalizar_texto(regla.patron)
+                if patron and patron in concepto_norm and regla.codigo_cuenta:
+                    return {
+                        "cuenta": regla.codigo_cuenta,
+                        "nombre": regla.nombre_cuenta or "Gasto clasificado",
+                    }
+
+        cuenta_por_concepto = obtener_cuenta_por_concepto(concepto)
+        if cuenta_por_concepto:
+            return cuenta_por_concepto
+
+        # 3. Clasificación por clave SAT
+        clave = (clave_sat or "").strip()
+        if clave:
+            reglas_sat = db.query(MapeoCuenta).filter(
+                MapeoCuenta.empresa_id == empresa_id,
+                MapeoCuenta.tipo_regla == "clave_sat",
+            ).all()
+            for regla in reglas_sat:
+                patron = (regla.patron or "").strip()
+                if patron and clave.startswith(patron) and regla.codigo_cuenta:
+                    return {
+                        "cuenta": regla.codigo_cuenta,
+                        "nombre": regla.nombre_cuenta or "Gasto clasificado",
+                    }
+
         return obtener_cuenta_por_clave_sat(db, clave_sat)
         
-    except Exception as e:
+    except Exception:
         logger.error("Error obtaining intelligent account", exc_info=True)
         # Return fallback account
         return {
@@ -111,6 +173,8 @@ def obtener_cuenta_inteligente(
 CUENTAS = {
     "caja": "101.01.01",
     "bancos": "102.01.01",
+    "baucher": "102.02.01",
+    "depositos_efectivo": "102.03.01",
     "cxc": "105.01.01",
     "iva_acreditable": "118.01.01",
     "iva_pendiente_acreditar": "118.02.01",
@@ -136,6 +200,19 @@ FORMA_PAGO_CUENTA = {
     "29": ("102.01.01", "Bancos"),
 }
 
+FORMAS_PAGO_INGRESO = FORMAS_PAGO_TARJETA | {"01", "02"}
+
+
+def _cuenta_contraparte_ingreso(forma_pago: str | None) -> tuple[str, str]:
+    """Define contrapartida del cobro para póliza de ingreso."""
+    forma = forma_pago or ""
+    if forma in FORMAS_PAGO_TARJETA:
+        return CUENTAS["baucher"], "Baucher"
+    # Efectivo y cheque se manejan como depósito en efectivo a la cuenta definida.
+    if forma in {"01", "02"}:
+        return CUENTAS["depositos_efectivo"], "Depositos en efectivo"
+    return CUENTAS["baucher"], "Baucher"
+
 
 def _ultimo_numero_poliza(db: Session, empresa_id: int, tipo: TipoPoliza, mes: int, anio: int) -> int:
     ultima = db.query(Poliza).filter(
@@ -151,9 +228,12 @@ def _cuenta_cobro(factura: Factura) -> tuple[str, str]:
     if factura.metodo_pago == "PPD":
         return CUENTAS["cxc"], "Clientes (por cobrar)"
     forma = factura.forma_pago or ""
-    # Tarjeta: el cobro y la comisión van en póliza de ingresos
+    # Pago con tarjeta: primero se reconoce en Baucher y luego se deposita a Bancos.
     if forma in FORMAS_PAGO_TARJETA:
-        return CUENTAS["cxc"], "Clientes"
+        return CUENTAS["baucher"], "Baucher"
+    # Efectivo/cheque: se reconoce en depósito en efectivo y luego se mueve a Bancos.
+    if forma in {"01", "02"}:
+        return CUENTAS["depositos_efectivo"], "Depositos en efectivo"
     if forma in FORMA_PAGO_CUENTA:
         return FORMA_PAGO_CUENTA[forma]
     return CUENTAS["cxc"], "Clientes"
@@ -274,7 +354,7 @@ def generar_poliza_ingreso_cobro(
     factura: Factura, db: Session, banco_id: int | None = None
 ) -> Poliza | None:
     forma = factura.forma_pago or ""
-    if forma not in FORMAS_PAGO_TARJETA or factura.metodo_pago == "PPD":
+    if forma not in FORMAS_PAGO_INGRESO or factura.metodo_pago == "PPD":
         return None
 
     fecha = factura.fecha_emision.date() if factura.fecha_emision else date.today()
@@ -288,6 +368,7 @@ def generar_poliza_ingreso_cobro(
     forma_label = etiqueta_forma_pago(forma)
     banco_nombre = info_com["nombre_banco"] or "Banco"
     pct = info_com["porcentaje"]
+    cuenta_contraparte, nombre_contraparte = _cuenta_contraparte_ingreso(forma)
 
     numero = _ultimo_numero_poliza(db, factura.empresa_id, TipoPoliza.ingreso, mes, anio)
     poliza = Poliza(
@@ -326,11 +407,11 @@ def generar_poliza_ingreso_cobro(
         ),
         MovimientoPoliza(
             poliza_id=poliza.id,
-            cuenta=CUENTAS["cxc"],
-            nombre_cuenta="Clientes",
+            cuenta=cuenta_contraparte,
+            nombre_cuenta=nombre_contraparte,
             debe=0,
             haber=total,
-            concepto="Cancelación de CxC por cobro con tarjeta",
+            concepto=f"Contrapartida de cobro por {forma_label}",
         ),
     ]
 
@@ -360,7 +441,11 @@ def generar_poliza_egreso(factura: Factura, db: Session) -> Poliza:
     else:
         clave_sat = _clave_sat_desde_factura(factura)
         info_cuenta = obtener_cuenta_inteligente(
-            db, factura.rfc_emisor, factura.empresa_id, clave_sat
+            db,
+            factura.rfc_emisor,
+            factura.empresa_id,
+            clave_sat,
+            descripcion_gasto,
         )
 
     numero = _ultimo_numero_poliza(db, factura.empresa_id, TipoPoliza.egreso, mes, anio)
@@ -524,7 +609,7 @@ def factura_requiere_polizas(factura: Factura, db: Session, empresa_rfc: str) ->
         if not _tiene_poliza_tipo(db, factura.id, TipoPoliza.diario):
             return True
         forma = factura.forma_pago or ""
-        if forma in FORMAS_PAGO_TARJETA and factura.metodo_pago != "PPD":
+        if forma in FORMAS_PAGO_INGRESO and factura.metodo_pago != "PPD":
             if not _tiene_poliza_tipo(db, factura.id, TipoPoliza.ingreso):
                 return True
         return False
@@ -587,11 +672,13 @@ def generar_polizas_automaticas(
         count_mes = 0
         for factura in facturas_mes:
             try:
-                nuevas = generar_poliza_desde_factura(factura, db, banco_id)
+                # Cada factura se procesa en su propio savepoint. Si una falla,
+                # no revierte las pólizas válidas ya generadas en el lote.
+                with db.begin_nested():
+                    nuevas = generar_poliza_desde_factura(factura, db, banco_id)
                 creadas_total.extend(nuevas)
                 count_mes += len(nuevas)
             except Exception as exc:
-                db.rollback()
                 errores.append({
                     "factura_id": factura.id,
                     "uuid": factura.uuid,
@@ -756,7 +843,7 @@ def preview_poliza_desde_factura(
             "que_se_vendio": _conceptos_vendidos(factura),
             "desglose_impuestos": desglose_impuestos(factura),
         }
-        if (factura.forma_pago or "") in FORMAS_PAGO_TARJETA and factura.metodo_pago != "PPD":
+        if (factura.forma_pago or "") in FORMAS_PAGO_INGRESO and factura.metodo_pago != "PPD":
             item["ingreso"] = {
                 "forma_pago": etiqueta_forma_pago(factura.forma_pago),
                 "comision_bancaria": comision,
@@ -767,13 +854,20 @@ def preview_poliza_desde_factura(
     else:
         item["categoria"] = "egreso"
         clave_sat = _clave_sat_desde_factura(factura)
+        descripcion_gasto = (
+            extraer_datos_xml(factura.xml_contenido).get("concepto_principal")
+            or factura.nombre_emisor
+        )
         if db is not None:
             info_cuenta = obtener_cuenta_inteligente(
-                db, factura.rfc_emisor or "", factura.empresa_id, clave_sat
+                db,
+                factura.rfc_emisor or "",
+                factura.empresa_id,
+                clave_sat,
+                descripcion_gasto,
             )
         else:
-            from app.services.clasificador import obtener_cuenta_por_clave_sat  # noqa: PLC0415
-            info_cuenta = obtener_cuenta_por_clave_sat(None, clave_sat)
+            info_cuenta = obtener_cuenta_por_concepto(descripcion_gasto) or obtener_cuenta_por_clave_sat(None, clave_sat)
         item["egreso"] = {
             "proveedor": factura.nombre_emisor,
             "rfc_proveedor": factura.rfc_emisor,

@@ -125,7 +125,13 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
         if (p.polizas_generadas > 0)
           toast(`${MESES[p.mes - 1]} ${p.anio}: ${p.polizas_generadas} póliza(s)`, { icon: '📅' });
       });
-      if (errores?.length) toast.error(`${errores.length} factura(s) con error`);
+      if (errores?.length) {
+        const ejemplos = errores
+          .slice(0, 2)
+          .map((e) => `UUID ${e.uuid || e.factura_id}: ${e.error}`)
+          .join(' | ');
+        toast.error(`${errores.length} factura(s) con error. ${ejemplos}`);
+      }
       await fetchPolizas();
       onRefreshFacturas?.();
     } catch (err) {

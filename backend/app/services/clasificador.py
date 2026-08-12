@@ -4,6 +4,9 @@ Primero busca mapeo manual por RFC/empresa, luego clasifica por prefijo de clave
 y como fallback retorna Gastos Generales.
 """
 
+import re
+import unicodedata
+
 from sqlalchemy.orm import Session
 from app.models.mapeo_cuenta import MapeoCuenta
 
@@ -63,6 +66,45 @@ _CATALOGO_SAT: list[tuple[str, str, str]] = [
 ]
 
 
+# Reglas de clasificación por texto del concepto de la factura (egresos).
+# Se evalúan en orden de prioridad; la primera coincidencia gana.
+_CATALOGO_CONCEPTO: list[tuple[tuple[str, ...], str, str]] = [
+    (("renta", "arrendamiento", "alquiler"), "601.06.01", "Arrendamiento"),
+    (("gasolina", "diesel", "combustible", "pemex"), "601.07.01", "Combustibles y lubricantes"),
+    (("internet", "telefonia", "telefono", "movil", "celular", "telecom"), "601.04.01", "Telecomunicaciones"),
+    (("hosting", "software", "licencia", "nube", "cloud", "saas", "suscripcion"), "601.03.01", "Servicios de tecnología"),
+    (("honorarios", "asesoria", "consultoria", "contable", "legal", "notaria"), "601.02.01", "Honorarios profesionales"),
+    (("flete", "mensajeria", "envio", "paqueteria", "transporte"), "601.05.01", "Fletes y transportes"),
+    (("papeleria", "toner", "utiles", "oficina", "impresion"), "601.09.01", "Papelería y útiles de oficina"),
+    (("publicidad", "marketing", "anuncio", "facebook ads", "google ads"), "601.10.01", "Publicidad y mercadotecnia"),
+    (("seguro", "poliza", "aseguradora", "fianza"), "601.11.01", "Seguros y fianzas"),
+    (("mantenimiento", "limpieza", "reparacion", "servicio tecnico"), "601.12.01", "Mantenimiento y limpieza"),
+    (("equipo", "laptop", "computadora", "monitor", "teclado", "electronica"), "601.13.01", "Equipo de cómputo"),
+    (("energia", "electricidad", "cfe", "luz"), "601.16.01", "Energía eléctrica"),
+    (("agua",), "601.17.01", "Agua y servicios"),
+]
+
+
+def _normalizar_texto(texto: str | None) -> str:
+    if not texto:
+        return ""
+    base = unicodedata.normalize("NFKD", texto)
+    sin_acentos = "".join(ch for ch in base if not unicodedata.combining(ch))
+    limpio = re.sub(r"[^a-zA-Z0-9\s]", " ", sin_acentos).lower()
+    return re.sub(r"\s+", " ", limpio).strip()
+
+
+def _clasificar_por_concepto(concepto: str | None) -> dict | None:
+    texto = _normalizar_texto(concepto)
+    if not texto:
+        return None
+
+    for palabras_clave, codigo, nombre in _CATALOGO_CONCEPTO:
+        if any(palabra in texto for palabra in palabras_clave):
+            return {"cuenta": codigo, "nombre": nombre}
+    return None
+
+
 def _clasificar_por_clave_sat(clave_sat: str) -> dict:
     """Clasifica usando el catálogo de prefijos SAT. Retorna cuenta contable."""
     if not clave_sat or clave_sat == "00000000":
@@ -74,6 +116,11 @@ def _clasificar_por_clave_sat(clave_sat: str) -> dict:
             return {"cuenta": codigo, "nombre": nombre}
 
     return {"cuenta": "601.01.01", "nombre": "Gastos Generales"}
+
+
+def obtener_cuenta_por_concepto(concepto: str | None) -> dict | None:
+    """Clasifica gasto a partir de la descripción/concepto de la factura."""
+    return _clasificar_por_concepto(concepto)
 
 
 def obtener_cuenta_por_clave_sat(db: Session | None, clave_sat: str) -> dict:

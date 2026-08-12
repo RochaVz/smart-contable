@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import re
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -17,6 +18,38 @@ from app.schemas.comision_banco import (
 from app.services.comisiones import asegurar_banco_default
 
 router = APIRouter()
+
+
+_TIPOS_REGLA = {"rfc", "concepto", "clave_sat"}
+
+
+def _normalizar_regla(datos: MapeoCuentaCreate) -> dict:
+    tipo = (datos.tipo_regla or "rfc").strip().lower()
+    if tipo not in _TIPOS_REGLA:
+        raise HTTPException(status_code=400, detail="tipo_regla inválido. Usa: rfc, concepto o clave_sat")
+
+    rfc = (datos.rfc_emisor or "").strip().upper() or None
+    patron = (datos.patron or "").strip() or None
+
+    if tipo == "rfc":
+        if not rfc:
+            raise HTTPException(status_code=400, detail="rfc_emisor es requerido cuando tipo_regla='rfc'")
+        patron = None
+    elif tipo == "concepto":
+        if not patron:
+            raise HTTPException(status_code=400, detail="patron es requerido cuando tipo_regla='concepto'")
+        rfc = None
+    elif tipo == "clave_sat":
+        if not patron:
+            raise HTTPException(status_code=400, detail="patron es requerido cuando tipo_regla='clave_sat'")
+        patron = re.sub(r"\s+", "", patron)
+        rfc = None
+
+    return {
+        "tipo_regla": tipo,
+        "rfc_emisor": rfc,
+        "patron": patron,
+    }
 
 
 def _validar_empresa(db: Session, empresa_id: int, user: Usuario) -> Empresa:
@@ -39,39 +72,55 @@ def _marcar_unico_default(db: Session, empresa_id: int, banco_id: int) -> None:
 def crear_o_actualizar_mapeo(
     datos: MapeoCuentaCreate,
     db: Session = Depends(get_db),
-    _current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(get_current_user)
 ):
-    # 1. Verificar que la empresa pertenece al usuario (Seguridad Multi-tenant)
-    # (Asumiendo que tienes esta lógica o el usuario tiene permiso)
-    
-    # 2. Buscar si ya existe un mapeo para este RFC en esta empresa
-    mapeo_existente = db.query(MapeoCuenta).filter(
-        MapeoCuenta.rfc_emisor == datos.rfc_emisor,
-        MapeoCuenta.empresa_id == datos.empresa_id
-    ).first()
+    _validar_empresa(db, datos.empresa_id, current_user)
+    regla = _normalizar_regla(datos)
+
+    query = db.query(MapeoCuenta).filter(
+        MapeoCuenta.empresa_id == datos.empresa_id,
+        MapeoCuenta.tipo_regla == regla["tipo_regla"],
+    )
+    if regla["tipo_regla"] == "rfc":
+        query = query.filter(MapeoCuenta.rfc_emisor == regla["rfc_emisor"])
+    else:
+        query = query.filter(MapeoCuenta.patron == regla["patron"])
+
+    mapeo_existente = query.first()
 
     if mapeo_existente:
-        # Actualizar
         mapeo_existente.nombre_cuenta = datos.nombre_cuenta
         mapeo_existente.codigo_cuenta = datos.codigo_cuenta
+        mapeo_existente.rfc_emisor = regla["rfc_emisor"]
+        mapeo_existente.patron = regla["patron"]
+        mapeo_existente.tipo_regla = regla["tipo_regla"]
         db.commit()
         db.refresh(mapeo_existente)
         return mapeo_existente
-    else:
-        # Crear nuevo
-        nuevo_mapeo = MapeoCuenta(**datos.model_dump())
-        db.add(nuevo_mapeo)
-        db.commit()
-        db.refresh(nuevo_mapeo)
-        return nuevo_mapeo
+
+    payload = datos.model_dump()
+    payload.update(regla)
+    nuevo_mapeo = MapeoCuenta(**payload)
+    db.add(nuevo_mapeo)
+    db.commit()
+    db.refresh(nuevo_mapeo)
+    return nuevo_mapeo
 
 @router.get("/mapeos/{empresa_id}", response_model=List[MapeoCuentaResponse])
 def listar_mapeos(
     empresa_id: int,
+    tipo_regla: str | None = None,
     db: Session = Depends(get_db),
-    _current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(get_current_user)
 ):
-    return db.query(MapeoCuenta).filter(MapeoCuenta.empresa_id == empresa_id).all()
+    _validar_empresa(db, empresa_id, current_user)
+    q = db.query(MapeoCuenta).filter(MapeoCuenta.empresa_id == empresa_id)
+    if tipo_regla:
+        tipo = tipo_regla.strip().lower()
+        if tipo not in _TIPOS_REGLA:
+            raise HTTPException(status_code=400, detail="tipo_regla inválido. Usa: rfc, concepto o clave_sat")
+        q = q.filter(MapeoCuenta.tipo_regla == tipo)
+    return q.all()
 
 
 @router.get("/comisiones-banco/{empresa_id}", response_model=List[ComisionBancoResponse])
