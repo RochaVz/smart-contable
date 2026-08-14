@@ -24,6 +24,7 @@ from app.services.conciliacion import (
     hash_movimiento,
     parsear_estado_cuenta_xml,
     parsear_estado_cuenta_csv,
+    TOLERANCIA_CONCILIACION_CENTAVOS,
     # parsear_estado_cuenta_pdf, -> Ya no lo necesitamos para PDF, lo maneja bank_parser
 )
 
@@ -61,7 +62,7 @@ def obtener_conciliacion(
     mes: int | None = Query(None, ge=1, le=12),
     anio: int | None = Query(None, ge=2000, le=2100),
     banco_id: int | None = None,
-    tolerancia: float = Query(1.0, ge=0),
+    tolerancia: float = Query(TOLERANCIA_CONCILIACION_CENTAVOS, ge=0, le=0.05),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):

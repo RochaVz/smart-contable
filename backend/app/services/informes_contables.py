@@ -36,11 +36,12 @@ def generar_resumen_ingresos_egresos(
     egresos = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0}
 
     for f in facturas:
-        bucket = ingresos if es_venta(f, rfc) else egresos
+        venta = es_venta(f, rfc)
+        bucket = ingresos if venta else egresos
         bucket["cantidad"] += 1
         bucket["subtotal"] += float(f.subtotal or 0)
         bucket["iva"] += float(f.iva_trasladado or 0)
-        bucket["total"] += float(f.total or 0)
+        bucket["total"] += float((f.subtotal if venta else f.total) or 0)
 
     for b in (ingresos, egresos):
         for k in ("subtotal", "iva", "total"):

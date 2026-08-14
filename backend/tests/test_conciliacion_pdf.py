@@ -7,8 +7,35 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 import builtins
+from types import SimpleNamespace
 
 from app.services.conciliacion import parsear_estado_cuenta_pdf
+from app.services.conciliacion import (
+    _monto_banco_poliza,
+    _montos_coinciden,
+    _montos_conciliables_poliza,
+)
+from app.models.poliza import TipoPoliza
+
+
+def test_monto_conciliable_ingreso_usa_deposito_neto():
+    poliza = SimpleNamespace(
+        tipo=TipoPoliza.ingreso,
+        total=1160,
+        movimientos=[
+            SimpleNamespace(cuenta="102.01.01", debe=1131, haber=0),
+            SimpleNamespace(cuenta="701.02.01", debe=29, haber=0),
+        ],
+    )
+
+    assert _monto_banco_poliza(poliza) == 1131
+    assert _montos_conciliables_poliza(poliza) == [1131, 1160]
+
+
+def test_conciliacion_acepta_diferencias_de_centavos_y_rechaza_diferencias_reales():
+    assert _montos_coinciden(1000.00, 1000.01, 0.05) is True
+    assert _montos_coinciden(1000.00, 1000.05, 0.05) is True
+    assert _montos_coinciden(1000.00, 1000.06, 0.05) is False
 
 
 def test_parsear_estado_cuenta_pdf():

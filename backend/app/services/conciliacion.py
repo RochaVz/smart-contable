@@ -310,6 +310,8 @@ _PATRONES_COMISION = (
     "IVA COMISION",
 )
 
+TOLERANCIA_CONCILIACION_CENTAVOS = 0.05
+
 
 def _es_comision_bancaria(descripcion: str) -> bool:
     """True si el movimiento es una comisión/IVA bancario ya incluido en póliza de ingreso."""
@@ -317,12 +319,23 @@ def _es_comision_bancaria(descripcion: str) -> bool:
     return any(patron in desc for patron in _PATRONES_COMISION)
 
 
+def _montos_coinciden(monto_poliza: float, monto_banco: float, tolerancia: float) -> bool:
+    diferencia = round(abs(monto_poliza - monto_banco), 2)
+    return diferencia <= round(tolerancia, 2)
+
+
 def _monto_banco_poliza(poliza: Poliza) -> float:
     """Extrae el monto bancario de la póliza.
-    - Ingreso: usa poliza.total (monto bruto = lo que pagó el cliente = lo que abona el banco)
+    - Ingreso: usa el depósito neto registrado en Bancos; la comisión se separa.
     - Egreso: suma haber de cuentas 102/105; si no hay, suma haber de cuentas 201
     """
     if poliza.tipo == TipoPoliza.ingreso:
+        movs_banco = [
+            m for m in poliza.movimientos
+            if (m.cuenta or "").startswith(_CUENTAS_BANCO) and float(m.debe or 0) > 0
+        ]
+        if movs_banco:
+            return round(sum(float(m.debe or 0) for m in movs_banco), 2)
         return round(float(poliza.total or 0), 2)
     # egreso
     movs_banco = [m for m in poliza.movimientos if (m.cuenta or "").startswith(_CUENTAS_BANCO)]
@@ -333,6 +346,16 @@ def _monto_banco_poliza(poliza: Poliza) -> float:
     if movs_pago:
         return round(sum(float(m.haber or 0) for m in movs_pago), 2)
     return round(float(poliza.total or 0), 2)
+
+
+def _montos_conciliables_poliza(poliza: Poliza) -> list[float]:
+    monto = _monto_banco_poliza(poliza)
+    montos = [monto]
+    if poliza.tipo == TipoPoliza.ingreso:
+        total_bruto = round(float(poliza.total or 0), 2)
+        if total_bruto > 0 and total_bruto != monto:
+            montos.append(total_bruto)
+    return montos
 
 
 def _polizas_conciliables(db: Session, empresa_id: int, mes: int, anio: int) -> list[dict]:
@@ -351,6 +374,7 @@ def _polizas_conciliables(db: Session, empresa_id: int, mes: int, anio: int) -> 
     for p in polizas:
         tipo_banco = "abono" if p.tipo == TipoPoliza.ingreso else "cargo"
         monto = _monto_banco_poliza(p)
+        montos_conciliables = _montos_conciliables_poliza(p)
         logger.debug("Poliza %s tipo=%s monto=%s", p.id, p.tipo.value, monto)
         if monto <= 0:
             continue
@@ -362,6 +386,7 @@ def _polizas_conciliables(db: Session, empresa_id: int, mes: int, anio: int) -> 
             "fecha": str(_fecha_date(p.fecha)),
             "concepto": p.concepto or "",
             "monto": monto,
+            "montos_conciliables": montos_conciliables,
         })
     return resultado
 
@@ -380,7 +405,7 @@ def conciliar_periodo(
     empresa_id: int,
     mes: int,
     anio: int,
-    tolerancia: float = 0.0,
+    tolerancia: float = TOLERANCIA_CONCILIACION_CENTAVOS,
     banco_id: int | None = None,
 ) -> dict:
     # 1. Movimientos del estado de cuenta bancario
@@ -413,7 +438,10 @@ def conciliar_periodo(
         candidatas = [
             p for p in polizas_disponibles
             if p["tipo_banco"] == mov.tipo
-            and abs(p["monto"] - monto_mov) <= tolerancia
+            and any(
+                _montos_coinciden(monto_poliza, monto_mov, tolerancia)
+                for monto_poliza in p["montos_conciliables"]
+            )
             and _concepto_similar(mov.descripcion or "", p["concepto"])
         ]
 
@@ -422,7 +450,10 @@ def conciliar_periodo(
             candidatas = [
                 p for p in polizas_disponibles
                 if p["tipo_banco"] == mov.tipo
-                and abs(p["monto"] - monto_mov) <= tolerancia
+                and any(
+                    _montos_coinciden(monto_poliza, monto_mov, tolerancia)
+                    for monto_poliza in p["montos_conciliables"]
+                )
             ]
 
         # Ordenar candidatas por diferencia de días (menor diferencia primero)

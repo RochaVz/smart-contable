@@ -1,13 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from app.core.dependencies import get_current_user
 from app.models.usuario import Usuario
 from app.models.empresa import Empresa
-from sqlalchemy import func, case
+from sqlalchemy import func, case, and_, or_
 from sqlalchemy.orm import Session
-from sqlalchemy import distinct
-
 from app.core.database import get_db
 from app.models.poliza import MovimientoPoliza, Poliza
+from app.models.factura import Factura, TipoFactura
 
 from app.core.validators import (
     validar_empresa_usuario,
@@ -23,6 +22,15 @@ FAMILIA_PASIVO = '2'
 FAMILIA_CAPITAL = '3'
 FAMILIA_INGRESOS = '4'
 FAMILIA_GASTOS = '6'
+
+
+def _movimiento_ingreso_valido():
+    """Excluye pólizas 4xx ligadas a CFDI que no sean ingresos tipo I."""
+    return or_(
+        ~MovimientoPoliza.cuenta.like("4%"),
+        Poliza.factura_id.is_(None),
+        Factura.tipo_comprobante == TipoFactura.ingreso,
+    )
 
 @router.get("/paquete-fiscal")
 def obtener_paquete_fiscal(
@@ -75,11 +83,12 @@ def obtener_resumen_financiero(
             MovimientoPoliza.haber
         ).label("total_haber")
 
-    ).join(Poliza).filter(
+    ).join(Poliza).outerjoin(Factura).filter(
 
         Poliza.empresa_id == empresa_id,
         Poliza.mes == mes,
-        Poliza.anio == anio
+        Poliza.anio == anio,
+        _movimiento_ingreso_valido(),
 
     ).group_by(
         func.substring(
@@ -235,12 +244,12 @@ def obtener_kpis(
     # 2. Consulta unificada mediante agregación condicional (case)
     # Añadimos el comentario para que Pylint ignore el falso positivo en la generación de funciones SQL.
     datos = db.query(
-        func.sum(case((MovimientoPoliza.cuenta.like('4%'), MovimientoPoliza.haber), else_=0)).label("ingresos"),
+        func.sum(case((and_(MovimientoPoliza.cuenta.like('4%'), _movimiento_ingreso_valido()), MovimientoPoliza.haber), else_=0)).label("ingresos"),
         func.sum(case((MovimientoPoliza.cuenta.like('6%'), MovimientoPoliza.debe), else_=0)).label("gastos"),
         func.sum(case((MovimientoPoliza.cuenta.like('216.01%'), MovimientoPoliza.haber), else_=0)).label("iva_trasladado"),
         func.sum(case((MovimientoPoliza.cuenta.like('216.04%'), MovimientoPoliza.haber), else_=0)).label("impuestos_locales"),
         func.count(func.distinct(Poliza.factura_id)).label("facturas_emitidas")  # pylint: disable=not-callable
-    ).select_from(Poliza).join(MovimientoPoliza).filter(
+    ).select_from(Poliza).join(MovimientoPoliza).outerjoin(Factura).filter(
         Poliza.empresa_id == empresa_id,
         Poliza.mes == mes,
         Poliza.anio == anio
@@ -285,9 +294,9 @@ def obtener_kpis_globales(
 
     # 2. Una sola consulta eficiente que cruza Empresa -> Poliza -> Movimiento
     datos = db.query(
-        func.sum(case((MovimientoPoliza.cuenta.like('4%'), MovimientoPoliza.haber), else_=0)).label("ingresos"),
+        func.sum(case((and_(MovimientoPoliza.cuenta.like('4%'), _movimiento_ingreso_valido()), MovimientoPoliza.haber), else_=0)).label("ingresos"),
         func.sum(case((MovimientoPoliza.cuenta.like('6%'), MovimientoPoliza.debe), else_=0)).label("gastos")
-    ).select_from(MovimientoPoliza).join(Poliza).join(Empresa).filter(
+    ).select_from(MovimientoPoliza).join(Poliza).join(Empresa).outerjoin(Factura).filter(
         Empresa.usuario_id == current_user.id,
         Poliza.mes == mes,
         Poliza.anio == anio

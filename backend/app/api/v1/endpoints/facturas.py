@@ -485,23 +485,21 @@ def listar_facturas(
 
         respuesta =[]
         for f in facturas:
-            # 3. Lógica robusta: ¿Venta o Gasto?
-            # Comparamos siempre en mayúsculas y sin espacios
-            rfc_emisor_f = (f.rfc_emisor or "").strip().upper()
-            es_venta = (rfc_emisor_f == mi_rfc)
+            # 3. Lógica centralizada: solo CFDI tipo I emitidos por la empresa son ventas.
+            venta = es_venta(f, mi_rfc)
             
-            tipo_operacion = "VENTA" if es_venta else "GASTO"
-            entidad_nombre = f.nombre_receptor if es_venta else f.nombre_emisor
-            entidad_rfc = f.rfc_receptor if es_venta else f.rfc_emisor
+            tipo_operacion = "VENTA" if venta else "GASTO"
+            entidad_nombre = f.nombre_receptor if venta else f.nombre_emisor
+            entidad_rfc = f.rfc_receptor if venta else f.rfc_emisor
             
             # 4. Determinamos la cuenta contable
-            cuenta_nombre = "VENTAS GENERALES" if es_venta else "GASTOS POR CLASIFICAR"
+            cuenta_nombre = "VENTAS GENERALES" if venta else "GASTOS POR CLASIFICAR"
             
             if hasattr(f, 'polizas') and f.polizas and len(f.polizas) > 0:
                 poliza_padre = f.polizas[0]
                 
                 # Buscamos el movimiento que define el gasto o ingreso
-                if es_venta:
+                if venta:
                     mov = db.query(MovimientoPoliza).filter(
                         MovimientoPoliza.poliza_id == poliza_padre.id,
                         MovimientoPoliza.haber > 0,
@@ -523,9 +521,9 @@ def listar_facturas(
                 "uuid": f.uuid,
                 "fecha": str(f.fecha_emision),
                 "tipo_operacion": tipo_operacion,
-                "emisor": entidad_nombre if es_venta else f.nombre_emisor,
-                "rfc_emisor": entidad_rfc if not es_venta else f.rfc_emisor,
-                "nombre_cliente": f.nombre_receptor if es_venta else None,
+                "emisor": entidad_nombre if venta else f.nombre_emisor,
+                "rfc_emisor": entidad_rfc if not venta else f.rfc_emisor,
+                "nombre_cliente": f.nombre_receptor if venta else None,
                 "forma_pago": f.forma_pago,
                 "forma_pago_label": etiqueta_forma_pago(f.forma_pago),
                 "metodo_pago": f.metodo_pago,

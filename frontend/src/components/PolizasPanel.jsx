@@ -14,21 +14,21 @@ const MESES = [
 const TABS = [
   {
     id: 'diario',
-    label: 'Diario',
+    label: 'Diario · ventas',
     icon: BookOpen,
-    desc: 'Registro de ventas: nombre, forma de pago, productos e impuestos',
+    desc: 'Registro contable de la venta: nombre, forma de pago, productos e impuestos. No es un cobro adicional.',
     acento: 'blue',
   },
   {
     id: 'ingresos',
-    label: 'Ingresos',
+    label: 'Ingresos · cobros',
     icon: TrendingUp,
-    desc: 'Cobros y comisiones bancarias por pago con tarjeta',
+    desc: 'Cobros bancarios de las ventas y sus comisiones. No se suma al ingreso contable del Diario.',
     acento: 'emerald',
   },
   {
     id: 'egresos',
-    label: 'Egresos',
+    label: 'Egresos · gastos',
     icon: TrendingDown,
     desc: 'Gastos clasificados con desglose fiscal por proveedor',
     acento: 'rose',
@@ -406,7 +406,7 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
         <p className="text-slate-400 text-xs">{tabInfo.desc}</p>
         {items.length > 0 && (
           <p className={`text-sm font-black ${col.total}`}>
-            Total: ${totalPeriodo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            {tab === 'ingresos' ? 'Total cobrado' : 'Total'}: ${totalPeriodo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </p>
         )}
       </div>

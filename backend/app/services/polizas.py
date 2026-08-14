@@ -200,7 +200,8 @@ FORMA_PAGO_CUENTA = {
     "29": ("102.01.01", "Bancos"),
 }
 
-FORMAS_PAGO_INGRESO = FORMAS_PAGO_TARJETA | {"01", "02"}
+# Todo cobro no-PPD debe generar póliza de ingreso, incluida transferencia (03).
+FORMAS_PAGO_INGRESO = set(FORMA_PAGO_CUENTA)
 
 
 def _cuenta_contraparte_ingreso(forma_pago: str | None) -> tuple[str, str]:
@@ -267,7 +268,7 @@ def _conceptos_vendidos(factura: Factura) -> list[dict]:
 def generar_poliza_diario_venta(factura: Factura, db: Session) -> Poliza:
     fecha = factura.fecha_emision.date() if factura.fecha_emision else date.today()
     mes, anio = fecha.month, fecha.year
-    subtotal = float(factura.subtotal or 0)
+    subtotal = max(float(factura.subtotal or 0) - float(factura.descuento or 0), 0)
     iva = float(factura.iva_trasladado or 0)
     total = float(factura.total or 0)
     ish = float(factura.impuestos_locales or 0)
@@ -428,7 +429,10 @@ def generar_poliza_ingreso_cobro(
 def generar_poliza_egreso(factura: Factura, db: Session) -> Poliza:
     fecha = factura.fecha_emision.date() if factura.fecha_emision else date.today()
     mes, anio = fecha.month, fecha.year
-    subtotal = Decimal(str(factura.subtotal or 0))
+    subtotal = max(
+        Decimal(str(factura.subtotal or 0)) - Decimal(str(factura.descuento or 0)),
+        Decimal("0"),
+    )
     iva = Decimal(str(factura.iva_trasladado or 0))
     total = Decimal(str(factura.total or 0))
     iva_ret = Decimal(str(factura.iva_retenido or 0))
@@ -463,7 +467,9 @@ def generar_poliza_egreso(factura: Factura, db: Session) -> Poliza:
     db.add(poliza)
     db.flush()
 
-    abono_proveedor = total - isr_ret - iva_ret
+    # El proveedor recibe el total neto; las retenciones se reconocen aparte.
+    # La contrapartida debe partir de la base contable neta, no del total neto.
+    abono_proveedor = subtotal + iva - isr_ret - iva_ret
     movimientos = [
         MovimientoPoliza(
             poliza_id=poliza.id,

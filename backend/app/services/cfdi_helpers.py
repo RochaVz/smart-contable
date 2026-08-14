@@ -59,7 +59,12 @@ def normalizar_uuid(uuid: str | None) -> str:
 
 
 def es_venta(factura, empresa_rfc: str) -> bool:
-    return normalizar_rfc(factura.rfc_emisor) == normalizar_rfc(empresa_rfc)
+    tipo_comprobante = getattr(factura, "tipo_comprobante", None)
+    tipo_comprobante = getattr(tipo_comprobante, "value", tipo_comprobante)
+    return (
+        str(tipo_comprobante or "").upper() == "I"
+        and normalizar_rfc(factura.rfc_emisor) == normalizar_rfc(empresa_rfc)
+    )
 
 
 def cfdi_pertenece_a_empresa(datos: dict, empresa_rfc: str) -> bool:

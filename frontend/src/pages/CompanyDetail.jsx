@@ -306,7 +306,7 @@ const CompanyDetail = () => {
 
   const totalesMovimiento = useMemo(() => {
     const sumar = (lista) => lista.reduce((acc, f) => {
-      acc.total += toNumber(f.total);
+      acc.total += esIngreso(f) ? toNumber(f.subtotal) : toNumber(f.total);
       acc.conteo += 1;
       return acc;
     }, { total: 0, conteo: 0 });
@@ -362,8 +362,9 @@ const CompanyDetail = () => {
       const periodo = getPeriodoFactura(f);
       if (!periodo || periodo.anio !== anioFiltro) return;
       const item = meses[periodo.mes - 1];
-      const total = toNumber(f.total);
-      if (f.tipo_operacion === 'VENTA') item.ingresos += total;
+      const venta = f.tipo_operacion === 'VENTA';
+      const total = venta ? toNumber(f.subtotal) : toNumber(f.total);
+      if (venta) item.ingresos += total;
       else item.egresos += total;
     });
 
