@@ -71,6 +71,7 @@ _CATALOGO_SAT: list[tuple[str, str, str]] = [
 _CATALOGO_CONCEPTO: list[tuple[tuple[str, ...], str, str]] = [
     (("renta", "arrendamiento", "alquiler"), "601.06.01", "Arrendamiento"),
     (("gasolina", "diesel", "combustible", "pemex"), "601.07.01", "Combustibles y lubricantes"),
+    (("nomina", "nominas", "sueldo", "sueldos", "salario", "salarios", "prestaciones", "aguinaldo", "finiquito"), "601.15.01", "Nóminas"),
     (("internet", "telefonia", "telefono", "movil", "celular", "telecom"), "601.04.01", "Telecomunicaciones"),
     (("hosting", "software", "licencia", "nube", "cloud", "saas", "suscripcion"), "601.03.01", "Servicios de tecnología"),
     (("honorarios", "asesoria", "consultoria", "contable", "legal", "notaria"), "601.02.01", "Honorarios profesionales"),

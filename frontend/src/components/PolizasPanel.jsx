@@ -46,11 +46,8 @@ const itemKey = (item, tab) =>
     ? `poliza-${item.poliza_id}-${tab}`
     : `factura-${item.factura_id}-${tab}`;
 
-const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
-  const hoy = new Date();
+const PolizasPanel = ({ empresaId, mes, anio, onPeriodoChange, onRefreshFacturas }) => {
   const [tab, setTab] = useState('diario');
-  const [mes, setMes] = useState(hoy.getMonth() + 1);
-  const [anio, setAnio] = useState(hoy.getFullYear());
   const [data, setData] = useState({ diario: [], ingresos: [], egresos: [], pendientes: [] });
   const [bancos, setBancos] = useState([]);
   const [bancoSeleccionado, setBancoSeleccionado] = useState('');
@@ -329,7 +326,7 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
             <Calendar className="w-4 h-4 text-slate-500" />
             <select
               value={mes}
-              onChange={(e) => setMes(Number(e.target.value))}
+              onChange={(e) => onPeriodoChange(Number(e.target.value), anio)}
               className="bg-transparent text-white text-sm outline-none"
             >
               {MESES.map((nombre, i) => (
@@ -338,7 +335,7 @@ const PolizasPanel = ({ empresaId, onRefreshFacturas }) => {
             </select>
             <select
               value={anio}
-              onChange={(e) => setAnio(Number(e.target.value))}
+              onChange={(e) => onPeriodoChange(mes, Number(e.target.value))}
               className="bg-transparent text-white text-sm outline-none"
             >
               {[anio - 1, anio, anio + 1].map((y) => (

@@ -3,6 +3,7 @@ from app.models.factura import Factura
 from app.models.poliza import Poliza, MovimientoPoliza, TipoPoliza
 from app.models.mapeo_cuenta import MapeoCuenta
 from app.models.empresa import Empresa
+from app.models.conciliacion import MovimientoBanco
 from datetime import date
 from app.services.clasificador import (
     obtener_cuenta_por_clave_sat,
@@ -576,6 +577,58 @@ def generar_poliza_diario(
     return poliza
 
 
+def generar_poliza_movimiento_banco(
+    movimiento: MovimientoBanco,
+    cuenta_contrapartida: str,
+    nombre_contrapartida: str,
+    concepto: str,
+    db: Session,
+) -> Poliza:
+    """Crea una póliza conciliable a partir de un cargo o abono bancario."""
+    fecha = movimiento.fecha.date() if hasattr(movimiento.fecha, "date") else movimiento.fecha
+    monto = float(movimiento.monto or 0)
+    if monto <= 0:
+        raise ValueError("El movimiento bancario debe tener un monto mayor que cero")
+    if not cuenta_contrapartida.strip() or not nombre_contrapartida.strip():
+        raise ValueError("La cuenta de contrapartida es requerida")
+
+    es_abono = movimiento.tipo == "abono"
+    tipo = TipoPoliza.ingreso if es_abono else TipoPoliza.egreso
+    numero = _ultimo_numero_poliza(db, movimiento.empresa_id, tipo, fecha.month, fecha.year)
+    concepto_final = concepto.strip() or movimiento.descripcion or "Movimiento bancario"
+
+    if es_abono:
+        movimientos = [
+            {"cuenta": "102.01.01", "nombre_cuenta": "Bancos", "debe": monto, "haber": 0},
+            {"cuenta": cuenta_contrapartida.strip(), "nombre_cuenta": nombre_contrapartida.strip(), "debe": 0, "haber": monto},
+        ]
+    else:
+        movimientos = [
+            {"cuenta": cuenta_contrapartida.strip(), "nombre_cuenta": nombre_contrapartida.strip(), "debe": monto, "haber": 0},
+            {"cuenta": "102.01.01", "nombre_cuenta": "Bancos", "debe": 0, "haber": monto},
+        ]
+
+    poliza = Poliza(
+        empresa_id=movimiento.empresa_id,
+        factura_id=None,
+        tipo=tipo,
+        numero=numero,
+        fecha=fecha,
+        concepto=concepto_final,
+        total=monto,
+        mes=fecha.month,
+        anio=fecha.year,
+    )
+    db.add(poliza)
+    db.flush()
+    validar_partida_doble([
+        MovimientoPoliza(debe=m["debe"], haber=m["haber"]) for m in movimientos
+    ])
+    for movimiento_poliza in movimientos:
+        db.add(MovimientoPoliza(poliza_id=poliza.id, concepto=concepto_final, **movimiento_poliza))
+    return poliza
+
+
 def generar_poliza_desde_factura(
     factura: Factura, db: Session, banco_id: int | None = None
 ) -> list[Poliza]:
@@ -803,11 +856,29 @@ def serializar_poliza(
             (m for m in poliza.movimientos if float(m.debe or 0) > 0 and "IVA" not in (m.nombre_cuenta or "")),
             None,
         )
+        descripcion_gasto = (
+            extraer_datos_xml(factura.xml_contenido).get("concepto_principal")
+            or factura.nombre_emisor
+        )
+        if db is not None:
+            info_cuenta = obtener_cuenta_inteligente(
+                db,
+                factura.rfc_emisor or "",
+                factura.empresa_id,
+                _clave_sat_desde_factura(factura),
+                descripcion_gasto,
+            )
+        else:
+            info_cuenta = obtener_cuenta_por_concepto(descripcion_gasto)
         base["egreso"] = {
             "proveedor": factura.nombre_emisor,
             "rfc_proveedor": factura.rfc_emisor,
-            "clasificacion_gasto": cuenta_gasto.nombre_cuenta if cuenta_gasto else "Sin clasificar",
-            "cuenta_gasto": cuenta_gasto.cuenta if cuenta_gasto else None,
+            "clasificacion_gasto": (
+                info_cuenta["nombre"] if info_cuenta else (cuenta_gasto.nombre_cuenta if cuenta_gasto else "Sin clasificar")
+            ),
+            "cuenta_gasto": (
+                info_cuenta["cuenta"] if info_cuenta else (cuenta_gasto.cuenta if cuenta_gasto else None)
+            ),
             "desglose_impuestos": desglose_impuestos(factura),
             "deducible": bool(factura.es_deducible),
         }

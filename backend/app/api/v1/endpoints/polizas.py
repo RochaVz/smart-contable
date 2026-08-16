@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.poliza import Poliza, TipoPoliza
 from app.models.factura import Factura
+from app.models.conciliacion import MovimientoBanco
 from app.models.empresa import Empresa
 from app.models.usuario import Usuario
 from app.services.polizas import (
@@ -16,6 +17,7 @@ from app.services.polizas import (
     generar_poliza_desde_factura,
     generar_polizas_automaticas,
     obtener_facturas_pendientes_poliza,
+    generar_poliza_movimiento_banco,
 )
 from app.services.comisiones import obtener_banco_default_id
 from app.services.cfdi_helpers import es_venta
@@ -36,6 +38,14 @@ class PolizaDiarioInput(BaseModel):
     fecha: date
     concepto: str
     movimientos: List[MovimientoInput]
+
+
+class PolizaMovimientoBancoInput(BaseModel):
+    empresa_id: int
+    movimiento_banco_id: int
+    cuenta_contrapartida: str
+    nombre_contrapartida: str
+    concepto: str = ""
 
 
 def _validar_empresa(db: Session, empresa_id: int, user: Usuario) -> Empresa:
@@ -73,6 +83,40 @@ def crear_poliza_diario(
 
     empresa = db.query(Empresa).filter(Empresa.id == datos.empresa_id).first()
     return serializar_poliza(poliza, None, empresa.rfc if empresa else "")
+
+
+@router.post("/desde-movimiento-banco", status_code=201)
+def crear_poliza_desde_movimiento_banco(
+    datos: PolizaMovimientoBancoInput,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    _validar_empresa(db, datos.empresa_id, current_user)
+    movimiento = db.query(MovimientoBanco).filter(
+        MovimientoBanco.id == datos.movimiento_banco_id,
+        MovimientoBanco.empresa_id == datos.empresa_id,
+    ).first()
+    if not movimiento:
+        raise HTTPException(status_code=404, detail="Movimiento bancario no encontrado")
+
+    try:
+        poliza = generar_poliza_movimiento_banco(
+            movimiento,
+            datos.cuenta_contrapartida,
+            datos.nombre_contrapartida,
+            datos.concepto,
+            db,
+        )
+        db.commit()
+        db.refresh(poliza)
+        empresa = db.query(Empresa).filter(Empresa.id == datos.empresa_id).first()
+        return serializar_poliza(poliza, None, empresa.rfc if empresa else "", db)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="No se pudo crear la póliza del movimiento") from exc
 
 
 @router.get("/organizadas", status_code=200)

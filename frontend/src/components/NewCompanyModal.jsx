@@ -36,19 +36,28 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }) => {
             <div className="bg-blue-600/20 p-2 rounded-xl text-blue-500">
                <Building2 className="w-6 h-6" /> {/* <--- ¡AQUÍ ESTÁ! */}
             </div>
-            <h2 className="text-2xl font-black text-white">Nueva Empresa</h2>
+            <h2 className="text-2xl font-black text-white">Agregar negocio</h2>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white">
              <X />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-blue-500" placeholder="RFC" onChange={(e) => setFormData({...formData, rfc: e.target.value})} required />
-          <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Razón Social" onChange={(e) => setFormData({...formData, razon_social: e.target.value})} required />
-          <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Código Postal" onChange={(e) => setFormData({...formData, codigo_postal: e.target.value})} required />
+          <div>
+            <label className="mb-2 block text-sm font-bold text-slate-300">RFC del negocio</label>
+            <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej. ABC010203AB1" onChange={(e) => setFormData({...formData, rfc: e.target.value})} required />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-bold text-slate-300">Nombre del negocio o empresa</label>
+            <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Cómo lo reconoces en tu día a día" onChange={(e) => setFormData({...formData, razon_social: e.target.value})} required />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-bold text-slate-300">Código postal fiscal</label>
+            <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Código postal registrado ante el SAT" onChange={(e) => setFormData({...formData, codigo_postal: e.target.value})} required />
+          </div>
           
           <button className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white mt-4 transition-all active:scale-95 flex justify-center" disabled={loading}>
-            {loading ? <Loader2 className="animate-spin" /> : "Guardar Empresa"}
+            {loading ? <Loader2 className="animate-spin" /> : "Guardar negocio"}
           </button>
         </form>
       </div>

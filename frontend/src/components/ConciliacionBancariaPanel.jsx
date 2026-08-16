@@ -5,6 +5,7 @@ import {
   RefreshCw, Search, UploadCloud, X,
 } from 'lucide-react';
 import api from '../services/api';
+import CrearPolizaMovimientoModal from './CrearPolizaMovimientoModal';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -59,10 +60,7 @@ function buildFilas(data) {
 }
 
 // ─── Componente principal ──────────────────────────────────────────────────────
-const ConciliacionBancariaPanel = ({ empresaId }) => {
-  const hoy = new Date();
-  const [mes, setMes] = useState(hoy.getMonth() + 1);
-  const [anio, setAnio] = useState(hoy.getFullYear());
+const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) => {
   const [bancoId, setBancoId] = useState('');
   const [bancos, setBancos] = useState([]);
   const [data, setData] = useState(null);
@@ -74,6 +72,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
   const [filtroEstado, setFiltroEstado] = useState('todos');   // todos | conciliado | sin_poliza
   const [filtroTipo, setFiltroTipo] = useState('todos');       // todos | cargo | abono
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
+  const [movimientoParaPoliza, setMovimientoParaPoliza] = useState(null);
 
   const cargarDatos = useCallback(async (targetMes, targetAnio) => {
     setLoading(true);
@@ -107,8 +106,8 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
     cargarDatos(mes, anio);
   }
 
-  const handleCambioMes = (v) => { setMes(v); startTransition(() => cargarDatos(v, anio)); };
-  const handleCambioAnio = (v) => { setAnio(v); startTransition(() => cargarDatos(mes, v)); };
+  const handleCambioMes = (v) => { onPeriodoChange(v, anio); startTransition(() => cargarDatos(v, anio)); };
+  const handleCambioAnio = (v) => { onPeriodoChange(mes, v); startTransition(() => cargarDatos(mes, v)); };
 
   const handleUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -394,7 +393,7 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {filasFiltradas.map((fila) => (
-                      <FilaMovimiento key={fila.id} fila={fila} />
+                      <FilaMovimiento key={fila.id} fila={fila} onCrearPoliza={setMovimientoParaPoliza} />
                     ))}
                   </tbody>
                   {/* Totales de la vista filtrada */}
@@ -418,12 +417,21 @@ const ConciliacionBancariaPanel = ({ empresaId }) => {
           )}
         </>
       )}
+
+      <CrearPolizaMovimientoModal
+        key={movimientoParaPoliza?.id || 'sin-movimiento'}
+        isOpen={Boolean(movimientoParaPoliza)}
+        onClose={() => setMovimientoParaPoliza(null)}
+        empresaId={empresaId}
+        fila={movimientoParaPoliza}
+        onSuccess={() => cargarDatos(mes, anio)}
+      />
     </section>
   );
 };
 
 // ─── Fila individual de la tabla ───────────────────────────────────────────────
-const FilaMovimiento = memo(({ fila }) => {
+const FilaMovimiento = memo(({ fila, onCrearPoliza }) => {
   const conciliado = fila.estado === 'conciliado';
   const comision   = fila.estado === 'comision';
   return (
@@ -461,7 +469,13 @@ const FilaMovimiento = memo(({ fila }) => {
         ) : comision ? (
           <span className="text-blue-400 text-[10px]">Incluida en ingreso</span>
         ) : (
-          <span className="text-slate-600">—</span>
+          <button
+            type="button"
+            onClick={() => onCrearPoliza(fila)}
+            className="inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2 py-1 text-[10px] font-black text-rose-300 transition-colors hover:bg-rose-500/20 hover:text-rose-200"
+          >
+            Crear póliza
+          </button>
         )}
       </td>
     </tr>

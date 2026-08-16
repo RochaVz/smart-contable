@@ -51,12 +51,12 @@ const Login = ({ onLoginSuccess }) => {
             <Lock className="text-blue-500 w-8 h-8" />
           </div>
           <h2 className="text-3xl font-bold text-white">Bienvenido</h2>
-          <p className="text-slate-400 mt-2">Ingresa a tu panel contable</p>
+          <p className="text-slate-400 mt-2">Revisa la información de tu negocio con claridad</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="text-slate-300 text-sm font-medium mb-2 block">Correo Electrónico</label>
+            <label className="text-slate-300 text-sm font-medium mb-2 block">Correo para entrar</label>
             <div className="relative">
               <Mail className="absolute left-3 top-3 text-slate-500 w-5 h-5" />
               <input 
@@ -71,7 +71,7 @@ const Login = ({ onLoginSuccess }) => {
           </div>
 
           <div>
-            <label className="text-slate-300 text-sm font-medium mb-2 block">Contraseña</label>
+            <label className="text-slate-300 text-sm font-medium mb-2 block">Tu contraseña</label>
             <div className="relative">
               <Lock className="absolute left-3 top-3 text-slate-500 w-5 h-5" />
               <input 

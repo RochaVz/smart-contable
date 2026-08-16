@@ -30,27 +30,27 @@ const MESES = [
 const SECCIONES = [
   {
     id: 'historial',
-    label: 'Historial',
+    label: 'Documentos',
     icon: FileText,
-    descripcion: 'CFDI del periodo, tendencia y exportación',
+    descripcion: 'Facturas, ingresos y gastos del periodo',
   },
   {
     id: 'polizas',
-    label: 'Pólizas',
+    label: 'Registro contable',
     icon: BookOpen,
-    descripcion: 'Diario, ingresos, egresos y comisiones bancarias',
+    descripcion: 'Cómo se registraron tus movimientos',
   },
   {
     id: 'informes',
-    label: 'Informes fiscales',
+    label: 'Resumen del negocio',
     icon: FileBarChart,
-    descripcion: 'Estado de resultados, impuestos y padrón',
+    descripcion: 'Resultado, impuestos y proveedores',
   },
   {
     id: 'conciliacion',
-    label: 'Conciliación',
+    label: 'Revisión bancaria',
     icon: Landmark,
-    descripcion: 'Estado de cuenta vs pólizas',
+    descripcion: 'Compara banco contra tus registros',
   },
 ];
 
@@ -124,6 +124,8 @@ const CompanyDetail = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedFactura, setSelectedFactura] = useState(null);
   const [selectedRfc, setSelectedRfc] = useState('');
+  const [selectedClasificacion, setSelectedClasificacion] = useState('');
+  const [classificationRefresh, setClassificationRefresh] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' });
   const [mesFiltro, setMesFiltro] = useState(hoy.getMonth() + 1);
@@ -136,6 +138,22 @@ const CompanyDetail = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  const abrirClasificacionProveedor = (proveedor) => {
+    setSelectedRfc(proveedor.rfc);
+    setSelectedClasificacion(proveedor.clasificacion === 'Por clasificar' ? '' : proveedor.clasificacion);
+    setIsClassifyOpen(true);
+  };
+
+  const handleClassificationSuccess = () => {
+    handleRefresh();
+    setClassificationRefresh((value) => value + 1);
+  };
+
+  const handlePeriodoChange = useCallback((mes, anio) => {
+    setMesFiltro(mes);
+    setAnioFiltro(anio);
+  }, []);
 
   const fetchDatos = useCallback(async () => {
     try {
@@ -203,8 +221,7 @@ const CompanyDetail = () => {
         responseType: 'blob',
       });
       const text = await res.data.text();
-      const preview = text.split('\n').slice(0, 80).join('\n');
-      setPreviewContent(preview || 'No hay contenido para mostrar.');
+      setPreviewContent(text || 'No hay contenido para mostrar.');
     } catch (err) {
       const mensaje = err.response?.data?.detail || 'No se pudo generar la vista previa';
       setPreviewContent(`Error: ${mensaje}`);
@@ -374,26 +391,39 @@ const CompanyDetail = () => {
   const seccionActiva = SECCIONES.find((s) => s.id === seccion) || SECCIONES[0];
 
   const selectorPeriodo = (
-    <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5">
-      <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
-      <select
-        value={mesFiltro}
-        onChange={(e) => setMesFiltro(Number(e.target.value))}
-        className="bg-transparent text-white text-sm outline-none max-w-[110px]"
-      >
-        {MESES.map((nombre, i) => (
-          <option key={nombre} value={i + 1}>{nombre}</option>
-        ))}
-      </select>
-      <select
-        value={anioFiltro}
-        onChange={(e) => setAnioFiltro(Number(e.target.value))}
-        className="bg-transparent text-white text-sm outline-none w-20"
-      >
-        {aniosDisponibles.map((anio) => (
-          <option key={anio} value={anio}>{anio}</option>
-        ))}
-      </select>
+    <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 shadow-lg shadow-black/10">
+      <Calendar className="h-5 w-5 shrink-0 text-blue-400" />
+      <div className="min-w-0">
+        <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">Periodo a revisar</span>
+        <div className="mt-1 flex items-center gap-1.5">
+          <div className="relative">
+            <select
+              aria-label="Mes a revisar"
+              value={mesFiltro}
+              onChange={(e) => setMesFiltro(Number(e.target.value))}
+              className="appearance-none rounded-lg border border-slate-700 bg-slate-950 py-1.5 pl-2.5 pr-7 text-sm font-bold text-white outline-none transition-colors hover:border-blue-500 focus:border-blue-500"
+            >
+              {MESES.map((nombre, i) => (
+                <option key={nombre} value={i + 1}>{nombre}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          </div>
+          <div className="relative">
+            <select
+              aria-label="Año a revisar"
+              value={anioFiltro}
+              onChange={(e) => setAnioFiltro(Number(e.target.value))}
+              className="appearance-none rounded-lg border border-slate-700 bg-slate-950 py-1.5 pl-2.5 pr-7 text-sm font-bold text-white outline-none transition-colors hover:border-blue-500 focus:border-blue-500"
+            >
+              {aniosDisponibles.map((anio) => (
+                <option key={anio} value={anio}>{anio}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -645,13 +675,35 @@ const CompanyDetail = () => {
               Configura comisiones por banco antes de generar pólizas con tarjeta.
             </div>
             <ComisionesBancoPanel empresaId={id} />
-            <PolizasPanel empresaId={id} onRefreshFacturas={handleRefresh} />
+            <PolizasPanel
+              empresaId={id}
+              mes={mesFiltro}
+              anio={anioFiltro}
+              onPeriodoChange={handlePeriodoChange}
+              onRefreshFacturas={handleRefresh}
+            />
           </div>
         );
       case 'informes':
-        return <InformesPanel empresaId={id} />;
+        return (
+          <InformesPanel
+            empresaId={id}
+            mes={mesFiltro}
+            anio={anioFiltro}
+            onPeriodoChange={handlePeriodoChange}
+            refreshToken={classificationRefresh}
+            onClassifyProveedor={abrirClasificacionProveedor}
+          />
+        );
       case 'conciliacion':
-        return <ConciliacionBancariaPanel empresaId={id} />;
+        return (
+          <ConciliacionBancariaPanel
+            empresaId={id}
+            mes={mesFiltro}
+            anio={anioFiltro}
+            onPeriodoChange={handlePeriodoChange}
+          />
+        );
       default:
         return renderHistorial();
     }
@@ -672,9 +724,9 @@ const CompanyDetail = () => {
         <header className="mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white">Smart Dashboard</h1>
+              <h1 className="text-2xl font-black text-white sm:text-3xl">{empresa?.razon_social || `Negocio #${id}`}</h1>
               <p className="text-slate-500 text-sm mt-1">
-                {empresa?.razon_social || `Empresa #${id}`}
+                Revisa la información de tu negocio y detecta diferencias a tiempo.
                 {empresa?.rfc && (
                   <span className="font-mono text-slate-600 ml-2">{empresa.rfc}</span>
                 )}
@@ -682,25 +734,33 @@ const CompanyDetail = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               {selectorPeriodo}
-              <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5">
-                <label className="text-xs font-semibold text-slate-400">Descargar</label>
-                <select
-                  value={tipoExportacion}
-                  onChange={(e) => setTipoExportacion(e.target.value)}
-                  className="bg-transparent text-sm text-white outline-none"
-                >
-                  <option value="todo">Todo</option>
-                  <option value="resumen">Resumen</option>
-                  <option value="empresa">Empresa</option>
-                  <option value="facturas">Facturas</option>
-                  <option value="ingresos">Ingresos</option>
-                  <option value="egresos">Egresos</option>
-                  <option value="polizas">Pólizas</option>
-                  <option value="movimientos">Movimientos</option>
-                  <option value="mapeos">Mapeos</option>
-                  <option value="comisiones">Comisiones</option>
-                  <option value="contable">Contable</option>
-                </select>
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 shadow-lg shadow-black/10">
+                <Download className="h-5 w-5 shrink-0 text-emerald-400" />
+                <div className="min-w-0">
+                  <label htmlFor="export-type" className="block text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">Exportar datos</label>
+                  <div className="relative mt-1">
+                    <select
+                      id="export-type"
+                      aria-label="Tipo de datos a exportar"
+                      value={tipoExportacion}
+                      onChange={(e) => setTipoExportacion(e.target.value)}
+                      className="w-full min-w-[128px] appearance-none rounded-lg border border-slate-700 bg-slate-950 py-1.5 pl-2.5 pr-8 text-sm font-bold text-white outline-none transition-colors hover:border-emerald-500 focus:border-emerald-500"
+                    >
+                      <option value="todo">Todo el negocio</option>
+                      <option value="resumen">Resumen</option>
+                      <option value="empresa">Datos del negocio</option>
+                      <option value="facturas">Facturas</option>
+                      <option value="ingresos">Ingresos</option>
+                      <option value="egresos">Gastos</option>
+                      <option value="polizas">Registro contable</option>
+                      <option value="movimientos">Movimientos</option>
+                      <option value="mapeos">Clasificaciones</option>
+                      <option value="comisiones">Comisiones</option>
+                      <option value="contable">Formato contable</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
@@ -784,11 +844,13 @@ const CompanyDetail = () => {
         onUploadSuccess={handleRefresh}
       />
       <ClassifyModal
+        key={`${selectedRfc}-${selectedClasificacion}`}
         isOpen={isClassifyOpen}
         onClose={() => setIsClassifyOpen(false)}
         rfc={selectedRfc}
         empresaId={id}
-        onClassificationSuccess={handleRefresh}
+        initialNombreCuenta={selectedClasificacion}
+        onClassificationSuccess={handleClassificationSuccess}
       />
       <FacturaDetailModal
         isOpen={isDetailOpen}

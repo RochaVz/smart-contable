@@ -3,8 +3,15 @@ import { X, Save, BrainCircuit } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
-const ClassifyModal = ({ isOpen, onClose, rfc, empresaId, onClassificationSuccess }) => {
-  const [nombreCuenta, setNombreCuenta] = useState('');
+const ClassifyModal = ({
+  isOpen,
+  onClose,
+  rfc,
+  empresaId,
+  initialNombreCuenta = '',
+  onClassificationSuccess,
+}) => {
+  const [nombreCuenta, setNombreCuenta] = useState(initialNombreCuenta);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -20,7 +27,7 @@ const ClassifyModal = ({ isOpen, onClose, rfc, empresaId, onClassificationSucces
         empresa_id: empresaId
       });
       
-      toast.success("Regla contable guardada con éxito!"); // Feedback positivo
+      toast.success("Clasificación guardada con éxito");
       onClassificationSuccess(); // Esto refresca la tabla automáticamente
       onClose();
     } catch (error) {
@@ -68,7 +75,7 @@ const ClassifyModal = ({ isOpen, onClose, rfc, empresaId, onClassificationSucces
             disabled={loading || !nombreCuenta}
             className="w-full mt-10 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2"
           >
-            {loading ? "Guardando..." : <><Save className="w-5 h-5" /> Guardar Regla Contable</>}
+            {loading ? "Guardando..." : <><Save className="w-5 h-5" /> Guardar clasificación</>}
           </button>
         </div>
       </div>

@@ -37,10 +37,7 @@ const TablaSimple = ({ cols, rows }) => (
   </div>
 );
 
-const InformesPanel = ({ empresaId }) => {
-  const hoy = new Date();
-  const [mes, setMes] = useState(hoy.getMonth() + 1);
-  const [anio, setAnio] = useState(hoy.getFullYear());
+const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProveedor, refreshToken = 0 }) => {
   const [tab, setTab] = useState('resumen');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -62,7 +59,7 @@ const InformesPanel = ({ empresaId }) => {
 
   useEffect(() => {
     fetchInformes();
-  }, [fetchInformes]);
+  }, [fetchInformes, refreshToken]);
 
   const TABS = [
     { id: 'resumen', label: 'Resumen', icon: FileBarChart },
@@ -155,10 +152,18 @@ const InformesPanel = ({ empresaId }) => {
           {p.total_proveedores} proveedor(es) · Total gastado: <span className="text-white font-bold">{fmt(p.total_gastado)}</span>
         </p>
         <TablaSimple
-          cols={['RFC', 'Proveedor', 'Clasificación', 'Facturas', 'Subtotal', 'IVA', 'Total']}
+          cols={['RFC', 'Proveedor', 'Clasificación', 'Facturas', 'Subtotal', 'IVA', 'Total', 'Acción']}
           rows={p.proveedores.map((x) => [
             x.rfc, x.nombre, x.clasificacion, x.num_facturas,
             fmt(x.subtotal), fmt(x.iva), fmt(x.total),
+            <button
+              key={`${x.rfc}-clasificar`}
+              type="button"
+              onClick={() => onClassifyProveedor(x)}
+              className="text-blue-400 hover:text-blue-300 font-bold whitespace-nowrap"
+            >
+              {x.clasificacion === 'Por clasificar' ? 'Clasificar' : 'Editar'}
+            </button>,
           ])}
         />
       </div>
@@ -332,7 +337,7 @@ const InformesPanel = ({ empresaId }) => {
           <Calendar className="w-4 h-4 text-slate-500" />
           <select
             value={mes}
-            onChange={(e) => setMes(Number(e.target.value))}
+            onChange={(e) => onPeriodoChange(Number(e.target.value), anio)}
             className="bg-transparent text-white text-sm outline-none"
           >
             {MESES.map((nombre, i) => (
@@ -341,7 +346,7 @@ const InformesPanel = ({ empresaId }) => {
           </select>
           <select
             value={anio}
-            onChange={(e) => setAnio(Number(e.target.value))}
+            onChange={(e) => onPeriodoChange(mes, Number(e.target.value))}
             className="bg-transparent text-white text-sm outline-none"
           >
             {[anio - 1, anio, anio + 1].map((y) => (

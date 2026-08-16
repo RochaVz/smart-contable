@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'; // <--- 1. Importa el Toaster
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import CompanyDetail from './pages/CompanyDetail';
+import ThemeToggle from './components/ThemeToggle';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('token'));
@@ -17,6 +18,7 @@ function App() {
     <BrowserRouter>
       {/* 2. Colócalo aquí, dentro del BrowserRouter pero fuera de las Routes */}
       <Toaster position="top-right" reverseOrder={false} />
+      <ThemeToggle />
       
       <Routes>
         <Route path="/login" element={!isAuthenticated ? <Login onLoginSuccess={() => setIsAuthenticated(true)} /> : <Navigate to="/dashboard" />} />

@@ -166,3 +166,101 @@ def test_retencion_no_descuadra_abono_del_proveedor():
     retencion = iva_retenido
 
     assert abono_proveedor + retencion == subtotal + iva
+
+
+def test_padron_reutiliza_clasificacion_por_rfc_en_periodos_futuros(monkeypatch):
+    proveedor = SimpleNamespace(
+        rfc_emisor="BBB010101BBB",
+        nombre_cuenta="HONORARIOS",
+        codigo_cuenta="601-01",
+    )
+
+    class QueryMapeos:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            return [proveedor]
+
+    class FakeDb:
+        def query(self, modelo):
+            assert modelo is informes_contables.MapeoCuenta
+            return QueryMapeos()
+
+    def facturas_del_periodo(_db, _empresa_id, mes, _anio):
+        return [
+            SimpleNamespace(
+                tipo_comprobante="E",
+                rfc_emisor="BBB010101BBB",
+                nombre_emisor="Proveedor recurrente",
+                subtotal=100 + mes,
+                iva_trasladado=16,
+                total=116 + mes,
+                iva_retenido=0,
+                isr_retenido=0,
+                es_deducible=True,
+            )
+        ]
+
+    monkeypatch.setattr(informes_contables, "_rfc_empresa", lambda *_args: "AAA010101AAA")
+    monkeypatch.setattr(informes_contables, "_facturas_periodo", facturas_del_periodo)
+
+    padron_julio = informes_contables.generar_padron_proveedores(FakeDb(), 1, 7, 2026)
+    padron_agosto = informes_contables.generar_padron_proveedores(FakeDb(), 1, 8, 2026)
+
+    assert padron_julio["proveedores"][0]["clasificacion"] == "HONORARIOS"
+    assert padron_agosto["proveedores"][0]["clasificacion"] == "HONORARIOS"
+
+
+def test_serializar_poliza_recalcula_nomina_para_poliza_historica(monkeypatch):
+    movimiento = SimpleNamespace(
+        cuenta="601.11.01",
+        nombre_cuenta="Seguros y fianzas",
+        debe=100,
+        haber=0,
+        concepto="Pago de nomina",
+    )
+    poliza = SimpleNamespace(
+        id=1,
+        tipo=polizas.TipoPoliza.egreso,
+        numero=1,
+        fecha=datetime(2026, 8, 1),
+        mes=8,
+        anio=2026,
+        factura_id=10,
+        concepto="Egreso | Proveedor | Seguros y fianzas",
+        total=116,
+        movimientos=[movimiento],
+    )
+    factura_egreso = SimpleNamespace(
+        id=10,
+        uuid="uuid-nomina",
+        tipo_comprobante="E",
+        rfc_emisor="BBB010101BBB",
+        nombre_emisor="Proveedor recurrente",
+        empresa_id=1,
+        xml_contenido="xml",
+        forma_pago=None,
+        metodo_pago=None,
+        subtotal=100,
+        descuento=0,
+        total=116,
+        es_deducible=True,
+        iva_trasladado=16,
+        iva_retenido=0,
+        isr_retenido=0,
+        impuestos_locales=0,
+    )
+
+    monkeypatch.setattr(polizas, "_info_comision_factura", lambda *_args: {"comision": 0})
+    monkeypatch.setattr(polizas, "extraer_datos_xml", lambda *_args: {"concepto_principal": "Pago de nomina"})
+    monkeypatch.setattr(
+        polizas,
+        "obtener_cuenta_inteligente",
+        lambda *_args: {"cuenta": "601.15.01", "nombre": "Nóminas"},
+    )
+
+    resultado = polizas.serializar_poliza(poliza, factura_egreso, "AAA010101AAA", db=object())
+
+    assert resultado["egreso"]["clasificacion_gasto"] == "Nóminas"
+    assert resultado["egreso"]["cuenta_gasto"] == "601.15.01"

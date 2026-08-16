@@ -1,1 +1,87 @@
 @import "tailwindcss";
+
+:root {
+	color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+	color-scheme: light;
+}
+
+:root[data-theme='light'] body {
+	background-color: #f4f7fb;
+	color: #334155;
+}
+
+:root[data-theme='light'] .bg-slate-950,
+:root[data-theme='light'] [class~='bg-slate-950'] {
+	background-color: #f8fafc !important;
+}
+
+:root[data-theme='light'] .bg-slate-900,
+:root[data-theme='light'] [class~='bg-slate-900'] {
+	background-color: #ffffff !important;
+}
+
+:root[data-theme='light'] [class~='bg-slate-900/50'],
+:root[data-theme='light'] [class~='bg-slate-900/80'] {
+	background-color: rgba(255, 255, 255, 0.88) !important;
+}
+
+:root[data-theme='light'] .bg-slate-800,
+:root[data-theme='light'] [class~='bg-slate-800'] {
+	background-color: #e8eef5 !important;
+}
+
+:root[data-theme='light'] [class~='bg-slate-800/50'] {
+	background-color: rgba(226, 232, 240, 0.72) !important;
+}
+
+:root[data-theme='light'] .border-slate-800,
+:root[data-theme='light'] [class~='border-slate-800'] {
+	border-color: #d7e0ea !important;
+}
+
+:root[data-theme='light'] .border-slate-700,
+:root[data-theme='light'] [class~='border-slate-700'] {
+	border-color: #c5d1df !important;
+}
+
+:root[data-theme='light'] .text-white,
+:root[data-theme='light'] [class~='text-white'] {
+	color: #172033 !important;
+}
+
+:root[data-theme='light'] .text-slate-200,
+:root[data-theme='light'] [class~='text-slate-200'] {
+	color: #334155 !important;
+}
+
+:root[data-theme='light'] .text-slate-300,
+:root[data-theme='light'] [class~='text-slate-300'] {
+	color: #475569 !important;
+}
+
+:root[data-theme='light'] .text-slate-400,
+:root[data-theme='light'] [class~='text-slate-400'] {
+	color: #64748b !important;
+}
+
+:root[data-theme='light'] .text-slate-500,
+:root[data-theme='light'] [class~='text-slate-500'] {
+	color: #64748b !important;
+}
+
+:root[data-theme='light'] .text-slate-600,
+:root[data-theme='light'] [class~='text-slate-600'] {
+	color: #8493a6 !important;
+}
+
+:root[data-theme='light'] .placeholder-slate-600::placeholder {
+	color: #94a3b8 !important;
+}
+
+:root[data-theme='light'] select option {
+	background-color: #ffffff;
+	color: #172033;
+}
