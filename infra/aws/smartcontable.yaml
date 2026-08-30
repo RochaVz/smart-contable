@@ -1,0 +1,169 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: SmartContable pilot infrastructure in us-east-2.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  AppSubnetId:
+    Type: AWS::EC2::Subnet::Id
+  DbSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  DbMasterPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+  DbName:
+    Type: String
+    Default: smart_contable
+  DbMasterUsername:
+    Type: String
+    Default: smartcontable
+
+Resources:
+  FilesBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS access to SmartContable API
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MySQL access only from SmartContable API
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+
+  AppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SmartContableFiles
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt FilesBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix: empresas/*
+              - Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "${FilesBucket.Arn}/empresas/*"
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "${FilesBucket.Arn}/releases/*"
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/smartcontable/*"
+
+  AppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref AppRole
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private SmartContable RDS subnets
+      SubnetIds: !Ref DbSubnetIds
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AllocatedStorage: 20
+      BackupRetentionPeriod: 1
+      DBInstanceClass: db.t3.micro
+      DBInstanceIdentifier: !Sub "smartcontable-${AWS::StackName}"
+      DBName: !Ref DbName
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      Engine: mysql
+      MasterUsername: !Ref DbMasterUsername
+      MasterUserPassword: !Ref DbMasterPassword
+      MultiAZ: false
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      StorageType: gp3
+      VPCSecurityGroups:
+        - !GetAtt DatabaseSecurityGroup.GroupId
+
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      InstanceType: t3.micro
+      IamInstanceProfile: !Ref AppInstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref AppSecurityGroup
+          SubnetId: !Ref AppSubnetId
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: 30
+            VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: SmartContable API
+
+Outputs:
+  S3BucketName:
+    Value: !Ref FilesBucket
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  DatabasePort:
+    Value: !GetAtt Database.Endpoint.Port
+  InstanceId:
+    Value: !Ref AppInstance
+  InstancePublicIp:
+    Value: !GetAtt AppInstance.PublicIp

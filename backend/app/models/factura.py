@@ -67,6 +67,7 @@ class Factura(Base):
     es_deducible     = Column(Boolean, default=True)
     estatus          = Column(Enum(EstatusFactura), default=EstatusFactura.vigente)
     xml_contenido    = Column(Text)  # XML original
+    archivo_s3_key   = Column(String(512), nullable=True)
     creado_en        = Column(DateTime(timezone=True), server_default=func.now())  # pylint: disable=not-callable
 
     empresa          = relationship("Empresa", back_populates="facturas")

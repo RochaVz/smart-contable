@@ -11,6 +11,7 @@ class EstadoCuentaCarga(Base):
     banco_id = Column(Integer, ForeignKey("comisiones_banco.id"), nullable=True, index=True)
     nombre_archivo = Column(String(255), nullable=False)
     hash_archivo = Column(String(64), nullable=False, index=True)
+    archivo_s3_key = Column(String(512), nullable=True)
     movimientos_count = Column(Integer, default=0)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
 

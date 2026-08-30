@@ -1,6 +1,6 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from pydantic import field_validator
-from typing import List
+from typing import Annotated, List
 
 
 class Settings(BaseSettings):
@@ -19,7 +19,17 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
-    CORS_ORIGINS: List[str] = [
+    MAX_XML_UPLOAD_BYTES: int = 2 * 1024 * 1024
+    MAX_ZIP_UPLOAD_BYTES: int = 25 * 1024 * 1024
+    MAX_XML_FILES_PER_ZIP: int = 1000
+    MAX_PDF_UPLOAD_BYTES: int = 10 * 1024 * 1024
+    DATABASE_POOL_SIZE: int = 5
+    DATABASE_MAX_OVERFLOW: int = 0
+    DATABASE_POOL_TIMEOUT_SECONDS: int = 30
+    S3_ENABLED: bool = False
+    S3_BUCKET: str = ""
+    AWS_REGION: str = "us-east-2"
+    CORS_ORIGINS: Annotated[List[str], NoDecode] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",

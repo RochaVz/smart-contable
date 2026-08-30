@@ -33,6 +33,7 @@ Fortalecer la base técnica antes de escalar funcionalidades.
 * [ ] Docker Compose
 * [ ] Variables de entorno centralizadas
 * [ ] Configuración para producción
+* [ ] Estrategia de despliegue híbrido Azure + Oracle Cloud
 
 #### Calidad
 
@@ -291,6 +292,44 @@ Preparar SmartContable para monetización.
 ### Resultado Esperado
 
 Producto listo para comercialización.
+
+---
+
+# Fase 9 — Integración Oracle Cloud
+
+## Prioridad: Alta
+
+### Objetivos
+
+Integrar Oracle Cloud como capa de infraestructura para garantizar operación de bajo costo y alta disponibilidad del backend contable.
+
+### Infraestructura OCI
+
+* [ ] Crear tenancy y compartimentos por entorno (dev/beta/prod)
+* [ ] Definir red base (VCN, subred pública/privada, reglas de seguridad)
+* [ ] Provisionar instancia Always Free para backend y tareas programadas
+
+### Datos y Persistencia
+
+* [ ] Desplegar MySQL autoadministrado en Oracle Cloud
+* [ ] Configurar backups automáticos y restauración validada
+* [ ] Diseñar plan de migración desde SQLite/MySQL local a MySQL en OCI
+
+### Integración Aplicativa
+
+* [ ] Parametrizar `DATABASE_URL` por entorno para OCI
+* [ ] Ejecutar migraciones Alembic en entorno Oracle Cloud
+* [ ] Validar compatibilidad completa de módulos CFDI, conciliación y reportes
+
+### Observabilidad y Seguridad
+
+* [ ] Centralizar logs de backend y health checks
+* [ ] Endurecer acceso SSH/puertos y rotación de secretos
+* [ ] Definir runbook de incidentes para operación en Oracle Cloud
+
+### Resultado Esperado
+
+SmartContable operando con integración Oracle Cloud estable para la fase beta y preparado para escalar a producción.
 
 ---
 

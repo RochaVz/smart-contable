@@ -1,0 +1,18 @@
+{
+  "name": "SmartContable",
+  "short_name": "SmartContable",
+  "description": "Revisa ingresos, gastos y pólizas de tu negocio desde tu celular o laptop.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

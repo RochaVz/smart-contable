@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: .
+    container_name: smartcontable-backend
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    volumes:
+      - backend_data:/app/data
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: smartcontable-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+volumes:
+  backend_data:
+  caddy_data:
+  caddy_config:

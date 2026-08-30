@@ -41,3 +41,11 @@ def test_respuesta_complemento_pago_omitido_incluye_contadores():
 
 def test_factura_serie_permite_valores_largos_de_cfdi():
     assert Factura.__table__.c.serie.type.length == 50
+
+
+def test_validar_tamano_xml_rechaza_archivo_sobre_limite():
+    with pytest.raises(facturas.HTTPException) as exc_info:
+        facturas._validar_tamano_archivo(b"123456", limite=5, tipo="XML")
+
+    assert exc_info.value.status_code == 413
+    assert "excede el limite" in exc_info.value.detail

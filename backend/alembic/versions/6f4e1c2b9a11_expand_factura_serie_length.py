@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -19,6 +20,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    serie = next(
+        column
+        for column in inspect(op.get_bind()).get_columns("facturas")
+        if column["name"] == "serie"
+    )
+    if getattr(serie["type"], "length", None) == 50:
+        return
+
     op.alter_column(
         'facturas',
         'serie',

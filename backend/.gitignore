@@ -5,12 +5,18 @@ venv/
 # Variables de entorno
 .env
 .env.*
+!.env.example
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Base de datos SQLite local (piloto sin costo)
+*.db
+*.db-journal
+/data/
 
 # Testing
 .pytest_cache/

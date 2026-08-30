@@ -36,7 +36,7 @@ export const subirEstadoCuentaPDF = async (file, empresaId, bancoId = null, mes 
 
     try {
         // Nota que pasamos los parámetros en la URL tal como los pide tu endpoint de FastAPI
-        const response = await api.post(`/v1/conciliacion/estado-cuenta?${params.toString()}`, formData, {
+        const response = await api.post(`/conciliacion/estado-cuenta?${params.toString()}`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },

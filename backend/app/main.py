@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
@@ -43,8 +43,11 @@ async def lifespan(_app: FastAPI):
     """Application lifespan: startup and shutdown"""
     # Startup
     logger.info("Iniciando aplicación SmartContable")
-    Base.metadata.create_all(bind=engine)
-    logger.info("Base de datos inicializada")
+    if settings.ENVIRONMENT == "production":
+        logger.info("Producción: el esquema debe estar actualizado con Alembic")
+    else:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Base de datos inicializada")
     
     yield
     
@@ -171,14 +174,23 @@ def root():
 
 
 @app.get("/health")
-def health(db: Session = Depends(get_db)):
-    """Health check endpoint"""
+def health():
+    """Liveness check endpoint."""
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness(db: Session = Depends(get_db)):
+    """Readiness check endpoint that verifies database connectivity."""
     from sqlalchemy import text
-    
+
     try:
         db.execute(text("SELECT 1"))
-        logger.info("Health check passed")
+        logger.info("Readiness check passed")
         return {"status": "ok", "database": "conectada"}
-    except Exception as e:  # pylint: disable=broad-except
-        logger.error("Health check failed", exc_info=True)
-        return {"status": "error", "database": str(e)}
+    except Exception:  # pylint: disable=broad-except
+        logger.error("Readiness check failed", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Base de datos no disponible",
+        ) from None

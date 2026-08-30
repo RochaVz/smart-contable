@@ -7,9 +7,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.logging_config import get_logger
+from app.services.file_storage import estado_cuenta_object_key, get_file_storage
 from app.models.conciliacion import EstadoCuentaCarga, MovimientoBanco
 from app.models.empresa import Empresa
 from app.models.usuario import Usuario
@@ -30,6 +32,29 @@ from app.services.conciliacion import (
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _mb(bytes_value: int) -> int:
+    return max(1, bytes_value // (1024 * 1024))
+
+
+def _validar_tamano_pdf(contenido: bytes) -> None:
+    if len(contenido) > settings.MAX_PDF_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"El PDF excede el limite de {_mb(settings.MAX_PDF_UPLOAD_BYTES)} MB para la beta.",
+        )
+
+
+def _validar_tamano_pdf_upload(archivo: UploadFile) -> None:
+    if (
+        archivo.size is not None
+        and archivo.size > settings.MAX_PDF_UPLOAD_BYTES
+    ):
+        raise HTTPException(
+            status_code=413,
+            detail=f"El PDF excede el limite de {_mb(settings.MAX_PDF_UPLOAD_BYTES)} MB para la beta.",
+        )
 
 
 def _validar_empresa(db: Session, empresa_id: int, user: Usuario) -> Empresa:
@@ -113,7 +138,9 @@ async def cargar_estado_cuenta(
             movimientos = parsear_estado_cuenta_csv(archivo_bytes)
 
         elif fname.endswith('.pdf'):
+            _validar_tamano_pdf_upload(archivo)
             archivo_bytes = await archivo.read()
+            _validar_tamano_pdf(archivo_bytes)
             if not archivo_bytes.strip():
                 raise HTTPException(status_code=400, detail="El archivo PDF está vacío")
             
@@ -180,6 +207,17 @@ async def cargar_estado_cuenta(
     )
     db.add(carga)
     db.flush()
+    storage = get_file_storage()
+    archivo_s3_key = None
+
+    if storage:
+        extension = "." + fname.rsplit(".", maxsplit=1)[1]
+        archivo_s3_key = storage.upload(
+            estado_cuenta_object_key(empresa_id, carga.hash_archivo, extension),
+            archivo_bytes,
+            archivo.content_type or "application/octet-stream",
+        )
+        carga.archivo_s3_key = archivo_s3_key
 
     nuevos = 0
     duplicados = 0
@@ -214,6 +252,8 @@ async def cargar_estado_cuenta(
         db.commit()
     except IntegrityError:
         db.rollback()
+        if archivo_s3_key:
+            storage.delete(archivo_s3_key)
         raise HTTPException(
             status_code=409,
             detail="El estado de cuenta ya fue cargado anteriormente",
@@ -240,7 +280,9 @@ async def convertir_pdf_a_csv(
         raise HTTPException(status_code=400, detail="El archivo debe ser un PDF válido")
 
     try:
+        _validar_tamano_pdf_upload(archivo)
         archivo_bytes = await archivo.read()
+        _validar_tamano_pdf(archivo_bytes)
         
         raw_text = PDFExtractor.extract_text(archivo_bytes)
         parser = BankParserFactory().get_parser(raw_text)

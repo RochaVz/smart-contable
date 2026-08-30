@@ -1,0 +1,5 @@
+# Reemplaza TU_IP_PUBLICA por la IP pública de tu instancia Amazon EC2 (ej. 123-45-67-89.nip.io).
+# nip.io resuelve automáticamente a esa IP: no requiere comprar dominio ni configurar DNS.
+TU_IP_PUBLICA.nip.io {
+	reverse_proxy backend:8000
+}

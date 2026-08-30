@@ -130,6 +130,34 @@ class TestGenericBankParser:
         result = self.parser.parse("texto sin fechas ni montos")
         assert result.movimientos == []
 
+    def test_parse_fecha_iso_y_referencia_en_fila(self):
+        text = (
+            "Fecha Descripcion Referencia Monto\n"
+            "2026-07-01 Pago cliente X FOLIO1 1000.00\n"
+            "2026-07-02 Retiro proveedor Y REF999 -250.50\n"
+        )
+
+        result = self.parser.parse(text)
+
+        assert len(result.movimientos) == 2
+        assert result.movimientos[0].referencia == "FOLIO1"
+        assert result.movimientos[0].abono == 1000.00
+        assert result.movimientos[1].referencia == "REF999"
+        assert result.movimientos[1].cargo == 250.50
+
+    def test_parse_recompone_fila_pdf_partida(self):
+        text = (
+            "Fecha Descripcion Referencia Monto\n"
+            "2026-07-01 Pago cliente X FOLIO1\n"
+            "1000.00\n"
+        )
+
+        result = self.parser.parse(text)
+
+        assert len(result.movimientos) == 1
+        assert result.movimientos[0].descripcion == "Pago cliente X"
+        assert result.movimientos[0].referencia == "FOLIO1"
+
 
 class TestBankParserFactory:
     def setup_method(self):

@@ -28,8 +28,10 @@ import app.models  # noqa: E402, F401 — registra todos los modelos en Base.met
 # access to the values within the .ini file in use.
 config = context.config
 
-# Inyecta la DATABASE_URL desde el entorno, sobreescribiendo el placeholder del .ini
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+# ConfigParser interpreta % como interpolación; las contraseñas URL-codificadas
+# pueden contenerlo, por lo que se debe escapar antes de inyectar la URL.
+database_url = os.environ["DATABASE_URL"].replace("%", "%%")
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:

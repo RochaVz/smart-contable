@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.conciliacion import MovimientoBanco
 from app.models.poliza import MovimientoPoliza, Poliza, TipoPoliza
 from app.core.logging_config import get_logger
+from app.services.bank_parser.factory import BankParserFactory
 
 logger = get_logger(__name__)
 
@@ -147,72 +148,49 @@ def parsear_estado_cuenta_xml(xml_bytes: bytes) -> list[MovimientoEstadoCuenta]:
 
 def parsear_estado_cuenta_pdf(pdf_bytes: bytes) -> list[MovimientoEstadoCuenta]:
     """
-    Parsea un estado de cuenta PDF mediante pdfplumber e Inteligencia Artificial
-    garantizando precisión con validación aritmética de saldos.
+    Extrae y analiza un estado de cuenta PDF con parsers locales.
+
+    La IA no es obligatoria para procesar el documento: el parser local evita
+    que una clave de pago ausente convierta una carga válida en un fallo total.
     """
-    try:
-        import pdfplumber
-    except ImportError as exc:
-        raise RuntimeError("Instala pdfplumber con: pip install pdfplumber") from exc
-
-    try:
-        from app.ai.bank_statement_agent import extraer_movimientos_pdf_ai
-    except ImportError as exc:
-        raise RuntimeError("No se encontró el agente de IA en app.ai.bank_statement_agent") from exc
-
-    # 1. Extraer capa de texto plano
-    texto_completo = ""
-    try:
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            for page in pdf.pages:
-                extracted = page.extract_text()
-                if extracted:
-                    texto_completo += extracted + "\n"
-    except Exception as exc:
-        raise ValueError(f"Error al abrir o leer las páginas del PDF: {exc}") from exc
+    texto_completo = _extraer_texto_pdf(pdf_bytes)
 
     if not texto_completo.strip():
         raise ValueError("El archivo PDF no contiene texto legible (puede estar escaneado o protegido).")
 
-    # 2. Extracción mediante IA
-    extraido = extraer_movimientos_pdf_ai(texto_completo)
+    parser = BankParserFactory().get_parser(texto_completo)
+    extraido = parser.parse(texto_completo)
+    if not extraido.movimientos:
+        raise ValueError("No se encontraron movimientos bancarios en el PDF")
 
-    # 3. Validación de balance financiero (Check Cero-Error)
-    if extraido.saldo_inicial and extraido.saldo_final and extraido.saldo_inicial > 0:
-        total_abonos = sum(m.monto for m in extraido.movimientos if m.tipo == "abono")
-        total_cargos = sum(m.monto for m in extraido.movimientos if m.tipo == "cargo")
-        
-        calculado = round(extraido.saldo_inicial + total_abonos - total_cargos, 2)
-        esperado = round(extraido.saldo_final, 2)
-        
-        if abs(calculado - esperado) > 0.10:
-            logger.warning(
-                f"Desbalance detectado en PDF. Inicial={extraido.saldo_inicial}, "
-                f"+Abonos={total_abonos}, -Cargos={total_cargos} => Calc: {calculado} vs Final: {esperado}. "
-                "Ejecutando reintento con ajuste de prompt..."
-            )
-            error_hint = f"Suma errónea: Inicial({extraido.saldo_inicial}) + Abonos({total_abonos}) - Cargos({total_cargos}) != Final({esperado})"
-            extraido = extraer_movimientos_pdf_ai(texto_completo, reintento=True, error_previo=error_hint)
-
-    # 4. Transformar a objetos MovimientoEstadoCuenta
     movimientos: list[MovimientoEstadoCuenta] = []
     vistos = set()
 
-    for m in extraido.movimientos:
-        fecha_obj = _to_date(m.fecha)
+    for movimiento in extraido.movimientos:
+        if movimiento.confianza < 0.80:
+            logger.warning(
+                "Movimiento PDF con confianza baja: fecha=%s descripcion=%s confianza=%.2f",
+                movimiento.fecha,
+                movimiento.descripcion,
+                movimiento.confianza,
+            )
+
+        fecha_obj = _to_date(movimiento.fecha)
         if not fecha_obj:
             continue
 
-        tipo_norm = "abono" if m.tipo.lower() in ("abono", "deposito", "ingreso") else "cargo"
-        monto_dec = Decimal(str(m.monto)).quantize(Decimal("0.01"))
-        saldo_dec = Decimal(str(m.saldo)).quantize(Decimal("0.01")) if m.saldo is not None else None
+        tipo_norm = "abono" if movimiento.abono > 0 else "cargo"
+        monto = movimiento.abono if movimiento.abono > 0 else movimiento.cargo
+        if monto <= 0:
+            continue
 
+        saldo_dec = Decimal(str(movimiento.saldo)).quantize(Decimal("0.01")) if movimiento.saldo is not None else None
         mov = MovimientoEstadoCuenta(
             fecha=fecha_obj,
             tipo=tipo_norm,
-            descripcion=m.descripcion,
-            referencia=m.referencia or "",
-            monto=monto_dec,
+            descripcion=movimiento.descripcion,
+            referencia=movimiento.referencia or "",
+            monto=Decimal(str(monto)).quantize(Decimal("0.01")),
             saldo=saldo_dec,
         )
 
@@ -227,6 +205,46 @@ def parsear_estado_cuenta_pdf(pdf_bytes: bytes) -> list[MovimientoEstadoCuenta]:
             continue
         vistos.add(key)
         movimientos.append(mov)
+
+    return movimientos
+
+
+def _extraer_texto_pdf(pdf_bytes: bytes) -> str:
+    """Extrae texto con fallbacks locales para no depender de un proveedor IA."""
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            return "\n".join(
+                extracted
+                for page in pdf.pages
+                if (extracted := page.extract_text())
+            )
+    except ImportError:
+        logger.info("pdfplumber no está disponible; intentando PyPDF2")
+    except Exception as exc:
+        logger.warning("pdfplumber no pudo extraer el PDF: %s", exc)
+
+    try:
+        from PyPDF2 import PdfReader
+
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    except ImportError:
+        logger.info("PyPDF2 no está disponible; intentando pdfminer")
+    except Exception as exc:
+        logger.warning("PyPDF2 no pudo extraer el PDF: %s", exc)
+
+    try:
+        from pdfminer.high_level import extract_text
+
+        return extract_text(io.BytesIO(pdf_bytes))
+    except ImportError as exc:
+        raise RuntimeError(
+            "No hay un extractor PDF instalado. Instala pdfplumber, PyPDF2 o pdfminer.six."
+        ) from exc
+    except Exception as exc:
+        raise ValueError(f"Error al abrir o leer las páginas del PDF: {exc}") from exc
 
     return sorted(movimientos, key=lambda m: (m.fecha, m.tipo, m.monto))
 

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from app.core.database import get_db
 from app.services.sat_parser import parsear_xml_sat
 from app.models.factura import Factura
@@ -18,6 +19,7 @@ from app.services.polizas import (
     preview_poliza_desde_factura,
 )
 from app.services.comisiones import obtener_banco_default_id
+from app.services.file_storage import cfdi_object_key, get_file_storage
 from app.services.cfdi_helpers import (
     es_venta,
     etiqueta_forma_pago,
@@ -32,6 +34,26 @@ from typing import List, Optional
 from app.schemas.factura import FacturaResponse
 
 router = APIRouter()
+
+
+def _mb(bytes_value: int) -> int:
+    return max(1, bytes_value // (1024 * 1024))
+
+
+def _validar_tamano_archivo(contenido: bytes, limite: int, tipo: str) -> None:
+    if len(contenido) > limite:
+        raise HTTPException(
+            status_code=413,
+            detail=f"El archivo {tipo} excede el limite de {_mb(limite)} MB para la beta.",
+        )
+
+
+def _validar_tamano_upload(archivo: UploadFile, limite: int, tipo: str) -> None:
+    if archivo.size is not None and archivo.size > limite:
+        raise HTTPException(
+            status_code=413,
+            detail=f"El archivo {tipo} excede el limite de {_mb(limite)} MB para la beta.",
+        )
 
 
 class ComplementoPagoOmitido(Exception):
@@ -119,7 +141,7 @@ def procesar_xml_interno(
             moneda=datos['moneda'],
             tipo_cambio=datos['tipo_cambio'],
             es_deducible=True,
-            xml_contenido=xml_str
+            xml_contenido=None if settings.S3_ENABLED else xml_str
         )
 
         db.add(factura)
@@ -218,7 +240,11 @@ async def subir_xml(
             detail="Solo se aceptan archivos XML"
         )
     empresa = _empresa_del_usuario(db, empresa_id, current_user)
+    _validar_tamano_upload(archivo, settings.MAX_XML_UPLOAD_BYTES, "XML")
     contenido = await archivo.read()
+    _validar_tamano_archivo(contenido, settings.MAX_XML_UPLOAD_BYTES, "XML")
+    storage = get_file_storage()
+    archivo_s3_key = None
 
     try:
         xml_str = contenido.decode('utf-8')
@@ -236,6 +262,14 @@ async def subir_xml(
 
         banco_id = obtener_banco_default_id(db, empresa_id)
         polizas_creadas = auto_generar_poliza_factura(factura, db, banco_id)
+
+        if storage:
+            archivo_s3_key = storage.upload(
+                cfdi_object_key(empresa_id, factura.uuid),
+                contenido,
+                "application/xml",
+            )
+            factura.archivo_s3_key = archivo_s3_key
 
         db.commit()
 
@@ -259,10 +293,14 @@ async def subir_xml(
 
     except HTTPException:
         db.rollback()
+        if archivo_s3_key:
+            storage.delete(archivo_s3_key)
         raise
 
     except IntegrityError as exc:
         db.rollback()
+        if archivo_s3_key:
+            storage.delete(archivo_s3_key)
         raise HTTPException(
             status_code=409,
             detail="Esta factura ya está registrada en la empresa.",
@@ -270,6 +308,8 @@ async def subir_xml(
 
     except Exception as e:
         db.rollback()
+        if archivo_s3_key:
+            storage.delete(archivo_s3_key)
 
         raise HTTPException(
             status_code=500,
@@ -289,8 +329,10 @@ async def subir_zip(
 
     empresa = _empresa_del_usuario(db, empresa_id, current_user)
 
+    _validar_tamano_upload(archivo, settings.MAX_ZIP_UPLOAD_BYTES, "ZIP")
     await archivo.seek(0)
     contenido = await archivo.read()
+    _validar_tamano_archivo(contenido, settings.MAX_ZIP_UPLOAD_BYTES, "ZIP")
     resultados: list[dict] = []
     exitos = 0
     duplicados = 0
@@ -298,10 +340,46 @@ async def subir_zip(
     no_xml = 0
     archivos_no_xml: list[str] = []
     uuids_en_lote: set[str] = set()
+    storage = get_file_storage()
+    archivos_s3_keys: list[str] = []
 
     try:
         with zipfile.ZipFile(io.BytesIO(contenido)) as z:
             lista_de_nombres = z.namelist()
+            archivos_xml_validos = [
+                info for info in z.infolist()
+                if info.filename.lower().endswith('.xml')
+                and not os.path.basename(info.filename).startswith('.')
+                and "__MACOSX" not in info.filename
+                and not info.is_dir()
+            ]
+
+            if len(archivos_xml_validos) > settings.MAX_XML_FILES_PER_ZIP:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        "El ZIP contiene demasiados XML para una sola carga beta "
+                        f"({len(archivos_xml_validos)} de {settings.MAX_XML_FILES_PER_ZIP} permitidos). "
+                        "Divide el mes en varios ZIP y vuelve a intentar."
+                    ),
+                )
+
+            xml_demasiado_grande = next(
+                (
+                    os.path.basename(info.filename) or info.filename
+                    for info in archivos_xml_validos
+                    if info.file_size > settings.MAX_XML_UPLOAD_BYTES
+                ),
+                None,
+            )
+            if xml_demasiado_grande:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"El XML {xml_demasiado_grande} excede el limite de "
+                        f"{_mb(settings.MAX_XML_UPLOAD_BYTES)} MB para la beta."
+                    ),
+                )
 
             for ruta_completa in lista_de_nombres:
                 nombre_archivo = os.path.basename(ruta_completa)
@@ -342,6 +420,14 @@ async def subir_zip(
                                 empresa_razon_social=empresa.razon_social,
                                 uuids_en_lote=uuids_en_lote,
                             )
+                            if storage:
+                                archivo_s3_key = storage.upload(
+                                    cfdi_object_key(empresa_id, factura.uuid),
+                                    xml_bytes,
+                                    "application/xml",
+                                )
+                                factura.archivo_s3_key = archivo_s3_key
+                                archivos_s3_keys.append(archivo_s3_key)
                         fecha_f = factura.fecha_emision
                         resultados.append({
                             "archivo": nombre_archivo,
@@ -385,6 +471,8 @@ async def subir_zip(
                 db.commit()
             except Exception as commit_err:
                 db.rollback()
+                for archivo_s3_key in archivos_s3_keys:
+                    storage.delete(archivo_s3_key)
                 raise HTTPException(
                     status_code=500,
                     detail=f"Error al confirmar las facturas en la base de datos: {commit_err}",
