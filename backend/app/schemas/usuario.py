@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from enum import Enum
 
 
@@ -13,13 +13,19 @@ class RolUsuario(str, Enum):
 class UsuarioCreate(BaseModel):
     nombre: str
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8)
     rol: RolUsuario = RolUsuario.contador
 
 
 class UsuarioLogin(BaseModel):
     email: EmailStr
     password: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    recovery_key: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
 
 
 class UsuarioResponse(BaseModel):

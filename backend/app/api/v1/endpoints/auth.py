@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends
+from secrets import compare_digest
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.security import (
     hash_password,
     verify_password,
@@ -20,6 +23,7 @@ from app.models.usuario import Usuario
 
 from app.schemas.usuario import (
     UsuarioCreate,
+    PasswordResetRequest,
     UsuarioResponse,
     Token
 )
@@ -166,3 +170,37 @@ def login(
     except Exception as e:
         logger.error("Error inesperado durante login", exc_info=True)
         raise DatabaseException("Error inesperado durante login") from e
+
+
+@router.post(
+    "/recuperar-contrasena",
+    status_code=204,
+    summary="Restablecer contrasena local",
+    description="Actualiza una contrasena con la clave local de recuperacion",
+)
+def recover_password(
+    datos: PasswordResetRequest,
+    db: Session = Depends(get_db),
+):
+    if not settings.LOCAL_PASSWORD_RESET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La recuperacion de contrasena local no esta configurada",
+        )
+
+    if not compare_digest(datos.recovery_key, settings.LOCAL_PASSWORD_RESET_KEY):
+        raise InvalidCredentialsException()
+
+    try:
+        usuario = db.query(Usuario).filter(Usuario.email == datos.email.lower()).first()
+        if not usuario or not usuario.activo:
+            logger.warning("Intento de recuperacion para usuario no disponible")
+            raise InvalidCredentialsException()
+
+        usuario.password_hash = hash_password(datos.new_password)
+        db.commit()
+        logger.info("Contrasena local actualizada", extra={"user_id": usuario.id})
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error("Error al recuperar contrasena", exc_info=True)
+        raise DatabaseException("No se pudo actualizar la contrasena") from exc
