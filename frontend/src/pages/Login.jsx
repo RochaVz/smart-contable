@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import api from '../services/api';
-import { Lock, Mail, Loader2 } from 'lucide-react';
+import { Lock, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
 
 const Login = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState('login');
@@ -11,6 +11,8 @@ const Login = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRecoveryKey, setShowRecoveryKey] = useState(false);
 
   const authenticate = async () => {
     const formData = new FormData();
@@ -125,12 +127,20 @@ const Login = ({ onLoginSuccess }) => {
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-slate-500 w-5 h-5" />
                 <input
-                  type="password"
+                  type={showRecoveryKey ? 'text' : 'password'}
                   required
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2.5 pl-10 pr-10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                   value={recoveryKey}
                   onChange={(event) => setRecoveryKey(event.target.value)}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowRecoveryKey((prev) => !prev)}
+                  className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                  aria-label={showRecoveryKey ? 'Ocultar clave' : 'Mostrar clave'}
+                >
+                  {showRecoveryKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
             </div>
           )}
@@ -140,13 +150,21 @@ const Login = ({ onLoginSuccess }) => {
             <div className="relative">
               <Lock className="absolute left-3 top-3 text-slate-500 w-5 h-5" />
               <input 
-                type="password" 
+                type={showPassword ? 'text' : 'password'} 
                 required
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2.5 pl-10 pr-10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
