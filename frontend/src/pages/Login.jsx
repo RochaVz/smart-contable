@@ -55,6 +55,8 @@ const Login = ({ onLoginSuccess }) => {
       console.error('Error de autenticación:', err);
       if (err?.code === 'ERR_NETWORK' || !err?.response) {
         setError('No se pudo conectar al servidor. Verifica que el backend esté activo en el puerto 8000.');
+      } else if (err.response?.data?.error?.message) {
+        setError(err.response.data.error.message);
       } else if (err.response?.status === 401) {
         setError('Usuario, contraseña o clave de recuperación inválidos.');
       } else if (err.response?.status === 409) {
@@ -129,6 +131,7 @@ const Login = ({ onLoginSuccess }) => {
                 <input
                   type={showRecoveryKey ? 'text' : 'password'}
                   required
+                  placeholder="Ej. local-recovery-key"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2.5 pl-10 pr-10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                   value={recoveryKey}
                   onChange={(event) => setRecoveryKey(event.target.value)}

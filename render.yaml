@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: smartcontable-backend
+    runtime: docker
+    plan: free
+    rootDir: backend
+    healthCheckPath: /ready
+    autoDeploy: false
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "480"
+      - key: MAX_XML_UPLOAD_BYTES
+        value: "2097152"
+      - key: MAX_ZIP_UPLOAD_BYTES
+        value: "26214400"
+      - key: MAX_XML_FILES_PER_ZIP
+        value: "1000"
+      - key: MAX_PDF_UPLOAD_BYTES
+        value: "10485760"
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

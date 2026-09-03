@@ -189,13 +189,13 @@ def recover_password(
         )
 
     if not compare_digest(datos.recovery_key, settings.LOCAL_PASSWORD_RESET_KEY):
-        raise InvalidCredentialsException()
+        raise InvalidCredentialsException("La clave de recuperación local es incorrecta")
 
     try:
         usuario = db.query(Usuario).filter(Usuario.email == datos.email.lower()).first()
         if not usuario or not usuario.activo:
             logger.warning("Intento de recuperacion para usuario no disponible")
-            raise InvalidCredentialsException()
+            raise InvalidCredentialsException("El usuario especificado no existe o no está activo")
 
         usuario.password_hash = hash_password(datos.new_password)
         db.commit()

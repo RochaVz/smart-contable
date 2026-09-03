@@ -8,9 +8,12 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  const [error, setError] = useState('');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     try {
       // Nota: El Backend asignará el usuario_id automáticamente por el Token
       await api.post('/empresas/', formData);
@@ -18,7 +21,13 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }) => {
       onClose();
     } catch (err) {
       console.error(err);
-      alert("Error al crear la empresa. Verifica el RFC.");
+      if (err.response?.status === 409) {
+        setError("Ya existe una empresa registrada con ese RFC. Por favor verifica el RFC ingresado.");
+      } else if (err.response?.data?.error?.message) {
+        setError(err.response.data.error.message);
+      } else {
+        setError("Error al crear la empresa. Revisa los datos e inténtalo nuevamente.");
+      }
     } finally {
       setLoading(false);
     }
@@ -43,6 +52,11 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }) => {
           </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl text-sm">
+              {error}
+            </div>
+          )}
           <div>
             <label className="mb-2 block text-sm font-bold text-slate-300">RFC del negocio</label>
             <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej. ABC010203AB1" onChange={(e) => setFormData({...formData, rfc: e.target.value})} required />

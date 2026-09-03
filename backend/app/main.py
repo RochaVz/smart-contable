@@ -23,10 +23,21 @@ from app.models.conciliacion import EstadoCuentaCarga, MovimientoBanco # noqa: F
 logger = get_logger(__name__)
 
 
+def _is_origin_allowed(origin: Optional[str]) -> bool:
+    if not origin:
+        return False
+    if origin in settings.CORS_ORIGINS:
+        return True
+    import re
+    if re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin):
+        return True
+    return False
+
+
 def _cors_headers(request: Request) -> dict:
     """Return CORS headers when the origin is in the allowed list."""
     origin: Optional[str] = request.headers.get("origin")
-    if origin and origin in settings.CORS_ORIGINS:
+    if _is_origin_allowed(origin):
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
@@ -70,12 +81,15 @@ app = FastAPI(
 _cors_origins = settings.CORS_ORIGINS or [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
