@@ -12,6 +12,10 @@
 **/.env.*
 !**/.env*.example
 
+# Respaldos y logs locales
+backend/smartcontable-backup-*.sql
+logs/
+
 # OS
 .DS_Store
 Thumbs.db
