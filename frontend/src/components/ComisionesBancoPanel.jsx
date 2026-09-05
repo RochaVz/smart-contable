@@ -100,8 +100,8 @@ const ComisionesBancoPanel = ({ empresaId }) => {
   };
 
   return (
-    <section className="mb-10 bg-slate-900/80 border border-slate-800 rounded-3xl p-6">
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
+    <section className="mb-10 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:rounded-3xl sm:p-6">
+      <div className="mb-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
           <Landmark className="w-6 h-6 text-amber-400" />
           <div>
@@ -114,14 +114,14 @@ const ComisionesBancoPanel = ({ empresaId }) => {
         <button
           type="button"
           onClick={openNew}
-          className="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold px-4 py-2 rounded-xl"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-500 sm:w-auto"
         >
           <Plus className="w-4 h-4" /> Agregar banco
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSave} className="mb-6 p-5 bg-slate-950 rounded-2xl border border-slate-800 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <form onSubmit={handleSave} className="mb-6 grid grid-cols-1 gap-4 rounded-2xl border border-slate-800 bg-slate-950 p-4 sm:p-5 md:grid-cols-2 lg:grid-cols-3">
           <div className="md:col-span-2 lg:col-span-3">
             <label className="text-[10px] font-black uppercase text-slate-500">Nombre del banco</label>
             <input
@@ -189,18 +189,18 @@ const ComisionesBancoPanel = ({ empresaId }) => {
               Banco predeterminado para cobros con tarjeta
             </label>
           </div>
-          <div className="flex gap-2 md:col-span-3">
+          <div className="grid grid-cols-1 gap-2 md:col-span-3 sm:flex">
             <button
               type="submit"
               disabled={saving}
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold px-6 py-2 rounded-xl"
+              className="min-h-11 rounded-xl bg-blue-600 px-6 py-2 font-bold text-white hover:bg-blue-500 disabled:opacity-50"
             >
               {saving ? 'Guardando...' : editId ? 'Actualizar' : 'Guardar'}
             </button>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="text-slate-400 hover:text-white px-4 py-2"
+              className="min-h-11 px-4 py-2 text-slate-400 hover:text-white"
             >
               Cancelar
             </button>

@@ -166,10 +166,10 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
   const countConciliado = useMemo(() => todasFilas.filter((f) => f.estado === 'conciliado').length, [todasFilas]);
 
   return (
-    <section className="mb-10 bg-slate-900/80 border border-slate-800 rounded-3xl p-6">
+    <section className="mb-10 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:rounded-3xl sm:p-6">
 
       {/* ── Header ── */}
-      <div className="flex flex-col lg:flex-row justify-between gap-4 mb-6">
+      <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row">
         <div className="flex items-start gap-3">
           <Landmark className="w-6 h-6 text-cyan-400 mt-1 shrink-0" />
           <div>
@@ -179,9 +179,9 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
           {/* Selector mes/año */}
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2">
+          <div className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
             <select
               value={mes}
               onChange={(e) => handleCambioMes(Number(e.target.value))}
@@ -201,7 +201,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
             type="button"
             onClick={() => cargarDatos(mes, anio)}
             disabled={estaCargando}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-xl"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 disabled:opacity-50"
           >
             {estaCargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Actualizar
@@ -211,7 +211,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
             <select
               value={bancoId}
               onChange={(e) => setBancoId(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white"
+              className="min-h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
             >
               {bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre_banco}</option>)}
             </select>
@@ -302,9 +302,9 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
 
           {/* ── Filtros ── */}
           {todasFilas.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="mb-4 grid grid-cols-1 gap-2">
               {/* Búsqueda */}
-              <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 flex-1 min-w-48">
+              <div className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
                 <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                 <input
                   type="text"
@@ -321,7 +321,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
               </div>
 
               {/* Filtro estado */}
-              <div className="flex rounded-xl overflow-hidden border border-slate-800 text-xs font-bold">
+              <div className="flex overflow-x-auto rounded-xl border border-slate-800 text-xs font-bold">
                 {[
                   { key: 'todos',      label: 'Todos' },
                   { key: 'conciliado', label: '🟢 Con póliza' },
@@ -331,7 +331,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
                   <button
                     key={key}
                     onClick={() => setFiltroEstado(key)}
-                    className={`px-3 py-2 transition-colors ${
+                    className={`min-h-10 shrink-0 px-3 py-2 transition-colors ${
                       filtroEstado === key
                         ? 'bg-cyan-700 text-white'
                         : 'bg-slate-950 text-slate-400 hover:bg-slate-800'
@@ -343,7 +343,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
               </div>
 
               {/* Filtro tipo */}
-              <div className="flex rounded-xl overflow-hidden border border-slate-800 text-xs font-bold">
+              <div className="flex overflow-x-auto rounded-xl border border-slate-800 text-xs font-bold">
                 {[
                   { key: 'todos', label: 'Cargos y abonos' },
                   { key: 'cargo', label: '↑ Cargos' },
@@ -352,7 +352,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
                   <button
                     key={key}
                     onClick={() => setFiltroTipo(key)}
-                    className={`px-3 py-2 transition-colors ${
+                    className={`min-h-10 shrink-0 px-3 py-2 transition-colors ${
                       filtroTipo === key
                         ? 'bg-cyan-700 text-white'
                         : 'bg-slate-950 text-slate-400 hover:bg-slate-800'

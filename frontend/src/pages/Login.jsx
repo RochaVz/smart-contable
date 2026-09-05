@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import api from '../services/api';
 import { Lock, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
+import SmartContableMark from '../components/SmartContableMark';
 
 const Login = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState('login');
@@ -87,9 +88,8 @@ const Login = ({ onLoginSuccess }) => {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
         <div className="text-center mb-8">
-          <div className="bg-blue-500/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Lock className="text-blue-500 w-8 h-8" />
-          </div>
+          <SmartContableMark size="lg" className="mx-auto mb-4" />
+          <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-blue-400">SmartContable</p>
           <h2 className="text-3xl font-bold text-white">{mode === 'register' ? 'Crear cuenta' : mode === 'recover' ? 'Recuperar acceso' : 'Bienvenido'}</h2>
           <p className="text-slate-400 mt-2">{mode === 'login' ? 'Revisa la información de tu negocio con claridad' : 'Configura tus credenciales locales'}</p>
         </div>

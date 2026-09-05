@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Upload, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import api from '../services/api';
+import { saveLocalCfdiXml } from '../services/localBackup';
 
 const formatErrorDetail = (detail) => {
   if (!detail) return 'Error al procesar el archivo';
@@ -17,6 +18,7 @@ const FileUploadModal = ({
   empresaId,
   empresaRfc,
   empresaNombre,
+  empresa,
   onUploadSuccess,
 }) => {
   const [file, setFile] = useState(null);
@@ -33,6 +35,57 @@ const FileUploadModal = ({
     setStatus(null);
     setErrorMsg('');
     setZipResumen(null);
+
+    if (String(empresaId).startsWith('local-')) {
+      try {
+        const result = await saveLocalCfdiXml({ file, company: empresa || { id: empresaId, rfc: empresaRfc, razon_social: empresaNombre } });
+        if (result.isZip) {
+          setZipResumen({ exitos: result.exitos, duplicados: result.duplicados, mensaje: result.mensaje, detalles: result.detalles });
+
+          if (result.exitos === 0) {
+            const detallesError = result.detalles
+              .filter((detalle) => detalle.status === 'error')
+              .slice(0, 3)
+              .map((detalle) => detalle.archivo)
+              .filter(Boolean);
+            const errores = detallesError.length > 0 ? ` Archivos con error: ${detallesError.join(', ')}.` : '';
+            setErrorMsg(result.mensaje || `No se importo ningun XML nuevo.${errores}`);
+            setStatus('error');
+            return;
+          }
+
+          setStatus(result.duplicados > 0 || result.errores > 0 || result.no_xml > 0 ? 'partial' : 'success');
+          onUploadSuccess();
+          setTimeout(() => {
+            onClose();
+            setFile(null);
+            setStatus(null);
+            setZipResumen(null);
+          }, result.duplicados > 0 || result.errores > 0 || result.no_xml > 0 ? 3500 : 1600);
+          return;
+        }
+
+        if (result.duplicate) {
+          setErrorMsg(`No se guardo nada nuevo: el UUID ${result.invoice.uuid} ya estaba registrado en este dispositivo.`);
+          setStatus('error');
+          return;
+        }
+
+        setStatus('success');
+        onUploadSuccess();
+        setTimeout(() => {
+          onClose();
+          setFile(null);
+          setStatus(null);
+        }, 1600);
+      } catch (error) {
+        setErrorMsg(error.message || 'No se pudo guardar el XML en este dispositivo');
+        setStatus('error');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     const formData = new FormData();
     formData.append('archivo', file);
@@ -107,14 +160,14 @@ const FileUploadModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-          <h3 className="text-xl font-bold text-white">Subir Comprobantes</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl sm:rounded-3xl">
+        <div className="flex items-center justify-between border-b border-slate-800 p-5 sm:p-6">
+          <h3 className="text-lg font-bold text-white sm:text-xl">Subir Comprobantes</h3>
           <button onClick={onClose} className="text-slate-500 hover:text-white"><X /></button>
         </div>
 
-        <div className="p-8">
+        <div className="p-5 sm:p-8">
           {empresaRfc && (
             <p className="text-slate-400 text-sm mb-4 leading-relaxed">
               Solo se aceptan CFDI donde el RFC{' '}
@@ -124,7 +177,7 @@ const FileUploadModal = ({
             </p>
           )}
 
-          <div className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-all ${file ? 'border-blue-500 bg-blue-500/5' : 'border-slate-800 hover:border-slate-700'}`}>
+          <div className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 transition-all sm:p-10 ${file ? 'border-blue-500 bg-blue-500/5' : 'border-slate-800 hover:border-slate-700'}`}>
             <Upload className={`w-12 h-12 mb-4 ${file ? 'text-blue-400' : 'text-slate-600'}`} />
             
             <input 

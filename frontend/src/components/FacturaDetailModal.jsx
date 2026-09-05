@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, FileText, Loader2, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import { deleteLocalInvoice } from '../services/localBackup';
 
 const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onEliminada }) => {
   const [detalle, setDetalle] = useState(null);
@@ -11,12 +12,27 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
 
   useEffect(() => {
     if (!isOpen || !factura?.id) return;
-    setLoading(true);
-    api.get(`/facturas/${factura.id}/detalle`)
-      .then((res) => setDetalle(res.data))
-      .catch(() => toast.error('No se pudo cargar el detalle'))
-      .finally(() => setLoading(false));
-  }, [isOpen, factura?.id]);
+    if (factura.local_only) return;
+
+    let cancelled = false;
+
+    Promise.resolve().then(async () => {
+      if (cancelled) return;
+      setLoading(true);
+      try {
+        const res = await api.get(`/facturas/${factura.id}/detalle`);
+        if (!cancelled) setDetalle(res.data);
+      } catch {
+        if (!cancelled) toast.error('No se pudo cargar el detalle');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, factura?.id, factura?.local_only]);
 
   if (!isOpen || !factura) return null;
 
@@ -29,7 +45,11 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
 
     setDeleting(true);
     try {
-      await api.delete(`/facturas/${factura.id}`);
+      if (factura.local_only) {
+        await deleteLocalInvoice(factura.id);
+      } else {
+        await api.delete(`/facturas/${factura.id}`);
+      }
       toast.success('Factura eliminada');
       onEliminada?.();
       onClose();
@@ -55,15 +75,15 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
     }
   };
 
-  const d = detalle || factura;
+  const d = factura.local_only ? factura : detalle || factura;
   const impuestos = d.desglose_impuestos || [];
   const conceptos = d.conceptos || d.conceptos_vendidos || [];
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-8 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl sm:rounded-3xl sm:p-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h2 className="flex items-center gap-2 text-xl font-bold text-white sm:text-2xl">
             <FileText className="text-blue-500" /> Detalles del CFDI
           </h2>
           <button type="button" onClick={onClose}><X className="text-slate-500 hover:text-white" /></button>
@@ -73,7 +93,7 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-500" />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+            <div className="mb-6 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div>
                 <p className="text-slate-500 text-[10px] font-black uppercase">Emisor / Cliente</p>
                 <p className="text-white font-bold">{d.emisor || d.receptor}</p>
@@ -106,7 +126,7 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
               ))}
             </div>
 
-            {!d.tiene_poliza && (
+            {!d.tiene_poliza && !d.local_only && (
               <button
                 type="button"
                 disabled={generating}

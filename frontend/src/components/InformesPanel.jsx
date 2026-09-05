@@ -14,7 +14,7 @@ const fmt = (n) => `$${(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits:
 
 const TablaSimple = ({ cols, rows }) => (
   <div className="overflow-x-auto rounded-2xl border border-slate-800">
-    <table className="w-full text-sm text-left">
+    <table className="w-full min-w-[560px] text-left text-sm">
       <thead className="text-[10px] uppercase font-black text-slate-500 bg-slate-800/50">
         <tr>
           {cols.map((c) => (
@@ -322,18 +322,18 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
   };
 
   return (
-    <section className="mb-10 bg-slate-900/50 border border-slate-800 rounded-3xl p-6">
-      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl font-black text-white flex items-center gap-2">
-            <FileBarChart className="text-violet-400 w-7 h-7" />
+    <section className="mb-10 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:rounded-3xl sm:p-6">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-xl font-black text-white sm:text-2xl">
+            <FileBarChart className="h-6 w-6 shrink-0 text-violet-400 sm:h-7 sm:w-7" />
             Informes fiscales y contables
           </h2>
           <p className="text-slate-500 text-sm mt-1">
             {MESES[mes - 1]} {anio} · Basado en CFDI y pólizas del periodo
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2">
+        <div className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 sm:w-auto">
           <Calendar className="w-4 h-4 text-slate-500" />
           <select
             value={mes}
@@ -356,13 +356,13 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-800 pb-4">
+      <div className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-800 pb-4 sm:flex sm:flex-wrap">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex min-h-10 items-center gap-1.5 rounded-lg px-3 py-2 text-left text-xs font-bold transition-all ${
               tab === id
                 ? 'bg-violet-600 text-white'
                 : 'text-slate-500 hover:text-white hover:bg-slate-800'

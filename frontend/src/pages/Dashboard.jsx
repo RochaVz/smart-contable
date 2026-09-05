@@ -1,21 +1,34 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { Building2, PlusCircle, Briefcase, LogOut, Search, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Building2, PlusCircle, LogOut, Search, ArrowRight, ShieldCheck } from 'lucide-react';
 import NewCompanyModal from '../components/NewCompanyModal';
+import SmartContableMark from '../components/SmartContableMark';
+import DeviceBackupPanel from '../components/DeviceBackupPanel';
+import { getLocalCompanies } from '../services/localBackup';
 
 const Dashboard = ({ onLogout }) => {
   const navigate = useNavigate();
   const[empresas, setEmpresas] = useState([]);
   const [loading, setLoading] = useState(true);
   const[isNewCompanyOpen, setIsNewCompanyOpen] = useState(false);
+  const [newCompanyDraft, setNewCompanyDraft] = useState({});
+  const [newCompanyModalKey, setNewCompanyModalKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const hasLoaded = useRef(false);
 
   const fetchEmpresas = useCallback(async () => {
     try {
-      const response = await api.get('/empresas/');
-      setEmpresas(response.data);
+      const [remoteResponse, localCompanies] = await Promise.all([
+        api.get('/empresas/').catch(() => ({ data: [] })),
+        getLocalCompanies().catch(() => []),
+      ]);
+      const remoteCompanies = remoteResponse.data || [];
+      const remoteRfcs = new Set(remoteCompanies.map((empresa) => empresa.rfc));
+      setEmpresas([
+        ...remoteCompanies,
+        ...localCompanies.filter((empresa) => !remoteRfcs.has(empresa.rfc)),
+      ]);
     } catch (err) {
       console.error("Error cargando empresas:", err);
     } finally {
@@ -28,6 +41,9 @@ const Dashboard = ({ onLogout }) => {
       hasLoaded.current = true;
       fetchEmpresas();
     }
+
+    window.addEventListener('smartcontable:local-companies-updated', fetchEmpresas);
+    return () => window.removeEventListener('smartcontable:local-companies-updated', fetchEmpresas);
   }, [fetchEmpresas]);
 
   const empresasFiltradas = empresas.filter(e => 
@@ -35,18 +51,37 @@ const Dashboard = ({ onLogout }) => {
     e.rfc.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const getDraftFromSearch = () => {
+    const value = searchTerm.trim();
+    if (!value) return {};
+    const normalized = value.toUpperCase().replace(/\s+/g, '');
+    const looksLikeRfc = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(normalized);
+    return looksLikeRfc ? { rfc: normalized } : { razon_social: value };
+  };
+
+  const openNewCompany = (draft = {}) => {
+    setNewCompanyDraft(draft);
+    setNewCompanyModalKey((value) => value + 1);
+    setIsNewCompanyOpen(true);
+  };
+
+  const handleCompanySaved = async () => {
+    setSearchTerm('');
+    await fetchEmpresas();
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* NAVBAR SUPERIOR PROFESIONAL */}
       <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3 text-blue-500">
-            <Briefcase className="w-8 h-8" />
-            <span className="text-xl font-black text-white tracking-tight">SmartContable</span>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
+          <div className="flex min-w-0 items-center gap-2 text-blue-500 sm:gap-3">
+            <SmartContableMark size="sm" className="rounded-xl" />
+            <span className="truncate text-lg font-black tracking-tight text-white sm:text-xl">SmartContable</span>
           </div>
           <button 
             onClick={onLogout} 
-            className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-colors"
+            className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-red-400 sm:text-base"
           >
             <LogOut className="w-5 h-5" /> <span>Salir</span>
           </button>
@@ -54,8 +89,8 @@ const Dashboard = ({ onLogout }) => {
       </nav>
 
       {/* CONTENIDO */}
-      <main className="max-w-7xl mx-auto p-8">
-        <header className="mb-8 overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 p-6 sm:p-8">
+      <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <header className="mb-5 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 p-5 shadow-xl shadow-black/10 sm:mb-8 sm:rounded-3xl sm:p-8">
           <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-blue-300">
@@ -67,19 +102,19 @@ const Dashboard = ({ onLogout }) => {
             </p>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-            <div className="relative">
+          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+            <div className="relative min-w-0 flex-1 lg:flex-none">
               <Search className="absolute left-3 top-3.5 text-slate-600 w-5 h-5" />
               <input 
                 type="text" 
                 placeholder="Buscar por nombre o RFC..."
-                className="bg-slate-900 border border-slate-700 rounded-2xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 w-full sm:w-64 outline-none text-white"
+                className="min-h-12 w-full rounded-2xl border border-slate-700 bg-slate-900 py-3 pl-10 pr-4 text-base text-white outline-none focus:ring-2 focus:ring-blue-500 sm:w-64 sm:text-sm"
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <button 
-              onClick={() => setIsNewCompanyOpen(true)} 
-              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-xl shadow-blue-900/20 active:scale-95 flex items-center justify-center gap-2"
+              onClick={() => openNewCompany(getDraftFromSearch())} 
+              className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white shadow-xl shadow-blue-900/20 transition-all hover:bg-blue-500 active:scale-[0.99]"
             >
               <PlusCircle className="w-5 h-5" /> Agregar negocio
             </button>
@@ -87,18 +122,10 @@ const Dashboard = ({ onLogout }) => {
           </div>
         </header>
 
-        <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mb-8 grid grid-cols-1 gap-3 sm:max-w-xs">
           <div className="border-l-2 border-blue-500 bg-slate-900/70 px-4 py-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Negocios registrados</p>
             <p className="mt-1 text-xl font-black text-white">{empresas.length}</p>
-          </div>
-          <div className="border-l-2 border-emerald-500 bg-slate-900/70 px-4 py-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Qué puedes revisar</p>
-            <p className="mt-1 text-sm font-bold text-slate-200">Ingresos y gastos reales</p>
-          </div>
-          <div className="border-l-2 border-amber-500 bg-slate-900/70 px-4 py-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Tu siguiente paso</p>
-            <p className="mt-1 text-sm font-bold text-slate-200">Elige un negocio para comenzar</p>
           </div>
         </div>
 
@@ -114,11 +141,19 @@ const Dashboard = ({ onLogout }) => {
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
                 {searchTerm ? 'Prueba con otro nombre o RFC.' : 'Agrega tu primer negocio para empezar a revisar sus movimientos.'}
               </p>
-              {!searchTerm && (
+              {searchTerm ? (
                 <button
                   type="button"
-                  onClick={() => setIsNewCompanyOpen(true)}
-                  className="mt-6 inline-flex items-center gap-2 bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
+                  onClick={() => openNewCompany(getDraftFromSearch())}
+                  className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
+                >
+                  Agregar este negocio <ArrowRight className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openNewCompany()}
+                  className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
                 >
                   Agregar mi primer negocio <ArrowRight className="h-4 w-4" />
                 </button>
@@ -130,16 +165,24 @@ const Dashboard = ({ onLogout }) => {
               <div 
                 key={e.id} 
                 onClick={() => navigate(`/empresa/${e.id}`)} 
-                className="bg-slate-900 p-8 rounded-3xl cursor-pointer border border-slate-800 hover:border-blue-500 transition-all shadow-xl hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-900/10 group"
+                className="group cursor-pointer rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl transition-all hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-900/10 active:scale-[0.99] sm:rounded-3xl sm:p-8 lg:hover:-translate-y-2"
               >
                 <div className="bg-blue-500/10 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 text-blue-500 group-hover:scale-110 transition-transform">
                   <Building2 className="w-7 h-7" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{e.razon_social}</h3>
+                <h3 className="mb-1 break-words text-lg font-bold text-white transition-colors group-hover:text-blue-400 sm:text-xl">{e.razon_social}</h3>
                 <p className="text-slate-500 font-mono text-xs uppercase tracking-widest">{e.rfc}</p>
+                {e.local_only && (
+                  <span className="mt-3 inline-flex rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                    Guardado en este dispositivo
+                  </span>
+                )}
                 <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-6">
                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Lista para revisar</span>
                    <span className="flex items-center gap-1 text-sm font-bold text-blue-400">Abrir <ArrowRight className="h-4 w-4" /></span>
+                </div>
+                <div className="mt-4 border-t border-slate-800 pt-4">
+                  <DeviceBackupPanel compact company={e} />
                 </div>
               </div>
             ))}
@@ -149,9 +192,11 @@ const Dashboard = ({ onLogout }) => {
       </main>
 
       <NewCompanyModal 
+        key={newCompanyModalKey}
         isOpen={isNewCompanyOpen} 
         onClose={() => setIsNewCompanyOpen(false)} 
-        onSaveSuccess={fetchEmpresas} 
+        onSaveSuccess={handleCompanySaved}
+        initialData={newCompanyDraft}
       />
     </div>
   );

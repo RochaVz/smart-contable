@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { saveApiSnapshot, shouldStoreApiSnapshot } from './localBackup';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1',
@@ -13,7 +14,15 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (shouldStoreApiSnapshot(response.config, response.data)) {
+      saveApiSnapshot(response.config, response.data).catch(() => {
+        // El respaldo local nunca debe bloquear el uso normal de la app.
+      });
+    }
+
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
       localStorage.removeItem('token');
