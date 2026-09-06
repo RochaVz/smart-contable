@@ -10,6 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
+from app.core.sat_fiscal import SatRegimenEnum
 import enum
 
 
@@ -18,11 +19,12 @@ class TipoPersona(str, enum.Enum):
     moral = "moral"
 
 
-class RegimenFiscal(str, enum.Enum):
-    actividad_empresarial = "612"
-    sueldos_salarios = "605"
-    arrendamiento = "606"
-    general_de_ley = "601"
+RegimenFiscal = SatRegimenEnum
+
+
+class OpcionDeduccion(str, enum.Enum):
+    ciega = "CIEGA"
+    real = "REAL"
 
 
 class Empresa(Base):
@@ -58,6 +60,8 @@ class Empresa(Base):
         Enum(RegimenFiscal),
         nullable=False
     )
+
+    opcion_deduccion = Column(Enum(OpcionDeduccion), nullable=True)
 
     codigo_postal = Column(String(10))
 

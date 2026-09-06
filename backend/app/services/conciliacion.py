@@ -126,6 +126,16 @@ def parsear_estado_cuenta_xml(xml_bytes: bytes) -> list[MovimientoEstadoCuenta]:
     vistos = set()
 
     for node in root.iter():
+        atributos_nodo = {_clean_key(key) for key in node.attrib}
+        campos_hijos_directos = {_clean_key(child.tag) for child in node}
+        es_nodo_movimiento = (
+            _clean_key(node.tag) in {"movimiento", "transaction", "operacion", "registro"}
+            or bool(atributos_nodo & FECHA_KEYS)
+            or bool(campos_hijos_directos & FECHA_KEYS)
+        )
+        if not es_nodo_movimiento:
+            continue
+
         data = _node_data(node)
         movimiento = _movimiento_desde_data(data)
         if not movimiento:
@@ -403,6 +413,7 @@ def _polizas_conciliables(db: Session, empresa_id: int, mes: int, anio: int) -> 
             "numero": p.numero,
             "fecha": str(_fecha_date(p.fecha)),
             "concepto": p.concepto or "",
+            "canal_cobro": _canal_cobro_poliza(p.concepto or ""),
             "monto": monto,
             "montos_conciliables": montos_conciliables,
         })
@@ -416,6 +427,30 @@ def _concepto_similar(concepto_banco: str, concepto_poliza: str) -> bool:
     palabras_banco = {w.upper() for w in re.split(r"\W+", concepto_banco) if len(w) >= 4}
     palabras_poliza = {w.upper() for w in re.split(r"\W+", concepto_poliza) if len(w) >= 4}
     return bool(palabras_banco & palabras_poliza)
+
+
+def _canal_cobro_poliza(concepto: str) -> str | None:
+    texto = (concepto or "").upper()
+    if any(etiqueta in texto for etiqueta in ("TARJETA DE CRÉDITO", "TARJETA DE DEBITO", "TARJETA DE DÉBITO", "TARJETA DE SERVICIOS")):
+        return "tarjeta"
+    if "TRANSFERENCIA" in texto:
+        return "transferencia"
+    return None
+
+
+def _canal_movimiento_banco(descripcion: str) -> str | None:
+    texto = (descripcion or "").upper()
+    if any(etiqueta in texto for etiqueta in ("VENTAS DEBITO", "VENTAS CREDITO", "TERMINALES PUNTO DE VENTA", "TPV", "TARJETA")):
+        return "tarjeta"
+    if any(etiqueta in texto for etiqueta in ("SPEI", "CUENTA DE TERCEROS", "TRANSFERENCIA")):
+        return "transferencia"
+    return None
+
+
+def _canal_cobro_compatible(movimiento_banco: MovimientoBanco, poliza: dict) -> bool:
+    canal_banco = _canal_movimiento_banco(movimiento_banco.descripcion or "")
+    canal_poliza = poliza.get("canal_cobro")
+    return not canal_banco or not canal_poliza or canal_banco == canal_poliza
 
 
 def conciliar_periodo(
@@ -456,6 +491,7 @@ def conciliar_periodo(
         candidatas = [
             p for p in polizas_disponibles
             if p["tipo_banco"] == mov.tipo
+            and _canal_cobro_compatible(mov, p)
             and any(
                 _montos_coinciden(monto_poliza, monto_mov, tolerancia)
                 for monto_poliza in p["montos_conciliables"]
@@ -468,6 +504,7 @@ def conciliar_periodo(
             candidatas = [
                 p for p in polizas_disponibles
                 if p["tipo_banco"] == mov.tipo
+                and _canal_cobro_compatible(mov, p)
                 and any(
                     _montos_coinciden(monto_poliza, monto_mov, tolerancia)
                     for monto_poliza in p["montos_conciliables"]

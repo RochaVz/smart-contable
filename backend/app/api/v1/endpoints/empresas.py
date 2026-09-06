@@ -79,6 +79,7 @@ def crear_empresa(
             razon_social=datos.razon_social,
             regimen_fiscal=datos.regimen_fiscal,
             tipo_persona=datos.tipo_persona,
+            opcion_deduccion=datos.opcion_deduccion,
             codigo_postal=datos.codigo_postal,
             usuario_id=current_user.id
         )
@@ -324,6 +325,8 @@ def actualizar_empresa(
             empresa.codigo_postal = datos.codigo_postal
         if datos.regimen_fiscal:
             empresa.regimen_fiscal = datos.regimen_fiscal
+        if datos.opcion_deduccion:
+            empresa.opcion_deduccion = datos.opcion_deduccion
 
         db.commit()
         db.refresh(empresa)

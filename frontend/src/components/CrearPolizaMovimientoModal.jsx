@@ -8,12 +8,18 @@ const OPCIONES_CARGO = [
   { cuenta: '601.02.01', nombre: 'Honorarios profesionales' },
   { cuenta: '601.07.01', nombre: 'Combustibles y lubricantes' },
   { cuenta: '601.15.01', nombre: 'Nóminas' },
+  { cuenta: '302.01.01', nombre: 'Retiros de socios' },
+  { cuenta: '602.01.02', nombre: 'Gastos personales no deducibles' },
+  { cuenta: '602.01.03', nombre: 'Donativos familiares no deducibles' },
   { cuenta: 'custom', nombre: 'Otro concepto...' },
 ];
 
 const OPCIONES_ABONO = [
   { cuenta: '401.01.01', nombre: 'Ingresos por ventas' },
   { cuenta: '402.01.01', nombre: 'Otros ingresos' },
+  { cuenta: '301.01.01', nombre: 'Aportaciones de socios' },
+  { cuenta: '402.01.02', nombre: 'Donativos recibidos' },
+  { cuenta: '301.01.02', nombre: 'Depósito en efectivo por aportación' },
   { cuenta: 'custom', nombre: 'Otro concepto...' },
 ];
 

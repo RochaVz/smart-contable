@@ -85,7 +85,8 @@ const PolizasPanel = ({ empresaId, mes, anio, onPeriodoChange, onRefreshFacturas
   const handleDescargarCsv = async () => {
     setDescargando(true);
     try {
-      const params = new URLSearchParams({ empresa_id: empresaId, tipo: tab });
+      const tipoCsv = { ingresos: 'ingreso', egresos: 'egreso' }[tab] || tab;
+      const params = new URLSearchParams({ empresa_id: empresaId, tipo: tipoCsv });
       if (mes) params.set('mes', mes);
       if (anio) params.set('anio', anio);
       const res = await api.get(`/polizas/descargar-csv?${params}`, { responseType: 'blob' });
@@ -292,8 +293,11 @@ const PolizasPanel = ({ empresaId, mes, anio, onPeriodoChange, onRefreshFacturas
             {item.poliza_id ? `Póliza Egreso #${item.numero}` : 'Gasto sin póliza'}
           </p>
           <h4 className="text-white font-bold mt-1">
-            {item.egreso?.proveedor || '—'}
+            {item.egreso?.receptor || item.egreso?.proveedor || '—'}
           </h4>
+          {item.egreso?.receptor && (
+            <p className="text-slate-500 text-xs mt-1">Receptor de nómina</p>
+          )}
           <p className="text-emerald-400 text-xs font-bold mt-1">
             {item.egreso?.clasificacion_gasto || 'Por clasificar'}
           </p>

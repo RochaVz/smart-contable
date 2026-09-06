@@ -54,12 +54,16 @@ def _parse_montos_por_posicion(line: str, cargo_pos: int, abono_pos: int) -> Tup
         return 0.0, 0.0, 0.0
 
     cargo = abono = saldo = 0.0
+    # Cada importe se alinea a la derecha en su columna. El margen debe
+    # depender del ancho real entre CARGOS y ABONOS; un margen fijo permite
+    # que el saldo de la operación se clasifique erróneamente como abono.
+    margen_columna = max(4, round(abs(abono_pos - cargo_pos) * 0.6))
     for pos, val in montos:
         distancia_cargo = abs(pos - cargo_pos)
         distancia_abono = abs(pos - abono_pos)
-        if distancia_cargo < distancia_abono and distancia_cargo < 20:
+        if distancia_cargo < distancia_abono and distancia_cargo <= margen_columna:
             cargo = val
-        elif distancia_abono <= distancia_cargo and distancia_abono < 20:
+        elif distancia_abono <= distancia_cargo and distancia_abono <= margen_columna:
             abono = val
         else:
             saldo = val

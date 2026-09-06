@@ -852,6 +852,8 @@ def serializar_poliza(
         }
 
     if poliza.tipo == TipoPoliza.egreso:
+        tipo_comprobante = getattr(factura.tipo_comprobante, "value", factura.tipo_comprobante)
+        es_nomina = str(tipo_comprobante or "").upper() == "N"
         cuenta_gasto = next(
             (m for m in poliza.movimientos if float(m.debe or 0) > 0 and "IVA" not in (m.nombre_cuenta or "")),
             None,
@@ -873,6 +875,8 @@ def serializar_poliza(
         base["egreso"] = {
             "proveedor": factura.nombre_emisor,
             "rfc_proveedor": factura.rfc_emisor,
+            "receptor": factura.nombre_receptor if es_nomina else None,
+            "rfc_receptor": factura.rfc_receptor if es_nomina else None,
             "clasificacion_gasto": (
                 info_cuenta["nombre"] if info_cuenta else (cuenta_gasto.nombre_cuenta if cuenta_gasto else "Sin clasificar")
             ),
@@ -929,6 +933,8 @@ def preview_poliza_desde_factura(
                 "nombre_banco": info_com.get("nombre_banco"),
             }
     else:
+        tipo_comprobante = getattr(factura.tipo_comprobante, "value", factura.tipo_comprobante)
+        es_nomina = str(tipo_comprobante or "").upper() == "N"
         item["categoria"] = "egreso"
         clave_sat = _clave_sat_desde_factura(factura)
         descripcion_gasto = (
@@ -948,6 +954,8 @@ def preview_poliza_desde_factura(
         item["egreso"] = {
             "proveedor": factura.nombre_emisor,
             "rfc_proveedor": factura.rfc_emisor,
+            "receptor": factura.nombre_receptor if es_nomina else None,
+            "rfc_receptor": factura.rfc_receptor if es_nomina else None,
             "clasificacion_gasto": info_cuenta["nombre"],
             "cuenta_gasto": info_cuenta["cuenta"],
             "desglose_impuestos": desglose_impuestos(factura),

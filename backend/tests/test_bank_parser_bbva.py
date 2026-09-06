@@ -3,7 +3,13 @@ Pruebas unitarias para BBVAParser con el formato real de BBVA Bancomer.
 Ejecutar: python -m pytest tests/test_bank_parser_bbva.py -v
 """
 import pytest
-from app.services.bank_parser.bbva import BBVAParser, _fecha_a_iso, _detectar_anio, _detectar_posicion_columnas
+from app.services.bank_parser.bbva import (
+    BBVAParser,
+    _detectar_anio,
+    _detectar_posicion_columnas,
+    _fecha_a_iso,
+    _parse_montos_por_posicion,
+)
 from app.services.bank_parser.generic import GenericBankParser
 from app.services.bank_parser.factory import BankParserFactory
 
@@ -56,6 +62,17 @@ class TestDetectarColumnas:
         cargo_pos, abono_pos = result
         assert cargo_pos < abono_pos
 
+    def test_no_confunde_el_saldo_con_cargos_o_abonos(self):
+        cargo_pos = 20
+        abono_pos = 35
+        line = f"{' ' * cargo_pos}125.50{' ' * (abono_pos - cargo_pos - 6)}2,000.00{' ' * 12}15,874.20"
+
+        cargo, abono, saldo = _parse_montos_por_posicion(line, cargo_pos, abono_pos)
+
+        assert cargo == 125.50
+        assert abono == 2000.00
+        assert saldo == 15874.20
+
 
 class TestBBVAParser:
     def setup_method(self):
@@ -79,11 +96,17 @@ class TestBBVAParser:
         result = self.parser.parse(BBVA_SAMPLE_TEXT)
         abonos = [m for m in result.movimientos if m.abono > 0]
         assert len(abonos) >= 2
+        assert abonos[0].descripcion.startswith("VENTAS DEBITO")
+        assert abonos[0].abono == 3500.00
+        assert abonos[0].cargo == 0
 
     def test_parse_cargo_detectado(self):
         result = self.parser.parse(BBVA_SAMPLE_TEXT)
         cargos = [m for m in result.movimientos if m.cargo > 0]
         assert len(cargos) >= 2
+        assert cargos[0].descripcion.startswith("APLI TASA DE DES DEBITO")
+        assert cargos[0].cargo == 54.24
+        assert cargos[0].abono == 0
 
     def test_parse_fechas_formato_iso(self):
         import re

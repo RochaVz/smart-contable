@@ -52,6 +52,9 @@ const PolizaDetailModal = ({ isOpen, onClose, poliza }) => {
           <div className="mb-6 p-4 bg-slate-950 rounded-2xl border border-slate-800">
             <p className="text-[10px] font-black uppercase text-rose-400 mb-2">Egreso — gasto</p>
             <p className="text-white">Proveedor: {poliza.egreso.proveedor}</p>
+            {poliza.egreso.receptor && (
+              <p className="text-white mt-1">Receptor de nómina: {poliza.egreso.receptor}</p>
+            )}
             <p className="text-emerald-400 mt-1">Clasificación: {poliza.egreso.clasificacion_gasto}</p>
           </div>
         )}

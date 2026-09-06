@@ -238,6 +238,8 @@ def test_serializar_poliza_recalcula_nomina_para_poliza_historica(monkeypatch):
         tipo_comprobante="E",
         rfc_emisor="BBB010101BBB",
         nombre_emisor="Proveedor recurrente",
+        rfc_receptor="AAA010101AAA",
+        nombre_receptor="Persona colaboradora",
         empresa_id=1,
         xml_contenido="xml",
         forma_pago=None,
@@ -260,7 +262,9 @@ def test_serializar_poliza_recalcula_nomina_para_poliza_historica(monkeypatch):
         lambda *_args: {"cuenta": "601.15.01", "nombre": "Nóminas"},
     )
 
+    factura_egreso.tipo_comprobante = "N"
     resultado = polizas.serializar_poliza(poliza, factura_egreso, "AAA010101AAA", db=object())
 
     assert resultado["egreso"]["clasificacion_gasto"] == "Nóminas"
     assert resultado["egreso"]["cuenta_gasto"] == "601.15.01"
+    assert resultado["egreso"]["receptor"] == "Persona colaboradora"

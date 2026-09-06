@@ -8,6 +8,7 @@ class EmpresaBase(BaseModel):
     razon_social: str
     tipo_persona: str
     regimen_fiscal: str
+    opcion_deduccion: Optional[str] = None
     codigo_postal: Optional[str] = None
 
 
@@ -19,6 +20,7 @@ class EmpresaUpdate(BaseModel):
     razon_social: Optional[str] = None
     codigo_postal: Optional[str] = None
     regimen_fiscal: Optional[str] = None
+    opcion_deduccion: Optional[str] = None
     activo: Optional[bool] = None
 
 
