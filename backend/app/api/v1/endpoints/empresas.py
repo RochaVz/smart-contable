@@ -20,6 +20,8 @@ from app.core.tenancy_validators import (
 
 from app.models.usuario import Usuario
 from app.models.empresa import Empresa
+from app.models.factura import Factura
+from app.core.sat_fiscal import SAT_REGIMEN_RULES, SatRegimenEnum
 from app.schemas.empresa import (
     EmpresaCreate,
     EmpresaUpdate,
@@ -32,6 +34,11 @@ from app.services.exportacion_empresa import (  # noqa: F401
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+def _tipo_persona_por_rfc(rfc: str | None) -> str:
+    """Infiere el tipo de persona para validar CFDIs cuando no hay padrón local."""
+    return "MORAL" if len((rfc or "").strip()) == 12 else "FISICA"
 
 
 # ─────────────────────────────────────────
@@ -169,6 +176,76 @@ def listar_empresas(
     except Exception as e:
         logger.error("Error inesperado al listar empresas", exc_info=True)
         raise DatabaseException("Error inesperado al listar empresas") from e
+
+
+# ─────────────────────────────────────────
+# MOTOR FISCAL
+# ─────────────────────────────────────────
+@router.get(
+    "/{empresa_id}/fiscal",
+    summary="Resumen de obligaciones y retenciones fiscales",
+)
+def obtener_resumen_fiscal(
+    empresa_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Devuelve obligaciones del régimen y retenciones sugeridas en CFDIs emitidos.
+
+    El análisis es informativo: identifica retenciones que deben revisarse sin
+    modificar CFDIs timbrados ni pólizas históricas.
+    """
+    from app.services.cfdi_helpers import es_venta
+    from app.services.validaciones_fiscales import validar_retenciones_cfdi
+
+    empresa = validar_empresa_pertenece_usuario(empresa_id, current_user.id, db)
+    regimen_valor = getattr(empresa.regimen_fiscal, "value", empresa.regimen_fiscal)
+    try:
+        regimen = SatRegimenEnum(regimen_valor)
+    except ValueError as exc:
+        raise DatabaseException("El régimen fiscal de la empresa no está soportado") from exc
+
+    reglas = SAT_REGIMEN_RULES[regimen]
+    retenciones = []
+    for factura in db.query(Factura).filter(Factura.empresa_id == empresa_id).all():
+        if not es_venta(factura, empresa.rfc):
+            continue
+        validacion = validar_retenciones_cfdi(
+            regimen,
+            getattr(empresa.tipo_persona, "value", empresa.tipo_persona),
+            _tipo_persona_por_rfc(factura.rfc_receptor),
+            "Tasa",
+            factura.subtotal,
+        )
+        if validacion["retenciones_sugeridas"]:
+            retenciones.append({
+                "factura_id": factura.id,
+                "uuid": factura.uuid,
+                "receptor": factura.nombre_receptor,
+                **validacion,
+            })
+
+    totales = {}
+    for item in retenciones:
+        for retencion in item["retenciones_sugeridas"]:
+            impuesto = retencion["impuesto"]
+            totales[impuesto] = round(totales.get(impuesto, 0) + retencion["monto"], 2)
+
+    return {
+        "empresa": {
+            "regimen_fiscal": regimen.value,
+            "tipo_persona": getattr(empresa.tipo_persona, "value", empresa.tipo_persona),
+            "opcion_deduccion": getattr(empresa.opcion_deduccion, "value", empresa.opcion_deduccion),
+        },
+        "obligaciones": {
+            "calculo_isr_tipo": reglas["calculo_isr_tipo"].value,
+            "exige_diot": reglas["exige_diot"],
+            "exige_contabilidad_electronica": reglas["exige_contabilidad_electronica"],
+            "permite_deducciones_isr": reglas["permite_deducciones_isr"],
+        },
+        "retenciones_sugeridas": retenciones,
+        "totales_retenciones": totales,
+    }
 
 
 # ─────────────────────────────────────────
@@ -323,6 +400,8 @@ def actualizar_empresa(
             empresa.razon_social = datos.razon_social
         if datos.codigo_postal:
             empresa.codigo_postal = datos.codigo_postal
+        if datos.tipo_persona:
+            empresa.tipo_persona = datos.tipo_persona
         if datos.regimen_fiscal:
             empresa.regimen_fiscal = datos.regimen_fiscal
         if datos.opcion_deduccion:

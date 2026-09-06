@@ -5,6 +5,7 @@ import {
   ArrowLeft, FileText, UploadCloud,
   Loader2, BrainCircuit, ChevronUp, ChevronDown, Download, Calendar,
   BookOpen, FileBarChart, Landmark, Settings2, Trash2,
+  Calculator,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
@@ -16,6 +17,7 @@ import ComisionesBancoPanel from '../components/ComisionesBancoPanel';
 import ConciliacionBancariaPanel from '../components/ConciliacionBancariaPanel';
 import InformesPanel from '../components/InformesPanel';
 import LocalConciliacionPanel from '../components/LocalConciliacionPanel';
+import FiscalRegimenPanel from '../components/FiscalRegimenPanel';
 import { downloadCsv } from '../utils/csv';
 import { downloadBlob, filenameFromContentDisposition } from '../utils/download';
 import { deleteLocalInvoice, getLocalCompany, getLocalInvoices } from '../services/localBackup';
@@ -53,6 +55,12 @@ const SECCIONES = [
     label: 'Revisión bancaria',
     icon: Landmark,
     descripcion: 'Compara banco contra tus registros',
+  },
+  {
+    id: 'fiscal',
+    label: 'Fiscal',
+    icon: Calculator,
+    descripcion: 'Régimen, obligaciones y retenciones',
   },
 ];
 
@@ -1108,6 +1116,11 @@ const CompanyDetail = () => {
             onPeriodoChange={handlePeriodoChange}
           />
         );
+      case 'fiscal':
+        if (isLocalCompany) {
+          return <p className="py-12 text-center text-sm text-slate-500">Configura un negocio sincronizado para usar el motor fiscal.</p>;
+        }
+        return <FiscalRegimenPanel empresa={empresa} onUpdated={handleRefresh} />;
       default:
         return renderHistorial();
     }
@@ -1201,7 +1214,7 @@ const CompanyDetail = () => {
 
           {/* Navegación principal */}
           <nav
-            className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-900/80 p-1.5 sm:grid-cols-4"
+            className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-900/80 p-1.5 sm:grid-cols-5"
             aria-label="Secciones del dashboard"
           >
             {SECCIONES.map(({ id, label, icon: Icon, descripcion }) => {

@@ -9,6 +9,7 @@ const DEFAULT_FORM_DATA = {
   razon_social: '',
   regimen_fiscal: '601',
   tipo_persona: 'moral',
+  opcion_deduccion: '',
   codigo_postal: '00000',
 };
 
@@ -89,6 +90,36 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess, initialData = {} }) =
             <label className="mb-2 block text-sm font-bold text-slate-300">Código postal fiscal</label>
             <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Código postal registrado ante el SAT" value={formData.codigo_postal} onChange={(e) => setFormData({...formData, codigo_postal: e.target.value})} required />
           </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-300">Tipo de persona</label>
+              <select value={formData.tipo_persona} onChange={(e) => setFormData({ ...formData, tipo_persona: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 text-white outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="fisica">Persona física</option>
+                <option value="moral">Persona moral</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-300">Régimen fiscal</label>
+              <select value={formData.regimen_fiscal} onChange={(e) => setFormData({ ...formData, regimen_fiscal: e.target.value, opcion_deduccion: e.target.value === '606' ? formData.opcion_deduccion : '' })} className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 text-white outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="601">General de Ley Personas Morales</option>
+                <option value="612">Actividades empresariales y profesionales</option>
+                <option value="606">Arrendamiento</option>
+                <option value="605">Sueldos y salarios</option>
+                <option value="626_PF">RESICO persona física</option>
+                <option value="626_PM">RESICO persona moral</option>
+              </select>
+            </div>
+          </div>
+          {formData.regimen_fiscal === '606' && (
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-300">Deducción ISR</label>
+              <select value={formData.opcion_deduccion} onChange={(e) => setFormData({ ...formData, opcion_deduccion: e.target.value })} required className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 text-white outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Selecciona una opción</option>
+                <option value="CIEGA">Deducción ciega (35% + predial)</option>
+                <option value="REAL">Gastos reales</option>
+              </select>
+            </div>
+          )}
           
           <button className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white mt-4 transition-all active:scale-95 flex justify-center" disabled={loading}>
             {loading ? <Loader2 className="animate-spin" /> : "Guardar negocio"}

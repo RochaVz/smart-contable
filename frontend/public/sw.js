@@ -1,6 +1,6 @@
-const APP_VERSION = '2026.09.04.11';
+const APP_VERSION = '2026.09.06.01';
 const CACHE_NAME = `smartcontable-app-${APP_VERSION}`;
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg?v=2026.09.04.11'];
+const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg?v=2026.09.06.01'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

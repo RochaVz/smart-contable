@@ -19,6 +19,7 @@ class EmpresaCreate(EmpresaBase):
 class EmpresaUpdate(BaseModel):
     razon_social: Optional[str] = None
     codigo_postal: Optional[str] = None
+    tipo_persona: Optional[str] = None
     regimen_fiscal: Optional[str] = None
     opcion_deduccion: Optional[str] = None
     activo: Optional[bool] = None
