@@ -1127,8 +1127,8 @@ const CompanyDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+    <div className="app-page min-h-screen bg-slate-950 text-slate-200">
+      <div className="app-container max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8">
         <button
           type="button"
           onClick={() => navigate('/dashboard')}
@@ -1139,7 +1139,7 @@ const CompanyDetail = () => {
 
         {/* Cabecera */}
         <header className="mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+          <div className="flex min-w-0 flex-col justify-between gap-4 mb-6 lg:flex-row lg:items-center">
             <div className="min-w-0">
               <h1 className="break-words text-2xl font-black text-white sm:text-3xl">{empresa?.razon_social || `Negocio #${id}`}</h1>
               <p className="text-slate-500 text-sm mt-1">
@@ -1149,9 +1149,9 @@ const CompanyDetail = () => {
                 )}
               </p>
             </div>
-            <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:justify-end">
-              {selectorPeriodo}
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 shadow-lg shadow-black/10">
+            <div className="flex w-full min-w-0 flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:justify-end">
+              <div className="w-full lg:w-auto">{selectorPeriodo}</div>
+              <div className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 shadow-lg shadow-black/10 lg:w-auto">
                 <Download className="h-5 w-5 shrink-0 text-emerald-400" />
                 <div className="min-w-0">
                   <label htmlFor="export-type" className="block text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">Exportar datos</label>
@@ -1249,7 +1249,7 @@ const CompanyDetail = () => {
         </p>
 
         {/* Contenido de la sección */}
-        <main>{renderSeccion()}</main>
+        <main className="min-w-0">{renderSeccion()}</main>
       </div>
 
       <FileUploadModal

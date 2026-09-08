@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { Building2, PlusCircle, LogOut, Search, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Building2, PlusCircle, LogOut, Search, ArrowRight, ShieldCheck, Trash2, Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import NewCompanyModal from '../components/NewCompanyModal';
 import SmartContableMark from '../components/SmartContableMark';
 import DeviceBackupPanel from '../components/DeviceBackupPanel';
-import { getLocalCompanies } from '../services/localBackup';
+import { deleteLocalCompany, getLocalCompanies } from '../services/localBackup';
 
 const Dashboard = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ const Dashboard = ({ onLogout }) => {
   const [newCompanyDraft, setNewCompanyDraft] = useState({});
   const [newCompanyModalKey, setNewCompanyModalKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deletingCompanyId, setDeletingCompanyId] = useState(null);
   const hasLoaded = useRef(false);
 
   const fetchEmpresas = useCallback(async () => {
@@ -70,8 +72,37 @@ const Dashboard = ({ onLogout }) => {
     await fetchEmpresas();
   };
 
+  const prepareCompanyBackup = async (empresa) => {
+    if (empresa.local_only) return {};
+    const response = await api.get(`/facturas/?empresa_id=${empresa.id}`);
+    return { invoices: response.data || [] };
+  };
+
+  const handleDeleteCompany = async (empresa, event) => {
+    event.stopPropagation();
+    const confirmacion = window.confirm(
+      `¿Eliminar el negocio "${empresa.razon_social}"?\n\nSe quitará de tu lista${empresa.local_only ? ' y se borrarán sus datos guardados en este dispositivo' : ''}.`,
+    );
+    if (!confirmacion) return;
+
+    setDeletingCompanyId(empresa.id);
+    try {
+      if (empresa.local_only) {
+        await deleteLocalCompany(empresa);
+      } else {
+        await api.delete(`/empresas/${empresa.id}`);
+      }
+      setEmpresas((current) => current.filter((item) => item.id !== empresa.id));
+      toast.success('Negocio eliminado correctamente');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'No se pudo eliminar el negocio');
+    } finally {
+      setDeletingCompanyId(null);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
+    <div className="app-page min-h-screen bg-slate-950 text-slate-200">
       {/* NAVBAR SUPERIOR PROFESIONAL */}
       <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
@@ -89,7 +120,7 @@ const Dashboard = ({ onLogout }) => {
       </nav>
 
       {/* CONTENIDO */}
-      <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+      <main className="app-container max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8">
         <header className="mb-5 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 p-5 shadow-xl shadow-black/10 sm:mb-8 sm:rounded-3xl sm:p-8">
           <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -182,8 +213,18 @@ const Dashboard = ({ onLogout }) => {
                    <span className="flex items-center gap-1 text-sm font-bold text-blue-400">Abrir <ArrowRight className="h-4 w-4" /></span>
                 </div>
                 <div className="mt-4 border-t border-slate-800 pt-4">
-                  <DeviceBackupPanel compact company={e} />
+                  <DeviceBackupPanel compact company={e} prepareCompanyBackup={prepareCompanyBackup} />
                 </div>
+                <button
+                  type="button"
+                  onClick={(event) => handleDeleteCompany(e, event)}
+                  disabled={deletingCompanyId === e.id}
+                  className="mt-4 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 px-3 py-2 text-sm font-bold text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:cursor-wait disabled:opacity-60"
+                  title={`Eliminar ${e.razon_social}`}
+                >
+                  {deletingCompanyId === e.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  {deletingCompanyId === e.id ? 'Eliminando...' : 'Eliminar negocio'}
+                </button>
               </div>
             ))}
           </div>

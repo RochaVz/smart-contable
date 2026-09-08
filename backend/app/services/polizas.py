@@ -245,8 +245,29 @@ def _clave_sat_desde_factura(factura: Factura) -> str:
     datos = extraer_datos_xml(factura.xml_contenido)
     conceptos = datos.get("conceptos") or []
     if conceptos:
-        return conceptos[0].get("clave_prod_serv") or "00000000"
+        claves = [concepto.get("clave_prod_serv") for concepto in conceptos]
+        return next((clave for clave in claves if clave), "00000000")
     return "00000000"
+
+
+def _descripcion_egreso_desde_factura(factura: Factura, datos_xml: dict) -> str:
+    """Construye el texto completo que se usa para clasificar un CFDI de gasto."""
+    descripciones = datos_xml.get("descripciones_conceptos") or [
+        concepto.get("descripcion")
+        for concepto in (datos_xml.get("conceptos") or [])
+        if concepto.get("descripcion")
+    ]
+    claves = datos_xml.get("claves_prod_serv") or [
+        concepto.get("clave_prod_serv")
+        for concepto in (datos_xml.get("conceptos") or [])
+        if concepto.get("clave_prod_serv")
+    ]
+    partes = [texto.strip() for texto in descripciones if texto and texto.strip()]
+    if claves:
+        partes.append(f"Claves SAT: {', '.join(claves)}")
+    if partes:
+        return " | ".join(partes)
+    return factura.nombre_emisor or "Gasto sin descripción"
 
 
 def _conceptos_vendidos(factura: Factura) -> list[dict]:
@@ -439,7 +460,7 @@ def generar_poliza_egreso(factura: Factura, db: Session) -> Poliza:
     iva_ret = Decimal(str(factura.iva_retenido or 0))
     isr_ret = Decimal(str(factura.isr_retenido or 0))
     datos_xml = extraer_datos_xml(factura.xml_contenido)
-    descripcion_gasto = datos_xml.get("concepto_principal") or factura.nombre_emisor
+    descripcion_gasto = _descripcion_egreso_desde_factura(factura, datos_xml)
 
     if not factura.es_deducible:
         info_cuenta = {"cuenta": CUENTAS["gastos_no_ded"], "nombre": "Gastos no deducibles"}

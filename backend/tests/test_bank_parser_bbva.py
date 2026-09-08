@@ -73,6 +73,29 @@ class TestDetectarColumnas:
         assert abono == 2000.00
         assert saldo == 15874.20
 
+    def test_no_confunde_el_saldo_cuando_se_indica_su_columna(self):
+        cargo_pos = 20
+        abono_pos = 35
+        saldo_pos = 50
+        line = f"{' ' * cargo_pos}125.50{' ' * (abono_pos - cargo_pos - 6)}2,000.00{' ' * 9}15,874.20"
+
+        cargo, abono, saldo = _parse_montos_por_posicion(
+            line, cargo_pos, abono_pos, saldo_pos
+        )
+
+        assert cargo == 125.50
+        assert abono == 2000.00
+        assert saldo == 15874.20
+
+    def test_parsea_importe_con_simbolo_moneda(self):
+        cargo, abono, saldo = _parse_montos_por_posicion(
+            "$1,250.00", 0, 20
+        )
+
+        assert cargo == 1250.00
+        assert abono == 0.0
+        assert saldo == 0.0
+
 
 class TestBBVAParser:
     def setup_method(self):
@@ -107,6 +130,15 @@ class TestBBVAParser:
         assert cargos[0].descripcion.startswith("APLI TASA DE DES DEBITO")
         assert cargos[0].cargo == 54.24
         assert cargos[0].abono == 0
+
+    def test_totales_de_cargos_y_abonos_no_incluyen_saldos(self):
+        result = self.parser.parse(BBVA_SAMPLE_TEXT)
+
+        total_cargos = round(sum(m.cargo for m in result.movimientos), 2)
+        total_abonos = round(sum(m.abono for m in result.movimientos), 2)
+
+        assert total_cargos == 174.24
+        assert total_abonos == 24250.50
 
     def test_parse_fechas_formato_iso(self):
         import re

@@ -57,6 +57,7 @@ def parsear_xml_sat(contenido_xml: str) -> dict:
         'uso_cfdi':         None,
         'regimen_receptor': None,
         'domicilio_fiscal': None,
+        'receptor':         {},
 
         # Impuestos
         'iva_trasladado':   Decimal('0.0'),
@@ -82,6 +83,13 @@ def parsear_xml_sat(contenido_xml: str) -> dict:
         datos['uso_cfdi']         = receptor.get('UsoCFDI')
         datos['regimen_receptor'] = receptor.get('RegimenFiscalReceptor')
         datos['domicilio_fiscal'] = receptor.get('DomicilioFiscalReceptor')
+        datos['receptor'] = {
+            'rfc': datos['rfc_receptor'],
+            'nombre': datos['nombre_receptor'],
+            'uso_cfdi': datos['uso_cfdi'],
+            'regimen_fiscal': datos['regimen_receptor'],
+            'domicilio_fiscal': datos['domicilio_fiscal'],
+        }
 
     # Conceptos
     conceptos_node = root.find(f'{{{ns}}}Conceptos')
@@ -90,6 +98,9 @@ def parsear_xml_sat(contenido_xml: str) -> dict:
             datos['conceptos'].append({
                 'clave_prod_serv': concepto.get('ClaveProdServ'),
                 'descripcion':     concepto.get('Descripcion'),
+                'clave_unidad':     concepto.get('ClaveUnidad'),
+                'no_identificacion': concepto.get('NoIdentificacion'),
+                'objeto_imp':       concepto.get('ObjetoImp'),
                 'cantidad':        float(concepto.get('Cantidad', 1)),
                 'unidad':          concepto.get('Unidad', ''),
                 'valor_unitario':  float(concepto.get('ValorUnitario', 0)),
@@ -146,8 +157,22 @@ def parsear_xml_sat(contenido_xml: str) -> dict:
     # Concepto principal (primer concepto)
     if datos['conceptos']:
         datos['concepto_principal'] = datos['conceptos'][0]['descripcion']
+        datos['clave_prod_serv_principal'] = datos['conceptos'][0]['clave_prod_serv']
     else:
         datos['concepto_principal'] = ''
+        datos['clave_prod_serv_principal'] = None
+
+    datos['descripciones_conceptos'] = [
+        concepto.get('descripcion') or ''
+        for concepto in datos['conceptos']
+        if concepto.get('descripcion')
+    ]
+    datos['claves_prod_serv'] = [
+        concepto.get('clave_prod_serv') or ''
+        for concepto in datos['conceptos']
+        if concepto.get('clave_prod_serv')
+    ]
+    datos['concepto_completo'] = ' | '.join(datos['descripciones_conceptos'])
 
     return datos
 

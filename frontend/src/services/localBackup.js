@@ -8,7 +8,7 @@ const STORE_COMPANIES = 'companies';
 const STORE_INVOICES = 'invoices';
 const STORE_BANK_MOVEMENTS = 'bankMovements';
 const BACKUP_FORMAT = 'smartcontable-device-backup';
-const BACKUP_FORMAT_VERSION = 1;
+const BACKUP_FORMAT_VERSION = 2;
 const EXCLUDED_LOCAL_STORAGE_KEYS = new Set(['token']);
 
 const openVault = () => new Promise((resolve, reject) => {
@@ -185,15 +185,20 @@ export const exportDeviceBackup = async () => {
   return { snapshots: snapshots.length, companies: companies.length, invoices: invoices.length, bankMovements: bankMovements.length, exportedAt };
 };
 
-export const exportCompanyBackup = async (company) => {
+export const exportCompanyBackup = async (company, { invoices: providedInvoices = [] } = {}) => {
   const snapshots = await readAllFromStore(STORE_SNAPSHOTS);
   const companies = await readAllFromStore(STORE_COMPANIES);
-  const invoices = await readAllFromStore(STORE_INVOICES);
+  const storedInvoices = await readAllFromStore(STORE_INVOICES);
   const bankMovements = await readAllFromStore(STORE_BANK_MOVEMENTS);
   const companyId = String(company.id || '');
   const companyRfc = String(company.rfc || '').toUpperCase();
   const localCompany = companies.find((item) => String(item.id) === companyId || item.rfc === companyRfc);
-  const companyInvoices = invoices.filter((invoice) => String(invoice.empresa_id) === companyId || invoice.empresa_rfc === companyRfc);
+  const storedCompanyInvoices = storedInvoices.filter((invoice) => String(invoice.empresa_id) === companyId || invoice.empresa_rfc === companyRfc);
+  const validProvidedInvoices = providedInvoices.filter((invoice) => invoice && typeof invoice === 'object' && !Array.isArray(invoice));
+  const companyInvoices = [...new Map([...storedCompanyInvoices, ...validProvidedInvoices].map((invoice, index) => [
+    invoice.uuid || invoice.id || `invoice-${index}`,
+    invoice,
+  ])).values()];
   const companyBankMovements = bankMovements.filter((movement) => String(movement.empresa_id) === companyId || movement.empresa_rfc === companyRfc);
   const companySnapshots = snapshots.filter((snapshot) => {
     const source = `${snapshot.url || ''} ${snapshot.key || ''}`;
@@ -224,40 +229,93 @@ export const importDeviceBackup = async (file) => {
   const text = await file.text();
   const backup = JSON.parse(text);
 
-  if (backup.format !== BACKUP_FORMAT || backup.formatVersion !== BACKUP_FORMAT_VERSION) {
+  if (backup.format !== BACKUP_FORMAT || ![1, 2].includes(backup.formatVersion)) {
     throw new Error('El archivo no parece ser un respaldo válido de SmartContable.');
   }
 
-  const preferences = backup.deviceStorage?.preferences || {};
+  const deviceStorage = backup.deviceStorage || {};
+  const preferences = deviceStorage.preferences || {};
   Object.entries(preferences).forEach(([key, value]) => {
     if (!EXCLUDED_LOCAL_STORAGE_KEYS.has(key)) localStorage.setItem(key, String(value));
   });
 
-  const snapshots = Array.isArray(backup.deviceStorage?.snapshots) ? backup.deviceStorage.snapshots : [];
+  const snapshots = Array.isArray(deviceStorage.snapshots) ? deviceStorage.snapshots : [];
+  const companies = Array.isArray(deviceStorage.companies) ? deviceStorage.companies : [];
+  const existingCompanies = await getLocalCompanies();
+  const companyIdMap = new Map();
+  const importedCompanies = [];
+  const now = new Date().toISOString();
+
+  companies.forEach((company) => {
+    if (!company || !company.rfc) return;
+    const rfc = String(company.rfc).trim().toUpperCase();
+    const existing = existingCompanies.find((item) => String(item.rfc || '').toUpperCase() === rfc);
+    const localId = existing?.id || `local-${rfc}-${crypto.randomUUID()}`;
+    if (company.id) companyIdMap.set(String(company.id), localId);
+    importedCompanies.push({
+      ...company,
+      id: localId,
+      rfc,
+      local_only: true,
+      created_at: existing?.created_at || company.created_at || now,
+      updated_at: now,
+      savedAt: now,
+    });
+  });
+
+  await runStore(STORE_COMPANIES, 'readwrite', (store) => {
+    importedCompanies.forEach((company) => {
+      store.put(company);
+    });
+  });
+
+  const invoices = Array.isArray(deviceStorage.invoices) ? deviceStorage.invoices : [];
+  const existingInvoices = await readAllFromStore(STORE_INVOICES);
+  const knownInvoiceUuids = new Set(existingInvoices.map((invoice) => String(invoice.uuid || '').toUpperCase()).filter(Boolean));
+  const importedInvoices = invoices
+    .filter((invoice) => invoice && (invoice.uuid || invoice.id))
+    .filter((invoice) => {
+      const uuid = String(invoice.uuid || '').toUpperCase();
+      if (!uuid || knownInvoiceUuids.has(uuid)) return !uuid;
+      knownInvoiceUuids.add(uuid);
+      return true;
+    })
+    .map((invoice) => ({
+      ...invoice,
+      id: `local-invoice-${crypto.randomUUID()}`,
+      empresa_id: companyIdMap.get(String(invoice.empresa_id)) || invoice.empresa_id,
+      empresa_rfc: String(invoice.empresa_rfc || '').toUpperCase(),
+      local_only: true,
+      savedAt: now,
+      importedAt: now,
+    }));
+  await runStore(STORE_INVOICES, 'readwrite', (store) => {
+    importedInvoices.forEach((invoice) => store.put(invoice));
+  });
+
+  const bankMovements = Array.isArray(deviceStorage.bankMovements) ? deviceStorage.bankMovements : [];
+  const existingMovements = await readAllFromStore(STORE_BANK_MOVEMENTS);
+  const knownMovementKeys = new Set(existingMovements.map((movement) => movement.fingerprint).filter(Boolean));
+  const importedMovements = bankMovements
+    .filter((movement) => movement && movement.id)
+    .map((movement) => ({
+      ...movement,
+      id: `local-bank-${crypto.randomUUID()}`,
+      empresa_id: companyIdMap.get(String(movement.empresa_id)) || movement.empresa_id,
+      empresa_rfc: String(movement.empresa_rfc || '').toUpperCase(),
+      local_only: true,
+      savedAt: now,
+      importedAt: now,
+    }))
+    .filter((movement) => !movement.fingerprint || !knownMovementKeys.has(movement.fingerprint));
+  await runStore(STORE_BANK_MOVEMENTS, 'readwrite', (store) => {
+    importedMovements.forEach((movement) => store.put(movement));
+  });
+
+  // Snapshots are cache data, so namespace them to avoid overwriting this device's cache.
   await runStore(STORE_SNAPSHOTS, 'readwrite', (store) => {
     snapshots.forEach((snapshot) => {
-      if (snapshot?.key) store.put(snapshot);
-    });
-  });
-
-  const companies = Array.isArray(backup.deviceStorage?.companies) ? backup.deviceStorage.companies : [];
-  await runStore(STORE_COMPANIES, 'readwrite', (store) => {
-    companies.forEach((company) => {
-      if (company?.id) store.put(company);
-    });
-  });
-
-  const invoices = Array.isArray(backup.deviceStorage?.invoices) ? backup.deviceStorage.invoices : [];
-  await runStore(STORE_INVOICES, 'readwrite', (store) => {
-    invoices.forEach((invoice) => {
-      if (invoice?.id) store.put(invoice);
-    });
-  });
-
-  const bankMovements = Array.isArray(backup.deviceStorage?.bankMovements) ? backup.deviceStorage.bankMovements : [];
-  await runStore(STORE_BANK_MOVEMENTS, 'readwrite', (store) => {
-    bankMovements.forEach((movement) => {
-      if (movement?.id) store.put(movement);
+      if (snapshot?.key) store.put({ ...snapshot, key: `imported:${crypto.randomUUID()}:${snapshot.key}` });
     });
   });
 
@@ -268,7 +326,12 @@ export const importDeviceBackup = async (file) => {
   window.dispatchEvent(new CustomEvent('smartcontable:local-companies-updated'));
   window.dispatchEvent(new CustomEvent('smartcontable:local-invoices-updated'));
   window.dispatchEvent(new CustomEvent('smartcontable:local-bank-movements-updated'));
-  return { snapshots: snapshots.length, companies: companies.length, invoices: invoices.length, bankMovements: bankMovements.length };
+  return {
+    snapshots: snapshots.length,
+    companies: importedCompanies.length,
+    invoices: importedInvoices.length,
+    bankMovements: importedMovements.length,
+  };
 };
 
 export const clearDeviceBackup = async () => {

@@ -19,7 +19,15 @@ _LINEA_MOV_RE = re.compile(
 # Encabezado de columnas para detectar posición de CARGOS y ABONOS
 _HEADER_RE = re.compile(r"CARGOS\s+ABONOS", re.IGNORECASE)
 
-_MONTO_RE = re.compile(r"[\d,]+\.\d{2}")
+_MONTO_RE = re.compile(r"(?<!\d)(?:[$]\s*)?(?:\(?-?[\d,]+\.\d{2}\)?)(?!\d)")
+
+
+def _monto_a_float(valor: str) -> float:
+    limpio = valor.replace("$", "").replace(",", "").replace(" ", "")
+    negativo = limpio.startswith("-") or (limpio.startswith("(") and limpio.endswith(")"))
+    limpio = limpio.strip("()")
+    monto = float(limpio)
+    return -monto if negativo else monto
 
 
 def _fecha_a_iso(fecha_str: str, anio: int) -> str:
@@ -39,34 +47,80 @@ def _detectar_anio(text: str) -> int:
 
 def _detectar_posicion_columnas(text: str) -> Optional[Tuple[int, int]]:
     """Detecta la posición x (char index) de las columnas CARGOS y ABONOS."""
+    posiciones = _detectar_posiciones_columnas(text)
+    return posiciones[:2] if posiciones else None
+
+
+def _detectar_posiciones_columnas(text: str) -> Optional[Tuple[int, int, Optional[int]]]:
+    """Detecta las posiciones de CARGOS, ABONOS y SALDO en el texto extraído."""
+    cargo_pos = abono_pos = saldo_pos = None
     for line in text.splitlines():
-        if _HEADER_RE.search(line):
-            cargo_pos = line.upper().find("CARGOS")
-            abono_pos = line.upper().find("ABONOS")
-            return cargo_pos, abono_pos
-    return None
+        upper_line = line.upper()
+        if cargo_pos is None and _HEADER_RE.search(line):
+            cargo_pos = upper_line.find("CARGOS")
+            abono_pos = upper_line.find("ABONOS")
+        if "SALDO" in upper_line:
+            posicion_saldo = upper_line.find("SALDO")
+            if saldo_pos is None or posicion_saldo > saldo_pos:
+                saldo_pos = posicion_saldo
+    if cargo_pos is None or abono_pos is None:
+        return None
+    return cargo_pos, abono_pos, saldo_pos
 
 
-def _parse_montos_por_posicion(line: str, cargo_pos: int, abono_pos: int) -> Tuple[float, float, float]:
+def _parse_montos_por_posicion(
+    line: str,
+    cargo_pos: int,
+    abono_pos: int,
+    saldo_pos: Optional[int] = None,
+) -> Tuple[float, float, float]:
     """Extrae cargo, abono y saldo según posición de columnas."""
-    montos = [(m.start(), float(m.group().replace(",", ""))) for m in _MONTO_RE.finditer(line)]
+    montos = [(m.start(), _monto_a_float(m.group())) for m in _MONTO_RE.finditer(line)]
     if not montos:
         return 0.0, 0.0, 0.0
 
     cargo = abono = saldo = 0.0
-    # Cada importe se alinea a la derecha en su columna. El margen debe
-    # depender del ancho real entre CARGOS y ABONOS; un margen fijo permite
-    # que el saldo de la operación se clasifique erróneamente como abono.
-    margen_columna = max(4, round(abs(abono_pos - cargo_pos) * 0.6))
-    for pos, val in montos:
+    # El saldo es la columna más a la derecha. En PDFs BBVA puede perderse
+    # el encabezado, pero el orden visual de las columnas se conserva.
+    candidatos = montos
+    if len(montos) >= 2 and saldo_pos is None:
+        saldo_pos, saldo = montos[-1]
+        candidatos = montos[:-1]
+
+    limite_cargo_abono = (cargo_pos + abono_pos) / 2
+    limite_abono_saldo = (
+        (abono_pos + saldo_pos) / 2
+        if saldo_pos is not None
+        else None
+    )
+    for pos, val in candidatos:
+        if limite_abono_saldo is not None and pos >= limite_abono_saldo:
+            saldo = val
+            continue
+        if pos < limite_cargo_abono:
+            cargo = val
+        else:
+            abono = val
+
+    # Si el saldo fue identificado por encabezado, aún puede haber quedado
+    # mezclado entre candidatos por el orden del texto extraído.
+    if saldo_pos is not None:
+        for pos, val in montos:
+            if pos >= (abono_pos + saldo_pos) / 2:
+                saldo = val
+                if (pos, val) in candidatos:
+                    candidatos.remove((pos, val))
+                break
+
+    for pos, val in candidatos:
+        if limite_abono_saldo is not None and pos >= limite_abono_saldo:
+            continue
         distancia_cargo = abs(pos - cargo_pos)
         distancia_abono = abs(pos - abono_pos)
-        if distancia_cargo < distancia_abono and distancia_cargo <= margen_columna:
+        if distancia_cargo < distancia_abono:
             cargo = val
-        elif distancia_abono <= distancia_cargo and distancia_abono <= margen_columna:
+        elif distancia_abono <= distancia_cargo:
             abono = val
-        else:
-            saldo = val
 
     return cargo, abono, saldo
 
@@ -82,7 +136,7 @@ class BBVAParser(BaseBankParser):
             full_text = text
 
         anio = _detectar_anio(full_text)
-        col_positions = _detectar_posicion_columnas(full_text)
+        col_positions = _detectar_posiciones_columnas(full_text)
         movimientos = self._parse_movimientos(full_text, anio, col_positions)
 
         return BankStatementModel(banco="BBVA México", movimientos=movimientos)
@@ -142,11 +196,13 @@ class BBVAParser(BaseBankParser):
 
                 # Determinar cargo/abono por posición de columna
                 if col_positions and montos:
-                    cargo_pos, abono_pos = col_positions
-                    cargo, abono, saldo = _parse_montos_por_posicion(line, cargo_pos, abono_pos)
+                    cargo_pos, abono_pos, saldo_pos = col_positions
+                    cargo, abono, saldo = _parse_montos_por_posicion(
+                        line, cargo_pos, abono_pos, saldo_pos
+                    )
                 elif len(montos) == 1:
                     # Un solo monto: determinar por posición en la línea
-                    monto_val = float(montos[0].replace(",", ""))
+                    monto_val = _monto_a_float(montos[0])
                     monto_match = _MONTO_RE.search(line)
                     pos = monto_match.start() if monto_match else 0
                     # Si está en la mitad izquierda de la línea es cargo, derecha es abono
@@ -156,9 +212,9 @@ class BBVAParser(BaseBankParser):
                     else:
                         cargo, abono, saldo = 0.0, monto_val, 0.0
                 elif len(montos) >= 2:
-                    cargo = float(montos[0].replace(",", ""))
-                    abono = float(montos[1].replace(",", ""))
-                    saldo = float(montos[2].replace(",", "")) if len(montos) > 2 else 0.0
+                    cargo = _monto_a_float(montos[0])
+                    abono = _monto_a_float(montos[1])
+                    saldo = _monto_a_float(montos[2]) if len(montos) > 2 else 0.0
                 else:
                     i += 1
                     continue

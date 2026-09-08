@@ -21,7 +21,7 @@ const formatDate = (value) => {
   });
 };
 
-const DeviceBackupPanel = ({ compact = false, company = null }) => {
+const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBackup = null }) => {
   const fileRef = useRef(null);
   const [stats, setStats] = useState({ snapshots: 0, companies: 0, invoices: 0, bankMovements: 0, totalRecords: 0, lastSavedAt: '' });
   const [loading, setLoading] = useState(true);
@@ -69,7 +69,8 @@ const DeviceBackupPanel = ({ compact = false, company = null }) => {
   const handleExport = async () => {
     setWorking(true);
     try {
-      const result = company ? await exportCompanyBackup(company) : await exportDeviceBackup();
+      const companyData = company && prepareCompanyBackup ? await prepareCompanyBackup(company) : {};
+      const result = company ? await exportCompanyBackup(company, companyData) : await exportDeviceBackup();
       toast.success(`Respaldo descargado con ${result.snapshots + result.companies + result.invoices + (result.bankMovements || 0)} registro(s) locales`);
       await refreshStats();
     } catch (error) {
@@ -123,16 +124,26 @@ const DeviceBackupPanel = ({ compact = false, company = null }) => {
   if (compact) {
     return (
       <div className="relative" onClick={(event) => event.stopPropagation()}>
-        <button
-          type="button"
-          onClick={() => setIsOpen((value) => !value)}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-2 text-sm font-bold text-slate-300 transition-colors hover:border-blue-500 hover:text-white"
-          aria-expanded={isOpen}
-        >
-          <HardDrive className="h-4 w-4 text-emerald-400" />
-          Respaldo
-          <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </button>
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={working}
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+          >
+            <Upload className="h-4 w-4" /> Agregar respaldo
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsOpen((value) => !value)}
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm font-bold text-slate-300 transition-colors hover:border-blue-500 hover:text-white"
+            aria-label="Opciones de respaldo"
+            aria-expanded={isOpen}
+          >
+            <HardDrive className="h-4 w-4 text-emerald-400" />
+            <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
 
         {isOpen && (
           <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl border border-slate-800 bg-slate-950/80 p-2">
