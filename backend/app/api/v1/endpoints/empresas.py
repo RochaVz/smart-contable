@@ -66,12 +66,36 @@ def crear_empresa(
     - **codigo_postal**: Código postal
     """
     try:
-        rfc = datos.rfc.upper()
+        rfc = datos.rfc.strip().upper()
         
         # Check if RFC already exists
         existe = db.query(Empresa).filter(
             Empresa.rfc == rfc
         ).first()
+
+        if existe and existe.usuario_id == current_user.id and not existe.activo:
+            # La eliminación de empresas es lógica para conservar el historial
+            # contable. Si el propietario vuelve a registrarla, se restaura el
+            # mismo registro en vez de intentar insertar otro RFC (que es único).
+            existe.razon_social = datos.razon_social
+            existe.regimen_fiscal = datos.regimen_fiscal
+            existe.tipo_persona = datos.tipo_persona
+            existe.opcion_deduccion = datos.opcion_deduccion
+            existe.codigo_postal = datos.codigo_postal
+            existe.activo = True
+
+            db.commit()
+            db.refresh(existe)
+
+            logger.info(
+                "Empresa reactivada exitosamente",
+                extra={
+                    "empresa_id": existe.id,
+                    "rfc": rfc,
+                    "user_id": current_user.id,
+                },
+            )
+            return existe
 
         if existe:
             logger.warning(

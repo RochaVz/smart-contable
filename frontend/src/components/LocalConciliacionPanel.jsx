@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CheckCircle2, FileText, Landmark, Loader2, Search, UploadCloud } from 'lucide-react';
+import { CheckCircle2, Download, FileText, Landmark, Loader2, Search, UploadCloud } from 'lucide-react';
 import { getLocalBankMovements, saveLocalBankMovements } from '../services/localBackup';
+import { downloadCsv } from '../utils/csv';
 
 const fmt = (value) => `$${(Number(value) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
 
@@ -245,6 +246,22 @@ const LocalConciliacionPanel = ({ empresa, facturas, mes, anio }) => {
     }
   };
 
+  const handleDescargarResultados = () => {
+    const rows = filtered.map((movement) => ({
+      Fecha: movement.fecha,
+      Descripcion: movement.descripcion,
+      Referencia: movement.referencia || '',
+      Tipo: movement.tipo === 'abono' ? 'Abono' : 'Cargo',
+      Cargo: movement.tipo === 'cargo' ? movement.monto : '',
+      Abono: movement.tipo === 'abono' ? movement.monto : '',
+      Estado: movement.estado === 'conciliado' ? 'Relacionado' : 'Sin relación de póliza',
+      CFDI: movement.factura?.emisor || '',
+      UUID: movement.factura?.uuid || '',
+    }));
+    downloadCsv(`revision_bancaria_local_${anio}-${String(mes).padStart(2, '0')}.csv`, rows);
+    toast.success(`${rows.length} resultado(s) descargado(s) en CSV`);
+  };
+
   return (
     <section className="mb-10 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:rounded-3xl sm:p-6">
       <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row">
@@ -257,7 +274,7 @@ const LocalConciliacionPanel = ({ empresa, facturas, mes, anio }) => {
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-500">
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             PDF
@@ -268,6 +285,16 @@ const LocalConciliacionPanel = ({ empresa, facturas, mes, anio }) => {
             CSV
             <input type="file" accept=".csv,text/csv" onChange={handleUpload} className="hidden" />
           </label>
+          <button
+            type="button"
+            onClick={handleDescargarResultados}
+            disabled={filtered.length === 0}
+            title="Descargar los resultados visibles"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            Descargar CSV
+          </button>
         </div>
       </div>
 

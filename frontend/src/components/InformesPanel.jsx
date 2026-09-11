@@ -1,9 +1,11 @@
 import { memo, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import toast from 'react-hot-toast';
 import {
   Loader2, Calendar, FileBarChart, Users, ArrowDownCircle, ArrowUpCircle,
-  Receipt, Lightbulb, TrendingUp, TrendingDown,
+  Download, Receipt, Lightbulb, TrendingUp, TrendingDown,
 } from 'lucide-react';
+import { downloadCsv } from '../utils/csv';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -61,6 +63,11 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     fetchInformes();
   }, [fetchInformes, refreshToken]);
 
+  const descargarReporte = (nombre, rows) => {
+    downloadCsv(`${nombre}_${anio}-${String(mes).padStart(2, '0')}.csv`, rows);
+    toast.success('Reporte descargado en CSV');
+  };
+
   const TABS = [
     { id: 'resumen', label: 'Resumen', icon: FileBarChart },
     { id: 'estado', label: 'Estado de resultados', icon: TrendingUp },
@@ -75,6 +82,14 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     const r = data.resumen_ingresos_egresos;
     return (
       <div className="space-y-6">
+        <div className="flex justify-end">
+          <BotonDescargarCsv onClick={() => descargarReporte('resumen_fiscal', [
+            { Concepto: 'Ingresos', CFDI: r.ingresos.cantidad, Subtotal: r.ingresos.subtotal, IVA: r.ingresos.iva, Total: r.ingresos.total },
+            { Concepto: 'Egresos', CFDI: r.egresos.cantidad, Subtotal: r.egresos.subtotal, IVA: r.egresos.iva, Total: r.egresos.total },
+            { Concepto: 'Utilidad neta', CFDI: '', Subtotal: '', IVA: '', Total: r.utilidad_neta },
+            { Concepto: 'IVA neto del periodo', CFDI: '', Subtotal: '', IVA: '', Total: data.sugerencias?.iva_neto_periodo ?? 0 },
+          ])} />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-slate-950 border border-emerald-500/30 rounded-2xl p-6">
             <p className="text-emerald-400 text-[10px] font-black uppercase">Ingresos (ventas)</p>
@@ -108,17 +123,42 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     return (
       <div className="space-y-8">
         <div>
-          <h4 className="text-emerald-400 font-bold mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" /> Ingresos
-          </h4>
+          <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <h4 className="flex items-center gap-2 font-bold text-emerald-400">
+              <TrendingUp className="w-4 h-4" /> Ingresos desglosados
+            </h4>
+            <button
+              type="button"
+              onClick={() => descargarReporte('estado_resultados', [
+                ...e.ingresos.map((ingreso) => ({
+                  Categoria: 'Ingreso', Concepto: ingreso.concepto, Cliente: ingreso.cliente || '',
+                  CuentaContable: ingreso.nombre_cuenta
+                    ? `${ingreso.nombre_cuenta}${ingreso.cuenta ? ` (${ingreso.cuenta})` : ''}`
+                    : (ingreso.cuenta || ''),
+                  CFDI: ingreso.num_facturas ?? 1, Monto: ingreso.monto,
+                })),
+                ...e.gastos.map((gasto) => ({
+                  Categoria: 'Gasto o costo', Concepto: gasto.concepto, Cliente: '',
+                  CuentaContable: gasto.cuenta || '', CFDI: '', Monto: gasto.monto,
+                })),
+                { Categoria: 'Total ingresos', Concepto: '', Cliente: '', CuentaContable: '', CFDI: '', Monto: e.total_ingresos },
+                { Categoria: 'Total gastos', Concepto: '', Cliente: '', CuentaContable: '', CFDI: '', Monto: e.total_gastos },
+                { Categoria: 'Utilidad neta', Concepto: '', Cliente: '', CuentaContable: '', CFDI: '', Monto: e.utilidad_neta },
+              ])}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600"
+            >
+              <Download className="h-4 w-4" /> Descargar CSV
+            </button>
+          </div>
           <TablaSimple
-            cols={['Concepto de venta', 'Cliente', 'Cuenta contable', 'Monto']}
+            cols={['Concepto de venta', 'Cliente', 'Cuenta contable', 'CFDI', 'Monto']}
             rows={e.ingresos.length === 0
-              ? [['Sin ventas en el periodo', '—', '—', fmt(0)]]
+              ? [['Sin ventas en el periodo', '—', '—', '—', fmt(0)]]
               : e.ingresos.map((i) => [
                 i.concepto,
                 i.cliente || '—',
                 i.nombre_cuenta ? `${i.nombre_cuenta}${i.cuenta ? ` (${i.cuenta})` : ''}` : (i.cuenta || '—'),
+                i.num_facturas ?? 1,
                 fmt(i.monto),
               ])}
           />
@@ -148,6 +188,12 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     const p = data.padron_proveedores;
     return (
       <div className="space-y-4">
+        <div className="flex justify-end">
+          <BotonDescargarCsv onClick={() => descargarReporte('padron_proveedores', p.proveedores.map((x) => ({
+            RFC: x.rfc, Proveedor: x.nombre, Clasificacion: x.clasificacion, Facturas: x.num_facturas,
+            Subtotal: x.subtotal, IVA: x.iva, Total: x.total,
+          })))} />
+        </div>
         <p className="text-slate-400 text-sm">
           {p.total_proveedores} proveedor(es) · Total gastado: <span className="text-white font-bold">{fmt(p.total_gastado)}</span>
         </p>
@@ -174,6 +220,12 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     const t = data.impuestos_trasladados;
     return (
       <div className="space-y-4">
+        <div className="flex justify-end">
+          <BotonDescargarCsv onClick={() => descargarReporte('iva_trasladado', [
+            ...t.detalle.map((d) => ({ Receptor: d.receptor, Subtotal: d.subtotal, IVA: d.iva_trasladado, ISH: d.impuestos_locales, Total: d.total })),
+            { Receptor: 'TOTAL', Subtotal: t.total_subtotal_ventas, IVA: t.total_iva_trasladado, ISH: t.total_impuestos_locales, Total: '' },
+          ])} />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
             <p className="text-[10px] text-slate-500 uppercase font-black">IVA trasladado</p>
@@ -206,6 +258,12 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     const a = data.impuestos_acreditables;
     return (
       <div className="space-y-4">
+        <div className="flex justify-end">
+          <BotonDescargarCsv onClick={() => descargarReporte('iva_acreditable', [
+            ...a.detalle.map((d) => ({ Proveedor: d.proveedor, RFC: d.rfc, Subtotal: d.subtotal, IVA: d.iva_acreditable, Total: d.total, Deducible: d.deducible ? 'Sí' : 'No' })),
+            { Proveedor: 'TOTAL', RFC: '', Subtotal: a.total_subtotal_compras, IVA: a.total_iva_acreditable, Total: '', Deducible: '' },
+          ])} />
+        </div>
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
             <p className="text-[10px] text-slate-500 uppercase font-black">IVA acreditable</p>
@@ -235,6 +293,12 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     const r = data.impuestos_retenidos;
     return (
       <div className="space-y-4">
+        <div className="flex justify-end">
+          <BotonDescargarCsv onClick={() => descargarReporte('retenciones', [
+            ...r.detalle.map((d) => ({ Tipo: d.tipo, Contraparte: d.contraparte, RFC: d.rfc, IVARetenido: d.iva_retenido, ISRRetenido: d.isr_retenido })),
+            { Tipo: 'TOTAL', Contraparte: '', RFC: '', IVARetenido: r.total_iva_retenido, ISRRetenido: r.total_isr_retenido },
+          ])} />
+        </div>
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
             <p className="text-[10px] text-slate-500 uppercase font-black">IVA retenido</p>
@@ -263,6 +327,16 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     const s = data.sugerencias;
     return (
       <div className="space-y-6">
+        <div className="flex justify-end">
+          <BotonDescargarCsv onClick={() => descargarReporte('sugerencias_fiscales', [
+            ...(s.alertas || []).map((a) => ({ Seccion: 'Alerta', Concepto: a.nivel, Detalle: a.mensaje, Monto: '' })),
+            ...(s.top_clientes || []).map((c) => ({ Seccion: 'Top cliente', Concepto: c.nombre, Detalle: `${c.cfdi || 0} CFDI`, Monto: c.total })),
+            ...(s.top_gastos || []).map((g) => ({ Seccion: 'Top gasto', Concepto: g.nombre, Detalle: `${g.rfc} · ${g.cfdi || 0} CFDI`, Monto: g.total })),
+            ...(s.recomendaciones || []).map((recomendacion) => ({ Seccion: 'Recomendación', Concepto: '', Detalle: recomendacion, Monto: '' })),
+            { Seccion: 'Indicador', Concepto: 'Comisiones bancarias', Detalle: '', Monto: s.comisiones_bancarias },
+            { Seccion: 'Indicador', Concepto: 'CFDI sin póliza', Detalle: '', Monto: s.facturas_sin_poliza },
+          ])} />
+        </div>
         {s.alertas?.map((a, i) => (
           <div
             key={i}
@@ -287,10 +361,20 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
         </div>
         {s.top_clientes?.length > 0 && (
           <div>
-            <h4 className="text-white font-bold mb-3">Top clientes del mes</h4>
+            <h4 className="text-white font-bold mb-3">Top 10 clientes del mes</h4>
             <TablaSimple
-              cols={['Cliente', 'Total facturado']}
-              rows={s.top_clientes.map((c) => [c.nombre, fmt(c.total)])}
+              cols={['Cliente', 'CFDI', 'Total facturado']}
+              rows={s.top_clientes.map((c) => [c.nombre, c.cfdi || 0, fmt(c.total)])}
+            />
+          </div>
+        )}
+        {s.top_gastos?.length > 0 && (
+          <div>
+            <h4 className="text-white font-bold mb-1">Top 10 gastos y costos del mes</h4>
+            <p className="mb-3 text-xs text-slate-500">Proveedores con mayor gasto facturado en el período.</p>
+            <TablaSimple
+              cols={['Proveedor', 'RFC', 'CFDI', 'Total gastado']}
+              rows={s.top_gastos.map((g) => [g.nombre, g.rfc, g.cfdi || 0, fmt(g.total)])}
             />
           </div>
         )}
@@ -384,5 +468,15 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
     </section>
   );
 };
+
+const BotonDescargarCsv = ({ onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600"
+  >
+    <Download className="h-4 w-4" /> Descargar CSV
+  </button>
+);
 
 export default memo(InformesPanel);

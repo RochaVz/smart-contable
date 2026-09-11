@@ -88,9 +88,9 @@ input[type='submit'] {
 
 :root[data-theme='light'] body {
 	background:
-		radial-gradient(circle at 18% 0%, rgba(14, 165, 233, 0.12), transparent 28rem),
-		linear-gradient(180deg, #f8fafc 0%, #eef4f8 48%, #f6f8fb 100%);
-	color: #243044;
+		radial-gradient(circle at 18% 0%, rgba(14, 165, 233, 0.16), transparent 28rem),
+		linear-gradient(180deg, #f8fafc 0%, #e9f1f7 48%, #f4f7fa 100%);
+	color: #1e293b;
 }
 
 :root[data-theme='light'] .bg-slate-950,
@@ -149,12 +149,17 @@ input[type='submit'] {
 
 :root[data-theme='light'] .border-slate-800,
 :root[data-theme='light'] [class~='border-slate-800'] {
-	border-color: #d9e4ef !important;
+	border-color: #b8c8d8 !important;
 }
 
 :root[data-theme='light'] .border-slate-700,
 :root[data-theme='light'] [class~='border-slate-700'] {
-	border-color: #c8d6e5 !important;
+	border-color: #9fb3c8 !important;
+}
+
+/* Separa visualmente tarjetas y controles del fondo claro. */
+:root[data-theme='light'] :is(.rounded-xl, .rounded-2xl, .rounded-3xl).border {
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 5px 14px rgba(15, 23, 42, 0.04);
 }
 
 :root[data-theme='light'] .shadow-xl,
@@ -169,7 +174,7 @@ input[type='submit'] {
 
 :root[data-theme='light'] .text-white,
 :root[data-theme='light'] [class~='text-white'] {
-	color: #172033 !important;
+	color: #0f172a !important;
 }
 
 :root[data-theme='light'] [class~='bg-blue-600'][class~='text-white'],
@@ -194,27 +199,33 @@ input[type='submit'] {
 
 :root[data-theme='light'] .text-slate-200,
 :root[data-theme='light'] [class~='text-slate-200'] {
-	color: #243044 !important;
+	color: #1e293b !important;
 }
 
 :root[data-theme='light'] .text-slate-300,
 :root[data-theme='light'] [class~='text-slate-300'] {
-	color: #334155 !important;
+	color: #27364a !important;
 }
 
 :root[data-theme='light'] .text-slate-400,
 :root[data-theme='light'] [class~='text-slate-400'] {
-	color: #526278 !important;
+	color: #40526a !important;
 }
 
 :root[data-theme='light'] .text-slate-500,
 :root[data-theme='light'] [class~='text-slate-500'] {
-	color: #64748b !important;
+	color: #52657c !important;
 }
 
 :root[data-theme='light'] .text-slate-600,
 :root[data-theme='light'] [class~='text-slate-600'] {
-	color: #718198 !important;
+	color: #5d7087 !important;
+}
+
+/* Importes, folios y cifras conservan una jerarquía más legible. */
+:root[data-theme='light'] .font-mono {
+	color: #18263a;
+	font-weight: 600;
 }
 
 :root[data-theme='light'] .text-blue-300,
@@ -259,7 +270,7 @@ input[type='submit'] {
 :root[data-theme='light'] textarea {
 	background-color: #ffffff;
 	color: #172033;
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 :root[data-theme='light'] .placeholder-slate-600::placeholder {

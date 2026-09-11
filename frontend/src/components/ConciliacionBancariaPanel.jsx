@@ -1,11 +1,12 @@
 import { memo, useCallback, useMemo, useState, useTransition } from 'react';
 import toast from 'react-hot-toast';
 import {
-  AlertTriangle, CheckCircle2, FileUp, Landmark, Loader2,
-  RefreshCw, Search, UploadCloud, X,
+  CheckCircle2, Landmark, Loader2,
+  Download, RefreshCw, Search, UploadCloud, X,
 } from 'lucide-react';
 import api from '../services/api';
 import CrearPolizaMovimientoModal from './CrearPolizaMovimientoModal';
+import { downloadCsv } from '../utils/csv';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -165,6 +166,24 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
   const countComision  = useMemo(() => todasFilas.filter((f) => f.estado === 'comision').length, [todasFilas]);
   const countConciliado = useMemo(() => todasFilas.filter((f) => f.estado === 'conciliado').length, [todasFilas]);
 
+  const handleDescargarResultados = () => {
+    const rows = filasFiltradas.map((fila) => ({
+      Fecha: fila.fecha,
+      Descripcion: fila.descripcion,
+      Referencia: fila.referencia,
+      Tipo: fila.tipo === 'abono' ? 'Abono' : 'Cargo',
+      Cargo: fila.cargo ?? '',
+      Abono: fila.abono ?? '',
+      Estado: fila.estado === 'conciliado' ? 'Conciliado' : fila.estado === 'comision' ? 'Comisión en póliza' : 'Sin póliza',
+      TipoPoliza: fila.poliza_tipo || '',
+      NumeroPoliza: fila.poliza_numero || '',
+      ConceptoPoliza: fila.poliza_concepto || '',
+      DiferenciaDias: fila.diferencia_dias ?? '',
+    }));
+    downloadCsv(`revision_bancaria_${anio}-${String(mes).padStart(2, '0')}.csv`, rows);
+    toast.success(`${rows.length} resultado(s) descargado(s) en CSV`);
+  };
+
   return (
     <section className="mb-10 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:rounded-3xl sm:p-6">
 
@@ -205,6 +224,17 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
           >
             {estaCargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Actualizar
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDescargarResultados}
+            disabled={!filasFiltradas.length}
+            title="Descargar los resultados visibles con los filtros aplicados"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            Descargar CSV
           </button>
 
           {bancos.length > 0 && (

@@ -95,6 +95,94 @@ def test_estado_resultados_excluye_nomina_de_ingresos(monkeypatch):
     assert resultado["total_ingresos"] == 1000
 
 
+def test_desglose_ingresos_separa_clientes_y_conserva_cantidad_cfdi(monkeypatch):
+    ventas = [
+        SimpleNamespace(id=1, nombre_receptor="Cliente A", xml_contenido="xml-a"),
+        SimpleNamespace(id=2, nombre_receptor="Cliente B", xml_contenido="xml-b"),
+    ]
+    monkeypatch.setattr(informes_contables, "_rfc_empresa", lambda *_args: "AAA010101AAA")
+    monkeypatch.setattr(informes_contables, "_facturas_periodo", lambda *_args: ventas)
+    monkeypatch.setattr(informes_contables, "es_venta", lambda *_args: True)
+    monkeypatch.setattr(
+        informes_contables,
+        "_cuenta_ingreso_de_factura",
+        lambda *_args: ("401.01.01", "Ingresos por ventas"),
+    )
+    monkeypatch.setattr(
+        informes_contables,
+        "extraer_datos_xml",
+        lambda _xml: {"conceptos": [{"descripcion": "Servicio", "importe": 100}]},
+    )
+
+    resultado = informes_contables._ingresos_por_concepto_venta(
+        db=object(), empresa_id=1, mes=7, anio=2026
+    )
+
+    assert [(item["cliente"], item["monto"], item["num_facturas"]) for item in resultado] == [
+        ("Cliente A", 100.0, 1),
+        ("Cliente B", 100.0, 1),
+    ]
+
+
+def test_sugerencias_limita_top_clientes_y_gastos_a_diez(monkeypatch):
+    facturas = [
+        SimpleNamespace(
+            es_venta=True,
+            rfc_receptor=f"CLIENTE{i}",
+            nombre_receptor=f"Cliente {i}",
+            rfc_emisor="AAA010101AAA",
+            nombre_emisor="Empresa",
+            total=i * 100,
+            polizas=[object()],
+        )
+        for i in range(1, 13)
+    ] + [
+        SimpleNamespace(
+            es_venta=False,
+            rfc_receptor="AAA010101AAA",
+            nombre_receptor="Empresa",
+            rfc_emisor=f"PROVEEDOR{i}",
+            nombre_emisor=f"Proveedor {i}",
+            total=i * 200,
+            polizas=[object()],
+        )
+        for i in range(1, 13)
+    ]
+
+    class Query:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def first(self):
+            return object()
+
+        def join(self, *_args, **_kwargs):
+            return self
+
+        def scalar(self):
+            return 0
+
+    monkeypatch.setattr(informes_contables, "_rfc_empresa", lambda *_args: "AAA010101AAA")
+    monkeypatch.setattr(informes_contables, "_facturas_periodo", lambda *_args: facturas)
+    monkeypatch.setattr(informes_contables, "es_venta", lambda f, _rfc: f.es_venta)
+
+    resultado = informes_contables.generar_sugerencias(
+        db=SimpleNamespace(query=lambda *_args: Query()),
+        empresa_id=1,
+        mes=7,
+        anio=2026,
+        paquete={
+            "impuestos_trasladados": {"total_iva_trasladado": 0},
+            "impuestos_acreditables": {"total_iva_acreditable": 0},
+        },
+    )
+
+    assert len(resultado["top_clientes"]) == 10
+    assert resultado["top_clientes"][0]["nombre"] == "Cliente 12"
+    assert len(resultado["top_gastos"]) == 10
+    assert resultado["top_gastos"][0]["nombre"] == "Proveedor 12"
+
+
 def test_venta_por_transferencia_genera_poliza_de_ingreso(monkeypatch):
     factura_transferencia = SimpleNamespace(
         id=10,

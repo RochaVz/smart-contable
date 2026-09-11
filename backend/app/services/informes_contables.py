@@ -121,7 +121,9 @@ def _ingresos_por_concepto_venta(
 
     agrupado: dict[tuple, dict] = {}
     for lin in lineas_crudas:
-        key = (lin["concepto"], lin["cuenta"], lin["nombre_cuenta"])
+        # El cliente forma parte de la clave para que el estado de resultados
+        # conserve el desglose comercial y no mezcle ventas de clientes distintos.
+        key = (lin["concepto"], lin["cliente"], lin["cuenta"], lin["nombre_cuenta"])
         if key not in agrupado:
             agrupado[key] = {
                 "concepto": lin["concepto"],
@@ -134,13 +136,10 @@ def _ingresos_por_concepto_venta(
         bucket = agrupado[key]
         bucket["monto"] += lin["monto"]
         bucket["num_facturas"] += 1
-        if bucket["cliente"] != lin["cliente"] and bucket["num_facturas"] > 1:
-            bucket["cliente"] = "Varios clientes"
 
     ingresos = sorted(agrupado.values(), key=lambda x: x["monto"], reverse=True)
     for item in ingresos:
         item["monto"] = round(item["monto"], 2)
-        item.pop("num_facturas", None)
 
     return ingresos
 
@@ -404,10 +403,28 @@ def generar_sugerencias(
             continue
         key = f.rfc_receptor or "?"
         if key not in top_clientes:
-            top_clientes[key] = {"nombre": f.nombre_receptor, "total": 0.0}
+            top_clientes[key] = {"nombre": f.nombre_receptor, "total": 0.0, "cfdi": 0}
         top_clientes[key]["total"] += float(f.total or 0)
+        top_clientes[key]["cfdi"] += 1
 
-    clientes = sorted(top_clientes.values(), key=lambda x: x["total"], reverse=True)[:5]
+    clientes = sorted(top_clientes.values(), key=lambda x: x["total"], reverse=True)[:10]
+
+    top_gastos: dict[str, dict] = {}
+    for f in facturas:
+        if es_venta(f, rfc):
+            continue
+        key = f.rfc_emisor or "?"
+        if key not in top_gastos:
+            top_gastos[key] = {
+                "nombre": f.nombre_emisor or "Proveedor sin nombre",
+                "rfc": key,
+                "total": 0.0,
+                "cfdi": 0,
+            }
+        top_gastos[key]["total"] += float(f.total or 0)
+        top_gastos[key]["cfdi"] += 1
+
+    gastos = sorted(top_gastos.values(), key=lambda x: x["total"], reverse=True)[:10]
 
     comisiones = (
         db.query(func.sum(MovimientoPoliza.debe))
@@ -451,6 +468,9 @@ def generar_sugerencias(
         "comisiones_bancarias": round(float(comisiones), 2),
         "top_clientes": [
             {**c, "total": round(c["total"], 2)} for c in clientes
+        ],
+        "top_gastos": [
+            {**g, "total": round(g["total"], 2)} for g in gastos
         ],
         "alertas": alertas,
         "recomendaciones": [
