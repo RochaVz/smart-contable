@@ -17,6 +17,61 @@ def _es_persona_moral(tipo_persona: str) -> bool:
     return str(getattr(tipo_persona, "value", tipo_persona) or "").strip().upper() in {"MORAL", "PM"}
 
 
+def resumir_obligaciones_fiscales(
+    regimen: SatRegimenEnum | str,
+    tipo_persona: str,
+    *,
+    total_ventas: float | Decimal | None = None,
+    total_gastos: float | Decimal | None = None,
+) -> dict:
+    """Resume las obligaciones del régimen fiscal para apoyo contable y fiscal.
+
+    Devuelve, además de la configuración del régimen, alertas concretas para la
+    empresa y una guía de acciones sugeridas.
+    """
+    regimen_enum = _normalizar_regimen(regimen)
+    reglas = SAT_REGIMEN_RULES.get(regimen_enum, {}) if regimen_enum else {}
+
+    obligaciones = {
+        "regimen_fiscal": getattr(regimen_enum, "value", str(regimen) or ""),
+        "calculo_isr_tipo": getattr(reglas.get("calculo_isr_tipo"), "value", None),
+        "exige_diot": bool(reglas.get("exige_diot")),
+        "exige_contabilidad_electronica": bool(reglas.get("exige_contabilidad_electronica")),
+        "permite_deducciones_isr": bool(reglas.get("permite_deducciones_isr")),
+    }
+
+    alertas: list[str] = []
+    if obligaciones["exige_diot"]:
+        alertas.append("DIOT: revisar presentación mensual y conciliación del régimen activo.")
+    if obligaciones["exige_contabilidad_electronica"]:
+        alertas.append("Contabilidad electrónica: mantener registros y archivos sincronizados con el SAT.")
+    if obligaciones["permite_deducciones_isr"]:
+        alertas.append("ISR: validar deducciones y documentación soporte de gastos antes de cierre.")
+
+    if regimen_enum in {SatRegimenEnum.resico_pf, SatRegimenEnum.actividad_empresarial, SatRegimenEnum.arrendamiento} and not _es_persona_moral(tipo_persona):
+        alertas.append("Retenciones: revisar si debe retener ISR/IVA en facturas emitidas a personas morales.")
+
+    if total_ventas is not None:
+        ventas = Decimal(str(total_ventas))
+        if ventas > Decimal("0"):
+            alertas.append("Ventas: comparar el total de facturas con la base contable y la conciliación bancaria.")
+
+    if total_gastos is not None:
+        gastos = Decimal(str(total_gastos))
+        if gastos > Decimal("0"):
+            alertas.append("Gastos: revisar la clasificación y documentación de proveedores para deducibilidad.")
+
+    return {
+        "regimen_fiscal": obligaciones["regimen_fiscal"],
+        "obligaciones": obligaciones,
+        "alertas": alertas,
+        "recomendaciones": [
+            "Mantener concentrado el flujo de CFDI por empresa y período.",
+            "Validar partidas al cierre del mes antes de presentar obligaciones fiscales.",
+        ],
+    }
+
+
 def validar_retenciones_cfdi(
     emisor_regimen: SatRegimenEnum | str,
     emisor_tipo_persona: str,

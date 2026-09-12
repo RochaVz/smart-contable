@@ -1,6 +1,9 @@
 """Pruebas de reglas de retención del Motor de Régimen Fiscal."""
 
-from app.services.validaciones_fiscales import validar_retenciones_cfdi
+from app.services.validaciones_fiscales import (
+    resumir_obligaciones_fiscales,
+    validar_retenciones_cfdi,
+)
 
 
 def test_resico_pf_a_persona_moral_exige_retencion_isr():
@@ -36,3 +39,18 @@ def test_persona_moral_general_a_persona_moral_no_exige_retenciones():
     assert resultado["es_valido"] is True
     assert resultado["retenciones_sugeridas"] == []
     assert resultado["errores"] == []
+
+
+def test_resumen_fiscal_agrega_obligaciones_del_regimen():
+    resumen = resumir_obligaciones_fiscales(
+        "612",
+        "FISICA",
+        total_ventas=250000,
+        total_gastos=180000,
+    )
+
+    assert resumen["obligaciones"]["calculo_isr_tipo"] == "TARIFA_PROGRESIVA"
+    assert resumen["obligaciones"]["exige_diot"] is True
+    assert resumen["obligaciones"]["exige_contabilidad_electronica"] is True
+    assert resumen["alertas"]
+    assert any("DIOT" in alerta for alerta in resumen["alertas"])

@@ -1,5 +1,4 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
 
 class FacturaResponse(BaseModel):
     id: int
@@ -11,5 +10,4 @@ class FacturaResponse(BaseModel):
     tipo_operacion: str
     tipo_comprobante: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

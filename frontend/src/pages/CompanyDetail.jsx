@@ -1,5 +1,5 @@
 import { Fragment, useState, useCallback, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import {
   ArrowLeft, FileText, UploadCloud,
@@ -124,9 +124,10 @@ const FILTROS_MOVIMIENTO = [
 const CompanyDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const hoy = new Date();
 
-  const [seccion, setSeccion] = useState('historial');
+  const [seccion, setSeccion] = useState(() => searchParams.get('seccion') || 'historial');
   const [facturas, setFacturas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -148,6 +149,13 @@ const CompanyDetail = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  useEffect(() => {
+    const paramSec = searchParams.get('seccion');
+    if (paramSec && paramSec !== seccion) {
+      setSeccion(paramSec);
+    }
+  }, [searchParams, seccion]);
   const isLocalCompany = String(id).startsWith('local-');
 
   const abrirClasificacionProveedor = (proveedor) => {
@@ -1092,6 +1100,7 @@ const CompanyDetail = () => {
             empresaId={id}
             mes={mesFiltro}
             anio={anioFiltro}
+            initialTab={searchParams.get('tab') || 'resumen'}
             onPeriodoChange={handlePeriodoChange}
             refreshToken={classificationRefresh}
             onClassifyProveedor={abrirClasificacionProveedor}

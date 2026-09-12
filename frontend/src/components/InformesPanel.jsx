@@ -1,9 +1,9 @@
-import { memo, useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import {
   Loader2, Calendar, FileBarChart, Users, ArrowDownCircle, ArrowUpCircle,
-  Download, Receipt, Lightbulb, TrendingUp, TrendingDown,
+  Download, Receipt, Lightbulb, TrendingUp, TrendingDown, Search,
 } from 'lucide-react';
 import { downloadCsv } from '../utils/csv';
 
@@ -39,10 +39,25 @@ const TablaSimple = ({ cols, rows }) => (
   </div>
 );
 
-const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProveedor, refreshToken = 0 }) => {
-  const [tab, setTab] = useState('resumen');
+const InformesPanel = ({
+  empresaId,
+  mes,
+  anio,
+  onPeriodoChange,
+  onClassifyProveedor,
+  refreshToken = 0,
+  initialTab = 'resumen',
+}) => {
+  const [tab, setTab] = useState(initialTab || 'resumen');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (initialTab) {
+      setTab(initialTab);
+    }
+  }, [initialTab]);
 
   const fetchInformes = useCallback(async () => {
     setLoading(true);
@@ -69,14 +84,36 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
   };
 
   const TABS = [
-    { id: 'resumen', label: 'Resumen', icon: FileBarChart },
-    { id: 'estado', label: 'Estado de resultados', icon: TrendingUp },
-    { id: 'padron', label: 'Padrón proveedores', icon: Users },
-    { id: 'trasladados', label: 'IVA trasladado', icon: ArrowUpCircle },
-    { id: 'acreditables', label: 'IVA acreditable', icon: ArrowDownCircle },
-    { id: 'retenidos', label: 'Retenciones', icon: Receipt },
-    { id: 'sugerencias', label: 'Más informes', icon: Lightbulb },
+    { id: 'resumen', label: 'Resumen', icon: FileBarChart, keywords: ['resumen', 'ventas', 'ingresos', 'egresos', 'utilidad', 'kpi', 'dashboard'] },
+    { id: 'estado', label: 'Estado de resultados', icon: TrendingUp, keywords: ['estado', 'resultados', 'ganancias', 'perdidas', 'ingresos', 'gastos', 'utilidad', 'costos', 'ventas', 'balance'] },
+    { id: 'padron', label: 'Padrón proveedores', icon: Users, keywords: ['proveedores', 'padron', 'suppliers', 'gastos', 'compras', 'rfc', 'empresa', 'facturas de compra'] },
+    { id: 'trasladados', label: 'IVA trasladado', icon: ArrowUpCircle, keywords: ['iva trasladado', 'ventas', 'emisiones', 'clientes', 'receptor', 'impuesto trasladado', 'facturas emitidas'] },
+    { id: 'acreditables', label: 'IVA acreditable', icon: ArrowDownCircle, keywords: ['iva acreditable', 'compras', 'gastos deducibles', 'proveedores', 'impuesto acreditable', 'facturas recibidas'] },
+    { id: 'retenidos', label: 'Retenciones', icon: Receipt, keywords: ['retenciones', 'isr', 'iva retenido', 'impuestos retenidos', 'pagos', 'proveedores'] },
+    { id: 'sugerencias', label: 'Más informes', icon: Lightbulb, keywords: ['sugerencias', 'alertas', 'recomendaciones', 'analisis', 'resumen fiscal', 'top clientes', 'comisiones', 'reportes'] },
   ];
+
+  const tabMatches = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
+    if (!normalized) {
+      return TABS.map((tabItem) => tabItem.id);
+    }
+
+    return TABS
+      .filter((tabItem) => {
+        const hayCoincidencia = [tabItem.label, ...(tabItem.keywords || [])].some((value) =>
+          value.toLowerCase().includes(normalized)
+        );
+        return hayCoincidencia;
+      })
+      .map((tabItem) => tabItem.id);
+  }, [search]);
+
+  useEffect(() => {
+    if (search.trim() && tabMatches.length > 0 && !tabMatches.includes(tab)) {
+      setTab(tabMatches[0]);
+    }
+  }, [search, tab, tabMatches]);
 
   const renderResumen = () => {
     const r = data.resumen_ingresos_egresos;
@@ -440,22 +477,45 @@ const InformesPanel = ({ empresaId, mes, anio, onPeriodoChange, onClassifyProvee
         </div>
       </div>
 
+      <div className="mb-5 rounded-2xl border border-slate-800 bg-slate-950/80 p-3">
+        <label className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-300">
+          <Search className="h-4 w-4 text-violet-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar ingreso, egreso, iva, proveedores, retenciones..."
+            className="w-full bg-transparent text-sm text-white placeholder:text-slate-500 outline-none"
+          />
+        </label>
+        {search.trim() && tabMatches.length === 0 && (
+          <p className="mt-2 text-xs text-slate-400">
+            No hubo coincidencias. Intenta buscar algo como “iva”, “ventas”, “proveedores” o “retenciones”.
+          </p>
+        )}
+      </div>
+
       <div className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-800 pb-4 sm:flex sm:flex-wrap">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`flex min-h-10 items-center gap-1.5 rounded-lg px-3 py-2 text-left text-xs font-bold transition-all ${
-              tab === id
-                ? 'bg-violet-600 text-white'
-                : 'text-slate-500 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        ))}
+        {TABS.map(({ id, label, icon: Icon }) => {
+          const isVisible = !search.trim() || tabMatches.includes(id);
+          if (!isVisible) return null;
+
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`flex min-h-10 items-center gap-1.5 rounded-lg px-3 py-2 text-left text-xs font-bold transition-all ${
+                tab === id
+                  ? 'bg-violet-600 text-white'
+                  : 'text-slate-500 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
