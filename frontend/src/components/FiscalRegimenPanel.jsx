@@ -27,6 +27,7 @@ const FiscalRegimenPanel = ({ empresa, onUpdated }) => {
   const [saving, setSaving] = useState(false);
 
   const cargar = async () => {
+    if (!empresa?.id) return;
     setLoading(true);
     try {
       const response = await api.get(`/empresas/${empresa.id}/fiscal`);
@@ -43,10 +44,15 @@ const FiscalRegimenPanel = ({ empresa, onUpdated }) => {
     }
   };
 
-  useEffect(() => { cargar(); }, [empresa.id]);
+  useEffect(() => {
+    if (empresa?.id) {
+      cargar();
+    }
+  }, [empresa?.id]);
 
   const guardar = async (event) => {
     event.preventDefault();
+    if (!empresa?.id) return;
     setSaving(true);
     try {
       await api.put(`/empresas/${empresa.id}`, {

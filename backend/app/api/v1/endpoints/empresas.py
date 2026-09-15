@@ -68,15 +68,16 @@ def crear_empresa(
     try:
         rfc = datos.rfc.strip().upper()
         
-        # Check if RFC already exists
+        # Check if RFC already exists for current user
         existe = db.query(Empresa).filter(
+            Empresa.usuario_id == current_user.id,
             Empresa.rfc == rfc
         ).first()
 
-        if existe and existe.usuario_id == current_user.id and not existe.activo:
+        if existe and not existe.activo:
             # La eliminación de empresas es lógica para conservar el historial
             # contable. Si el propietario vuelve a registrarla, se restaura el
-            # mismo registro en vez de intentar insertar otro RFC (que es único).
+            # mismo registro en vez de intentar insertar otro registro.
             existe.razon_social = datos.razon_social
             existe.regimen_fiscal = datos.regimen_fiscal
             existe.tipo_persona = datos.tipo_persona
@@ -99,7 +100,7 @@ def crear_empresa(
 
         if existe:
             logger.warning(
-                "Intento de crear empresa con RFC duplicado",
+                "Intento de crear empresa con RFC duplicado para el usuario",
                 extra={"rfc": rfc, "user_id": current_user.id}
             )
             raise DuplicateResourceException("empresa", "RFC")

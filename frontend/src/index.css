@@ -129,13 +129,9 @@ input[type='submit'] {
 }
 
 :root[data-theme='light'] .smartcontable-mark {
-	background-image: linear-gradient(135deg, #2563eb 0%, #0891b2 52%, #10b981 100%) !important;
-	box-shadow: 0 16px 30px rgba(37, 99, 235, 0.18), 0 5px 14px rgba(15, 23, 42, 0.08) !important;
-	color: #ffffff !important;
-}
-
-:root[data-theme='light'] .smartcontable-mark svg {
-	color: #ffffff !important;
+	background-image: linear-gradient(135deg, #091224 0%, #0f172a 50%, #020617 100%) !important;
+	border-color: #3b82f6 !important;
+	box-shadow: 0 10px 24px rgba(37, 99, 235, 0.2), 0 3px 8px rgba(15, 23, 42, 0.08) !important;
 }
 
 :root[data-theme='light'] .bg-slate-800,
@@ -147,19 +143,88 @@ input[type='submit'] {
 	background-color: rgba(226, 232, 240, 0.78) !important;
 }
 
+/* Bordes y contornos de alta definición para tema claro */
+:root[data-theme='light'] [class*='border-slate-800'],
+:root[data-theme='light'] [class*='border-slate-700'],
+:root[data-theme='light'] [class*='border-slate-900'],
 :root[data-theme='light'] .border-slate-800,
-:root[data-theme='light'] [class~='border-slate-800'] {
-	border-color: #b8c8d8 !important;
-}
-
 :root[data-theme='light'] .border-slate-700,
-:root[data-theme='light'] [class~='border-slate-700'] {
-	border-color: #9fb3c8 !important;
+:root[data-theme='light'] .border-slate-900 {
+	border-color: #cbd5e1 !important;
 }
 
-/* Separa visualmente tarjetas y controles del fondo claro. */
-:root[data-theme='light'] :is(.rounded-xl, .rounded-2xl, .rounded-3xl).border {
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 5px 14px rgba(15, 23, 42, 0.04);
+/* Divisores de tablas y listas */
+:root[data-theme='light'] [class*='divide-slate-800'],
+:root[data-theme='light'] [class*='divide-slate-700'],
+:root[data-theme='light'] .divide-slate-800 {
+	border-color: #e2e8f0 !important;
+}
+
+/* Bordes acentuados temáticos en modo claro con suficiente contraste */
+:root[data-theme='light'] [class*='border-blue-500'] {
+	border-color: #60a5fa !important;
+}
+
+:root[data-theme='light'] [class*='border-emerald-500'],
+:root[data-theme='light'] [class*='border-emerald-800'] {
+	border-color: #34d399 !important;
+}
+
+:root[data-theme='light'] [class*='border-rose-500'],
+:root[data-theme='light'] [class*='border-red-500'] {
+	border-color: #f87171 !important;
+}
+
+:root[data-theme='light'] [class*='border-amber-500'],
+:root[data-theme='light'] [class*='border-amber-800'],
+:root[data-theme='light'] [class*='border-amber-400'] {
+	border-color: #fbbf24 !important;
+}
+
+:root[data-theme='light'] [class*='border-violet-500'] {
+	border-color: #a78bfa !important;
+}
+
+:root[data-theme='light'] [class*='border-cyan-500'],
+:root[data-theme='light'] [class*='border-cyan-800'] {
+	border-color: #22d3ee !important;
+}
+
+/* Bordes discontinuos (dashed) para áreas vacías o de carga */
+:root[data-theme='light'] .border-dashed,
+:root[data-theme='light'] [class*='border-dashed'] {
+	border-color: #94a3b8 !important;
+}
+
+/* Contorno nítido y elevación para tarjetas, paneles, controles y modales */
+:root[data-theme='light'] :is(.rounded-xl, .rounded-2xl, .rounded-3xl).border,
+:root[data-theme='light'] :is(section, article, div, form, nav).border {
+	box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme='light'] :is(.rounded-xl, .rounded-2xl, .rounded-3xl).border-slate-800,
+:root[data-theme='light'] [class*='bg-slate-900'][class*='border'],
+:root[data-theme='light'] [class*='bg-slate-950'][class*='border'] {
+	border-color: #cbd5e1 !important;
+}
+
+/* Encabezados y líneas de tabla en modo claro */
+:root[data-theme='light'] thead {
+	background-color: #f1f5f9 !important;
+	border-bottom: 2px solid #cbd5e1 !important;
+}
+
+:root[data-theme='light'] thead th {
+	color: #475569 !important;
+	font-weight: 800 !important;
+}
+
+:root[data-theme='light'] tbody tr {
+	border-bottom-color: #e2e8f0 !important;
+}
+
+:root[data-theme='light'] tbody tr:hover {
+	background-color: #f8fafc !important;
 }
 
 :root[data-theme='light'] .shadow-xl,
@@ -268,9 +333,17 @@ input[type='submit'] {
 :root[data-theme='light'] input,
 :root[data-theme='light'] select,
 :root[data-theme='light'] textarea {
-	background-color: #ffffff;
-	color: #172033;
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(15, 23, 42, 0.04);
+	background-color: #ffffff !important;
+	color: #172033 !important;
+	border-color: #94a3b8 !important;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+:root[data-theme='light'] input:focus,
+:root[data-theme='light'] select:focus,
+:root[data-theme='light'] textarea:focus {
+	border-color: #2563eb !important;
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
 }
 
 :root[data-theme='light'] .placeholder-slate-600::placeholder {
@@ -280,10 +353,4 @@ input[type='submit'] {
 :root[data-theme='light'] select option {
 	background-color: #ffffff;
 	color: #172033;
-}
-
-:root[data-theme='light'] .smartcontable-mark,
-:root[data-theme='light'] .smartcontable-mark.text-white,
-:root[data-theme='light'] .smartcontable-mark svg {
-	color: #ffffff !important;
 }

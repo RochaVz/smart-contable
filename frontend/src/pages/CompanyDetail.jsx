@@ -1,11 +1,12 @@
-import { Fragment, useState, useCallback, useEffect, useMemo } from 'react';
+import { Fragment, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import {
   ArrowLeft, FileText, UploadCloud,
   Loader2, BrainCircuit, ChevronUp, ChevronDown, Download, Calendar,
   BookOpen, FileBarChart, Landmark, Settings2, Trash2,
-  Calculator,
+  Calculator, Search, Sparkles, TrendingUp, TrendingDown,
+  DollarSign, Receipt, Users, Scale, X, Zap,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
@@ -61,6 +62,120 @@ const SECCIONES = [
     label: 'Fiscal',
     icon: Calculator,
     descripcion: 'Régimen, obligaciones y retenciones',
+  },
+];
+
+const CATEGORIAS_RAPIDAS_EMPRESA = [
+  { id: 'documentos', label: 'Documentos', desc: 'Facturas de ingresos y gastos del periodo', seccion: 'historial', tab: null, icon: FileText },
+  { id: 'ingresos', label: 'Ingresos & Ventas', desc: 'Estado de resultados y detalle de ventas', seccion: 'informes', tab: 'estado', icon: TrendingUp },
+  { id: 'egresos', label: 'Gastos & Egresos', desc: 'Gastos clasificados por proveedor y cuenta', seccion: 'informes', tab: 'estado', icon: TrendingDown },
+  { id: 'utilidades', label: 'Utilidades', desc: 'Resumen financiero, margen y balance', seccion: 'informes', tab: 'resumen', icon: DollarSign },
+  { id: 'impuestos', label: 'Pago de Impuestos', desc: 'IVA trasladado y desglose impositivo', seccion: 'informes', tab: 'trasladados', icon: Receipt },
+  { id: 'proveedores', label: 'Padrón Proveedores', desc: 'Directorio y acumulados por RFC', seccion: 'informes', tab: 'padron', icon: Users },
+  { id: 'polizas', label: 'Registro Contable', desc: 'Pólizas de diario, ingresos y egresos', seccion: 'polizas', tab: null, icon: BookOpen },
+  { id: 'conciliacion', label: 'Conciliación Bancaria', desc: 'Cruce bancario con pólizas y comisiones', seccion: 'conciliacion', tab: null, icon: Landmark },
+  { id: 'fiscal', label: 'Motor Fiscal SAT', desc: 'Validaciones de régimen y obligaciones', seccion: 'fiscal', tab: null, icon: Scale },
+];
+
+const TOPICOS_BUSQUEDA = [
+  {
+    id: 'documentos',
+    label: 'Documentos y Facturas (CFDI)',
+    desc: 'Facturas de ingresos y gastos del periodo',
+    seccion: 'historial',
+    tab: null,
+    icon: FileText,
+    keywords: ['documentos', 'facturas', 'cfdi', 'xml', 'historial', 'ingreso', 'gasto', 'egreso'],
+  },
+  {
+    id: 'ingresos',
+    label: 'Ingresos & Ventas',
+    desc: 'Estado de resultados y detalle de ventas',
+    seccion: 'informes',
+    tab: 'estado',
+    icon: TrendingUp,
+    keywords: ['ingresos', 'ventas', 'clientes', 'facturas emitidas', 'ingreso', 'venta'],
+  },
+  {
+    id: 'egresos',
+    label: 'Gastos & Egresos',
+    desc: 'Gastos clasificados por proveedor y cuenta contable',
+    seccion: 'informes',
+    tab: 'estado',
+    icon: TrendingDown,
+    keywords: ['gastos', 'egresos', 'compras', 'costos', 'gasto', 'egreso', 'compra', 'deducciones'],
+  },
+  {
+    id: 'utilidades',
+    label: 'Utilidades & Rentabilidad',
+    desc: 'Resumen financiero, margen y utilidad neta',
+    seccion: 'informes',
+    tab: 'resumen',
+    icon: DollarSign,
+    keywords: ['utilidad', 'utilidades', 'rentabilidad', 'ganancia', 'margen', 'kpi', 'resumen'],
+  },
+  {
+    id: 'trasladados',
+    label: 'IVA Trasladado & Impuestos Emitidos',
+    desc: 'Impuesto trasladado en facturas emitidas',
+    seccion: 'informes',
+    tab: 'trasladados',
+    icon: Receipt,
+    keywords: ['iva trasladado', 'impuestos', 'iva cobrado', 'impuesto', 'trasladado', 'pago de impuestos'],
+  },
+  {
+    id: 'acreditables',
+    label: 'IVA Acreditable & Compras',
+    desc: 'IVA acreditable en gastos y proveedores',
+    seccion: 'informes',
+    tab: 'acreditables',
+    icon: Receipt,
+    keywords: ['iva acreditable', 'iva deducible', 'iva compras', 'acreditable', 'deducible'],
+  },
+  {
+    id: 'retenidos',
+    label: 'Retenciones de Impuestos (ISR / IVA)',
+    desc: 'Retenciones del periodo por proveedores y clientes',
+    seccion: 'informes',
+    tab: 'retenidos',
+    icon: Receipt,
+    keywords: ['retenciones', 'isr retenido', 'iva retenido', 'retencion', 'impuestos retenidos'],
+  },
+  {
+    id: 'padron',
+    label: 'Padrón de Proveedores',
+    desc: 'Directorio de proveedores, RFCs y montos acumulados',
+    seccion: 'informes',
+    tab: 'padron',
+    icon: Users,
+    keywords: ['padron', 'proveedores', 'proveedor', 'suppliers', 'rfc proveedores', 'directorio'],
+  },
+  {
+    id: 'polizas',
+    label: 'Registro Contable & Pólizas',
+    desc: 'Pólizas automáticas de diario, ingresos y egresos',
+    seccion: 'polizas',
+    tab: null,
+    icon: BookOpen,
+    keywords: ['polizas', 'registro contable', 'asientos', 'cuentas contables', 'libro diario', 'contabilidad'],
+  },
+  {
+    id: 'conciliacion',
+    label: 'Conciliación Bancaria',
+    desc: 'Cruce de estado de cuenta bancario con registros y comisiones',
+    seccion: 'conciliacion',
+    tab: null,
+    icon: Landmark,
+    keywords: ['conciliacion', 'banco', 'estado de cuenta', 'movimientos bancarios', 'saldo', 'comisiones'],
+  },
+  {
+    id: 'fiscal',
+    label: 'Motor Fiscal & SAT',
+    desc: 'Validaciones de régimen fiscal, obligaciones y alertas SAT',
+    seccion: 'fiscal',
+    tab: null,
+    icon: Scale,
+    keywords: ['fiscal', 'sat', 'regimen', 'obligaciones', 'motor fiscal', 'cumplimiento', 'auditoria'],
   },
 ];
 
@@ -127,7 +242,12 @@ const CompanyDetail = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const hoy = new Date();
 
-  const [seccion, setSeccion] = useState(() => searchParams.get('seccion') || 'historial');
+  const seccion = searchParams.get('seccion') || 'historial';
+  const tabActual = searchParams.get('tab') || (seccion === 'informes' ? 'resumen' : null);
+
+  const [busquedaGlobal, setBusquedaGlobal] = useState('');
+  const [menuAccesosAbierto, setMenuAccesosAbierto] = useState(false);
+  const accesosMenuRef = useRef(null);
   const [facturas, setFacturas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -151,11 +271,68 @@ const CompanyDetail = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
-    const paramSec = searchParams.get('seccion');
-    if (paramSec && paramSec !== seccion) {
-      setSeccion(paramSec);
+    const handleClickOutside = (event) => {
+      if (accesosMenuRef.current && !accesosMenuRef.current.contains(event.target)) {
+        setMenuAccesosAbierto(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setMenuAccesosAbierto(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const handleSelectSeccion = useCallback((nuevaSeccion, nuevoTab = null) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (!nuevaSeccion || nuevaSeccion === 'historial') {
+        next.delete('seccion');
+      } else {
+        next.set('seccion', nuevaSeccion);
+      }
+      if (nuevoTab) {
+        next.set('tab', nuevoTab);
+      } else if (nuevaSeccion !== 'informes') {
+        next.delete('tab');
+      }
+      return next;
+    });
+  }, [setSearchParams]);
+
+  const isCatActiva = useCallback((cat) => {
+    if (cat.seccion !== seccion) return false;
+    if (cat.tab) {
+      return tabActual === cat.tab;
     }
-  }, [searchParams, seccion]);
+    return !tabActual || seccion !== 'informes';
+  }, [seccion, tabActual]);
+
+  const categoriaActivaInfo = useMemo(() => {
+    return CATEGORIAS_RAPIDAS_EMPRESA.find((cat) => isCatActiva(cat));
+  }, [isCatActiva]);
+
+  const seccionActiva = SECCIONES.find((s) => s.id === seccion) || SECCIONES[0];
+  const seccionLabelActual = categoriaActivaInfo?.label || seccionActiva.label;
+  const seccionDescActual = categoriaActivaInfo?.desc || seccionActiva.descripcion;
+  const SeccionIconActual = categoriaActivaInfo?.icon || seccionActiva.icon;
+
+  const topicosFiltrados = useMemo(() => {
+    const term = busquedaGlobal.trim().toLowerCase();
+    if (!term) return [];
+    return TOPICOS_BUSQUEDA.filter((t) =>
+      t.label.toLowerCase().includes(term) ||
+      t.desc.toLowerCase().includes(term) ||
+      t.keywords.some((kw) => kw.toLowerCase().includes(term))
+    );
+  }, [busquedaGlobal]);
+
   const isLocalCompany = String(id).startsWith('local-');
 
   const abrirClasificacionProveedor = (proveedor) => {
@@ -442,45 +619,6 @@ const CompanyDetail = () => {
   const chartDataVisible = useMemo(
     () => chartData.filter((item) => item.ingresos > 0 || item.egresos > 0 || item.mes === mesFiltro),
     [chartData, mesFiltro],
-  );
-
-  const seccionActiva = SECCIONES.find((s) => s.id === seccion) || SECCIONES[0];
-
-  const selectorPeriodo = (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 shadow-lg shadow-black/10">
-      <Calendar className="h-5 w-5 shrink-0 text-blue-400" />
-      <div className="min-w-0">
-        <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">Periodo a revisar</span>
-        <div className="mt-1 flex items-center gap-1.5">
-          <div className="relative">
-            <select
-              aria-label="Mes a revisar"
-              value={mesFiltro}
-              onChange={(e) => setMesFiltro(Number(e.target.value))}
-              className="appearance-none rounded-lg border border-slate-700 bg-slate-950 py-1.5 pl-2.5 pr-7 text-sm font-bold text-white outline-none transition-colors hover:border-blue-500 focus:border-blue-500"
-            >
-              {MESES.map((nombre, i) => (
-                <option key={nombre} value={i + 1}>{nombre}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-          </div>
-          <div className="relative">
-            <select
-              aria-label="Año a revisar"
-              value={anioFiltro}
-              onChange={(e) => setAnioFiltro(Number(e.target.value))}
-              className="appearance-none rounded-lg border border-slate-700 bg-slate-950 py-1.5 pl-2.5 pr-7 text-sm font-bold text-white outline-none transition-colors hover:border-blue-500 focus:border-blue-500"
-            >
-              {aniosDisponibles.map((anio) => (
-                <option key={anio} value={anio}>{anio}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-          </div>
-        </div>
-      </div>
-    </div>
   );
 
   const renderFilaFactura = (f) => (
@@ -1146,116 +1284,292 @@ const CompanyDetail = () => {
           <ArrowLeft className="w-4 h-4" /> Mis empresas
         </button>
 
-        {/* Cabecera */}
-        <header className="mb-6">
-          <div className="flex min-w-0 flex-col justify-between gap-4 mb-6 lg:flex-row lg:items-center">
+        {/* Cabecera Principal */}
+        <header className="mb-6 space-y-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <h1 className="break-words text-2xl font-black text-white sm:text-3xl">{empresa?.razon_social || `Negocio #${id}`}</h1>
-              <p className="text-slate-500 text-sm mt-1">
+              <h1 className="break-words text-2xl font-black text-white sm:text-3xl">
+                {empresa?.razon_social || `Negocio #${id}`}
+              </h1>
+              <p className="mt-1 text-sm text-slate-400">
                 Revisa la información de tu negocio y detecta diferencias a tiempo.
                 {empresa?.rfc && (
-                  <span className="mt-1 block font-mono text-slate-600 sm:ml-2 sm:inline">{empresa.rfc}</span>
+                  <span className="mt-1 block font-mono text-xs text-slate-500 sm:ml-2 sm:inline">
+                    {empresa.rfc}
+                  </span>
                 )}
               </p>
             </div>
-            <div className="flex w-full min-w-0 flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:justify-end">
-              <div className="w-full lg:w-auto">{selectorPeriodo}</div>
-              <div className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 shadow-lg shadow-black/10 lg:w-auto">
-                <Download className="h-5 w-5 shrink-0 text-emerald-400" />
-                <div className="min-w-0">
-                  <label htmlFor="export-type" className="block text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">Exportar datos</label>
-                  <div className="relative mt-1">
-                    <select
-                      id="export-type"
-                      aria-label="Tipo de datos a exportar"
-                      value={tipoExportacion}
-                      onChange={(e) => setTipoExportacion(e.target.value)}
-                      className="w-full min-w-[128px] appearance-none rounded-lg border border-slate-700 bg-slate-950 py-1.5 pl-2.5 pr-8 text-sm font-bold text-white outline-none transition-colors hover:border-emerald-500 focus:border-emerald-500"
-                    >
-                      <option value="todo">Todo el negocio</option>
-                      <option value="resumen">Resumen</option>
-                      <option value="empresa">Datos del negocio</option>
-                      <option value="facturas">Facturas</option>
-                      <option value="ingresos">Ingresos</option>
-                      <option value="egresos">Gastos</option>
-                      <option value="polizas">Registro contable</option>
-                      <option value="movimientos">Movimientos</option>
-                      <option value="mapeos">Clasificaciones</option>
-                      <option value="comisiones">Comisiones</option>
-                      <option value="contable">Formato contable</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-                  </div>
+
+            {/* Barra de Acciones y Controles Superiores */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Selector de periodo minimalista */}
+              <div className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs">
+                <Calendar className="h-4 w-4 text-blue-400 shrink-0" />
+                <div className="relative">
+                  <select
+                    aria-label="Mes a revisar"
+                    value={mesFiltro}
+                    onChange={(e) => setMesFiltro(Number(e.target.value))}
+                    className="appearance-none bg-transparent pr-4 font-bold text-white outline-none cursor-pointer hover:text-blue-400 transition-colors"
+                  >
+                    {MESES.map((nombre, i) => (
+                      <option key={nombre} value={i + 1} className="bg-slate-900 text-white">
+                        {nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
+                </div>
+                <span className="text-slate-700">/</span>
+                <div className="relative">
+                  <select
+                    aria-label="Año a revisar"
+                    value={anioFiltro}
+                    onChange={(e) => setAnioFiltro(Number(e.target.value))}
+                    className="appearance-none bg-transparent pr-4 font-bold text-white outline-none cursor-pointer hover:text-blue-400 transition-colors"
+                  >
+                    {aniosDisponibles.map((anio) => (
+                      <option key={anio} value={anio} className="bg-slate-900 text-white">
+                        {anio}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handlePreviewExport}
-                disabled={exportandoEmpresa || loading}
-                className="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm text-white disabled:opacity-50"
-              >
-                <FileText className="w-5 h-5" />
-                Ver en pantalla
-              </button>
-              <button
-                type="button"
-                onClick={downloadExport}
-                disabled={exportandoEmpresa || loading}
-                className="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm text-white disabled:opacity-50"
-                title="CSV consolidado: empresa, facturas, pólizas, movimientos - Abre en Google Sheets"
-              >
-                {exportandoEmpresa ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Download className="w-5 h-5" />
-                )}
-                CSV
-              </button>
+
+              {/* Grupo de Exportación Integrado */}
+              <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/90 p-1">
+                <div className="relative flex items-center pl-2 pr-1">
+                  <Download className="h-3.5 w-3.5 text-emerald-400 shrink-0 mr-1.5" />
+                  <select
+                    id="export-type"
+                    aria-label="Tipo de datos a exportar"
+                    value={tipoExportacion}
+                    onChange={(e) => setTipoExportacion(e.target.value)}
+                    className="appearance-none bg-transparent pr-4 text-xs font-bold text-white outline-none cursor-pointer hover:text-emerald-400 transition-colors"
+                  >
+                    <option value="todo" className="bg-slate-900 text-white">Todo el negocio</option>
+                    <option value="resumen" className="bg-slate-900 text-white">Resumen</option>
+                    <option value="empresa" className="bg-slate-900 text-white">Datos del negocio</option>
+                    <option value="facturas" className="bg-slate-900 text-white">Facturas</option>
+                    <option value="ingresos" className="bg-slate-900 text-white">Ingresos</option>
+                    <option value="egresos" className="bg-slate-900 text-white">Gastos</option>
+                    <option value="polizas" className="bg-slate-900 text-white">Registro contable</option>
+                    <option value="movimientos" className="bg-slate-900 text-white">Movimientos</option>
+                    <option value="mapeos" className="bg-slate-900 text-white">Clasificaciones</option>
+                    <option value="comisiones" className="bg-slate-900 text-white">Comisiones</option>
+                    <option value="contable" className="bg-slate-900 text-white">Formato contable</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
+                </div>
+
+                <div className="h-4 w-px bg-slate-800" />
+
+                <button
+                  type="button"
+                  onClick={handlePreviewExport}
+                  disabled={exportandoEmpresa || loading}
+                  title="Ver vista previa en pantalla"
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>Ver</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={downloadExport}
+                  disabled={exportandoEmpresa || loading}
+                  title="Descargar archivo CSV"
+                  className="flex items-center gap-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600 hover:text-white px-2.5 py-1.5 text-xs font-bold disabled:opacity-50 transition-colors"
+                >
+                  {exportandoEmpresa ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  <span>CSV</span>
+                </button>
+              </div>
+
+              {/* Botón Cargar CFDI */}
               <button
                 type="button"
                 onClick={() => setIsModalOpen(true)}
-                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-500"
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-900/20 hover:bg-blue-500 active:scale-[0.99] transition-all"
               >
-                <UploadCloud className="w-5 h-5" /> Cargar CFDI
+                <UploadCloud className="h-4 w-4" />
+                <span>Cargar CFDI</span>
               </button>
             </div>
           </div>
 
-          {/* Navegación principal */}
-          <nav
-            className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-900/80 p-1.5 sm:grid-cols-5"
-            aria-label="Secciones del dashboard"
-          >
-            {SECCIONES.map(({ id, label, icon: Icon, descripcion }) => {
-              const activo = seccion === id;
-              return (
+          {/* Barra de Búsqueda y Accesos Rápidos en Cascada */}
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            {/* Buscador global dentro de la empresa */}
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
+              <input
+                type="text"
+                value={busquedaGlobal}
+                onChange={(e) => setBusquedaGlobal(e.target.value)}
+                placeholder="Buscar en este negocio (ingresos, gastos, utilidades, IVA, retenciones, proveedores, conciliación, SAT, pólizas)..."
+                className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 py-3 pl-10 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:bg-slate-900 focus:ring-1 focus:ring-blue-500"
+              />
+              {busquedaGlobal && (
                 <button
-                  key={id}
                   type="button"
-                  onClick={() => setSeccion(id)}
-                  className={`flex min-h-[74px] min-w-0 flex-col items-start gap-1 rounded-xl px-3 py-3 text-left transition-all sm:px-4 ${
-                    activo
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  }`}
+                  onClick={() => setBusquedaGlobal('')}
+                  className="absolute right-3.5 top-3 text-slate-400 hover:text-white"
+                  title="Limpiar búsqueda"
                 >
-                  <span className="flex min-w-0 items-center gap-2 text-sm font-bold">
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{label}</span>
-                  </span>
-                  <span className={`line-clamp-2 text-[10px] leading-tight ${activo ? 'text-blue-100' : 'text-slate-600'}`}>
-                    {descripcion}
-                  </span>
+                  <X className="h-5 w-5" />
                 </button>
-              );
-            })}
-          </nav>
-        </header>
+              )}
+            </div>
 
-        {/* Subtítulo de sección activa (móvil) */}
-        <p className="text-slate-500 text-xs mb-4 lg:hidden">
-          {seccionActiva.descripcion}
-        </p>
+            {/* Botón único en cascada de Accesos Rápidos */}
+            <div className="relative shrink-0" ref={accesosMenuRef}>
+              <button
+                type="button"
+                onClick={() => setMenuAccesosAbierto((prev) => !prev)}
+                className={`flex min-h-11 w-full items-center justify-between gap-2.5 rounded-2xl border px-4 py-2.5 text-sm font-bold transition-all sm:w-auto ${
+                  menuAccesosAbierto
+                    ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+                    : 'border-slate-800 bg-slate-900/90 text-slate-200 hover:border-slate-700 hover:bg-slate-800 hover:text-white'
+                }`}
+                aria-expanded={menuAccesosAbierto}
+                aria-haspopup="true"
+              >
+                <div className="flex items-center gap-2">
+                  <SeccionIconActual className={`h-4 w-4 shrink-0 ${menuAccesosAbierto ? 'text-white' : 'text-blue-400'}`} />
+                  <span>{seccionLabelActual}</span>
+                </div>
+                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${menuAccesosAbierto ? 'rotate-180 text-white' : 'text-slate-400'}`} />
+              </button>
+
+              {/* Menú desplegable en cascada */}
+              {menuAccesosAbierto && (
+                <div className="absolute right-0 top-full z-30 mt-2 w-full min-w-[290px] rounded-2xl border border-slate-800 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-xl sm:w-84">
+                  <div className="mb-1 flex items-center justify-between border-b border-slate-800/80 px-3 py-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Módulos y Reportes del Negocio
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {CATEGORIAS_RAPIDAS_EMPRESA.length} opciones
+                    </span>
+                  </div>
+                  <div className="max-h-96 space-y-1 overflow-y-auto">
+                    {CATEGORIAS_RAPIDAS_EMPRESA.map((cat) => {
+                      const Icon = cat.icon;
+                      const activa = isCatActiva(cat);
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            handleSelectSeccion(cat.seccion, cat.tab);
+                            setMenuAccesosAbierto(false);
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-xl p-2.5 text-left text-xs transition-all ${
+                            activa
+                              ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-900/20'
+                              : 'text-slate-300 hover:bg-slate-800/90 hover:text-white'
+                          }`}
+                        >
+                          <div className={`rounded-lg p-2 shrink-0 ${activa ? 'bg-white/20 text-white' : 'bg-slate-800/90 text-blue-400'}`}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-bold">{cat.label}</p>
+                            {cat.desc && (
+                              <p className={`truncate text-[11px] ${activa ? 'text-blue-100' : 'text-slate-500'}`}>
+                                {cat.desc}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Coincidencias del buscador dentro de la empresa */}
+          {busquedaGlobal.trim() && (
+            topicosFiltrados.length > 0 ? (
+              <div className="rounded-2xl border border-blue-500/30 bg-blue-950/20 p-4 shadow-lg">
+                <div className="mb-3 flex items-center justify-between text-xs font-black uppercase tracking-wider text-blue-300">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-blue-400" /> Secciones y reportes encontrados
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setBusquedaGlobal('')}
+                    className="text-[11px] font-bold text-slate-400 hover:text-white"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {topicosFiltrados.map((topico) => {
+                    const Icon = topico.icon;
+                    return (
+                      <button
+                        key={topico.id}
+                        type="button"
+                        onClick={() => {
+                          handleSelectSeccion(topico.seccion, topico.tab);
+                          setBusquedaGlobal('');
+                        }}
+                        className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/95 p-3 text-left transition-all hover:border-blue-500 hover:bg-slate-800"
+                      >
+                        <div className="rounded-lg bg-blue-500/10 p-2 text-blue-400 shrink-0">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold text-white">{topico.label}</p>
+                          <p className="truncate text-[11px] text-slate-400">{topico.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center text-xs text-slate-400">
+                No se encontraron secciones para “{busquedaGlobal}”. Prueba con “ingresos”, “gastos”, “iva”, “proveedores”, “polizas”, “banco” o “sat”.
+              </div>
+            )
+          )}
+
+          {/* Indicador de sección activa */}
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-400">
+                <SeccionIconActual className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Vista actual:</span>
+                  <span className="truncate text-sm font-black text-white">{seccionLabelActual}</span>
+                </div>
+                <p className="truncate text-xs text-slate-400">{seccionDescActual}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMenuAccesosAbierto((prev) => !prev)}
+              className="shrink-0 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-blue-400 transition-colors hover:bg-slate-700 hover:text-white"
+            >
+              Cambiar vista
+            </button>
+          </div>
+        </header>
 
         {/* Contenido de la sección */}
         <main className="min-w-0">{renderSeccion()}</main>
@@ -1299,3 +1613,4 @@ const CompanyDetail = () => {
 };
 
 export default CompanyDetail;
+

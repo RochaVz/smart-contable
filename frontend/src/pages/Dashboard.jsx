@@ -3,117 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
   Building2, PlusCircle, LogOut, Search, ArrowRight, ShieldCheck,
-  Trash2, Loader2, FileBarChart, TrendingUp, DollarSign, Users,
-  Receipt, Landmark, Scale, ChevronRight, Sparkles,
+  Trash2, Loader2, ChevronRight, Upload,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import NewCompanyModal from '../components/NewCompanyModal';
 import SmartContableMark from '../components/SmartContableMark';
 import DeviceBackupPanel from '../components/DeviceBackupPanel';
-import { deleteLocalCompany, getLocalCompanies } from '../services/localBackup';
-
-const REPORT_TOPICS = [
-  {
-    id: 'resumen',
-    label: 'Resumen & KPIs',
-    description: 'Ventas, compras y margen neto mensual',
-    icon: FileBarChart,
-    seccion: 'informes',
-    tab: 'resumen',
-    keywords: ['resumen', 'kpi', 'dashboard', 'ventas', 'margen', 'general'],
-  },
-  {
-    id: 'estado',
-    label: 'Ingresos & Gastos',
-    description: 'Desglose de estado de resultados',
-    icon: TrendingUp,
-    seccion: 'informes',
-    tab: 'estado',
-    keywords: ['ingresos', 'egresos', 'gastos', 'ventas', 'costos', 'estado de resultados', 'perdidas', 'ganancias'],
-  },
-  {
-    id: 'utilidad',
-    label: 'Utilidades & Rentabilidad',
-    description: 'Cálculo de utilidad neta y balance',
-    icon: DollarSign,
-    seccion: 'informes',
-    tab: 'resumen',
-    keywords: ['utilidad', 'utilidades', 'rentabilidad', 'ganancia', 'margen'],
-  },
-  {
-    id: 'trasladados',
-    label: 'Pago de Impuestos & IVA Trasladado',
-    description: 'IVA cobrado en facturas emitidas',
-    icon: Receipt,
-    seccion: 'informes',
-    tab: 'trasladados',
-    keywords: ['impuestos', 'iva trasladado', 'pago de impuestos', 'iva ventas', 'ish', 'impuesto'],
-  },
-  {
-    id: 'acreditables',
-    label: 'IVA Acreditable & Compras',
-    description: 'IVA pagado en compras a proveedores',
-    icon: Receipt,
-    seccion: 'informes',
-    tab: 'acreditables',
-    keywords: ['iva acreditable', 'deducible', 'compras', 'facturas recibidas'],
-  },
-  {
-    id: 'retenidos',
-    label: 'Retenciones (ISR / IVA)',
-    description: 'Retenciones del periodo',
-    icon: Receipt,
-    seccion: 'informes',
-    tab: 'retenidos',
-    keywords: ['retenciones', 'isr retenido', 'iva retenido', 'impuestos retenidos', 'retencion'],
-  },
-  {
-    id: 'padron',
-    label: 'Padrón de Proveedores',
-    description: 'Directorio de proveedores y montos',
-    icon: Users,
-    seccion: 'informes',
-    tab: 'padron',
-    keywords: ['padron de proveedores', 'proveedores', 'proveedor', 'compras', 'clasificacion'],
-  },
-  {
-    id: 'conciliacion',
-    label: 'Conciliación Bancaria',
-    description: 'Cruce entre banco y facturas',
-    icon: Landmark,
-    seccion: 'conciliacion',
-    keywords: ['conciliacion', 'banco', 'estado de cuenta', 'movimientos bancarios', 'saldo'],
-  },
-  {
-    id: 'fiscal',
-    label: 'Motor Fiscal & SAT',
-    description: 'Validaciones de régimen fiscal y alertas',
-    icon: Scale,
-    seccion: 'fiscal',
-    keywords: ['fiscal', 'sat', 'regimen', 'obligaciones', 'motor fiscal', 'auditoria'],
-  },
-];
-
-const CATEGORIAS_RAPIDAS = [
-  { id: 'todos', label: 'Todos los negocios' },
-  { id: 'ingresos', label: 'Ingresos & Ventas', seccion: 'informes', tab: 'estado' },
-  { id: 'egresos', label: 'Gastos & Egresos', seccion: 'informes', tab: 'estado' },
-  { id: 'utilidades', label: 'Utilidades', seccion: 'informes', tab: 'resumen' },
-  { id: 'impuestos', label: 'Pago de Impuestos', seccion: 'informes', tab: 'trasladados' },
-  { id: 'proveedores', label: 'Padrón Proveedores', seccion: 'informes', tab: 'padron' },
-  { id: 'conciliacion', label: 'Conciliación', seccion: 'conciliacion' },
-  { id: 'fiscal', label: 'Motor Fiscal SAT', seccion: 'fiscal' },
-];
+import { deleteLocalCompany, getLocalCompanies, importDeviceBackup } from '../services/localBackup';
 
 const Dashboard = ({ onLogout }) => {
   const navigate = useNavigate();
+  const fileImportRef = useRef(null);
   const [empresas, setEmpresas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [importingBackup, setImportingBackup] = useState(false);
   const [isNewCompanyOpen, setIsNewCompanyOpen] = useState(false);
   const [newCompanyDraft, setNewCompanyDraft] = useState({});
   const [newCompanyModalKey, setNewCompanyModalKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoriaActiva, setCategoriaActiva] = useState('todos');
   const [deletingCompanyId, setDeletingCompanyId] = useState(null);
   const hasLoaded = useRef(false);
 
@@ -146,15 +53,22 @@ const Dashboard = ({ onLogout }) => {
     return () => window.removeEventListener('smartcontable:local-companies-updated', fetchEmpresas);
   }, [fetchEmpresas]);
 
-  const reportesSugeridos = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return [];
-    return REPORT_TOPICS.filter((topic) =>
-      topic.label.toLowerCase().includes(term) ||
-      topic.description.toLowerCase().includes(term) ||
-      topic.keywords.some((kw) => kw.toLowerCase().includes(term))
-    );
-  }, [searchTerm]);
+  const handleGlobalImportBackup = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportingBackup(true);
+    try {
+      const result = await importDeviceBackup(file);
+      toast.success(`Respaldo restaurado: ${result.snapshots + result.companies + result.invoices + (result.bankMovements || 0)} registro(s)`);
+      await fetchEmpresas();
+    } catch (error) {
+      toast.error(error.message || 'No se pudo restaurar el respaldo');
+    } finally {
+      setImportingBackup(false);
+      event.target.value = '';
+    }
+  };
 
   const empresasFiltradas = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -166,12 +80,9 @@ const Dashboard = ({ onLogout }) => {
   }, [empresas, searchTerm]);
 
   const handleNavigateEmpresa = (empresaId, customSeccion, customTab) => {
-    const targetSeccion = customSeccion || (categoriaActiva !== 'todos' ? CATEGORIAS_RAPIDAS.find((c) => c.id === categoriaActiva)?.seccion : null);
-    const targetTab = customTab || (categoriaActiva !== 'todos' ? CATEGORIAS_RAPIDAS.find((c) => c.id === categoriaActiva)?.tab : null);
-
     const queryParams = new URLSearchParams();
-    if (targetSeccion) queryParams.set('seccion', targetSeccion);
-    if (targetTab) queryParams.set('tab', targetTab);
+    if (customSeccion) queryParams.set('seccion', customSeccion);
+    if (customTab) queryParams.set('tab', customTab);
 
     const qs = queryParams.toString();
     navigate(`/empresa/${empresaId}${qs ? `?${qs}` : ''}`);
@@ -251,9 +162,9 @@ const Dashboard = ({ onLogout }) => {
               <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-blue-300">
                 <ShieldCheck className="h-4 w-4" /> Centro de Control Fiscal y Financiero
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Tus negocios y reportes, en un solo lugar</h1>
+              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Tus negocios, en un solo lugar</h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
-                Encuentra fácilmente reportes de ingresos, egresos, utilidades, pago de impuestos, padrón de proveedores o la situación contable de cualquier negocio.
+                Administra tus empresas, carga comprobantes fiscales (CFDI) y accede al detalle contable de cada una.
               </p>
             </div>
             
@@ -263,11 +174,28 @@ const Dashboard = ({ onLogout }) => {
                 <input 
                   type="text" 
                   value={searchTerm}
-                  placeholder="Buscar negocio, RFC, IVA, utilidades, proveedores..."
+                  placeholder="Buscar negocio o RFC..."
                   className="min-h-12 w-full rounded-2xl border border-slate-700 bg-slate-900 py-3 pl-10 pr-4 text-base text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500 sm:w-80 sm:text-sm"
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
+              <button 
+                type="button"
+                onClick={() => fileImportRef.current?.click()}
+                disabled={importingBackup}
+                title="Cargar y restaurar un archivo de respaldo (.json)"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/90 px-4 py-3 font-bold text-slate-200 shadow-xl transition-all hover:border-slate-600 hover:bg-slate-800 hover:text-white active:scale-[0.99] disabled:opacity-50"
+              >
+                {importingBackup ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5 text-emerald-400" />}
+                <span>Cargar respaldo</span>
+              </button>
+              <input 
+                ref={fileImportRef} 
+                type="file" 
+                accept="application/json,.json" 
+                className="hidden" 
+                onChange={handleGlobalImportBackup} 
+              />
               <button 
                 onClick={() => openNewCompany(getDraftFromSearch())} 
                 className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white shadow-xl shadow-blue-900/20 transition-all hover:bg-blue-500 active:scale-[0.99]"
@@ -276,67 +204,7 @@ const Dashboard = ({ onLogout }) => {
               </button>
             </div>
           </div>
-
-          {/* ACCESOS DIRECTOS POR CATEGORÍA DE REPORTE */}
-          <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-800/80 pt-6">
-            {CATEGORIAS_RAPIDAS.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setCategoriaActiva(cat.id)}
-                className={`rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-                  categoriaActiva === cat.id
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
-                    : 'bg-slate-950/80 text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
         </header>
-
-        {/* COINCIDENCIAS DE REPORTES / SUGERENCIAS GLOBALES */}
-        {reportesSugeridos.length > 0 && (
-          <section className="mb-8 rounded-2xl border border-blue-500/30 bg-blue-950/20 p-5">
-            <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-blue-300">
-              <Sparkles className="h-4 w-4" /> Reportes y secciones encontradas
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {reportesSugeridos.map((topic) => {
-                const Icon = topic.icon;
-                return (
-                  <div key={topic.id} className="rounded-xl border border-slate-800 bg-slate-900/90 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-blue-500/10 p-2 text-blue-400">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-white">{topic.label}</p>
-                        <p className="truncate text-xs text-slate-400">{topic.description}</p>
-                      </div>
-                    </div>
-                    {empresas.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-800/80 pt-2.5">
-                        <span className="text-[10px] font-bold uppercase text-slate-500">Abrir en:</span>
-                        {empresas.slice(0, 3).map((emp) => (
-                          <button
-                            key={emp.id}
-                            type="button"
-                            onClick={() => handleNavigateEmpresa(emp.id, topic.seccion, topic.tab)}
-                            className="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-blue-300 hover:bg-blue-600 hover:text-white"
-                          >
-                            {emp.razon_social.split(' ')[0]}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
 
         <div className="mb-8 grid grid-cols-1 gap-3 sm:max-w-xs">
           <div className="border-l-2 border-blue-500 bg-slate-900/70 px-4 py-3">
@@ -355,25 +223,36 @@ const Dashboard = ({ onLogout }) => {
                 {searchTerm ? 'No encontramos coincidencias para esa búsqueda' : 'Aún no tienes negocios registrados'}
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                {searchTerm ? 'Prueba con el nombre del negocio, RFC o términos como “ingreso”, “iva”, “utilidad”.' : 'Agrega tu primer negocio para empezar a revisar sus movimientos.'}
+                {searchTerm ? 'Prueba con el nombre o RFC del negocio.' : 'Agrega tu primer negocio o restaura un respaldo previo (.json) para continuar donde te quedaste.'}
               </p>
-              {searchTerm ? (
-                <button
-                  type="button"
-                  onClick={() => openNewCompany(getDraftFromSearch())}
-                  className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
-                >
-                  Agregar este negocio <ArrowRight className="h-4 w-4" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => openNewCompany()}
-                  className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
-                >
-                  Agregar mi primer negocio <ArrowRight className="h-4 w-4" />
-                </button>
-              )}
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                {searchTerm ? (
+                  <button
+                    type="button"
+                    onClick={() => openNewCompany(getDraftFromSearch())}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
+                  >
+                    Agregar este negocio <ArrowRight className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openNewCompany()}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
+                    >
+                      Agregar mi primer negocio <ArrowRight className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileImportRef.current?.click()}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-bold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-700 hover:text-white"
+                    >
+                      <Upload className="h-4 w-4 text-emerald-400" /> Cargar respaldo (.json)
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">

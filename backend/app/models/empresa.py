@@ -5,7 +5,8 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
-    Enum
+    Enum,
+    UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -29,6 +30,9 @@ class OpcionDeduccion(str, enum.Enum):
 
 class Empresa(Base):
     __tablename__ = "empresas"
+    __table_args__ = (
+        UniqueConstraint("usuario_id", "rfc", name="uq_empresa_usuario_rfc"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -41,7 +45,6 @@ class Empresa(Base):
 
     rfc = Column(
         String(13),
-        unique=True,
         index=True,
         nullable=False
     )
