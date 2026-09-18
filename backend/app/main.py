@@ -19,6 +19,7 @@ from app.models.poliza import Poliza, MovimientoPoliza # noqa: F401
 from app.models.mapeo_cuenta import MapeoCuenta # noqa: F401
 from app.models.comision_banco import ComisionBanco # noqa: F401
 from app.models.conciliacion import EstadoCuentaCarga, MovimientoBanco # noqa: F401
+from app.models.fiscal import OperacionFiscal, PeriodoFiscal # noqa: F401
 
 logger = get_logger(__name__)
 

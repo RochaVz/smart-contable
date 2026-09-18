@@ -110,7 +110,34 @@ const Dashboard = ({ onLogout }) => {
   const prepareCompanyBackup = async (empresa) => {
     if (empresa.local_only) return {};
     const response = await api.get(`/facturas/?empresa_id=${empresa.id}`);
-    return { invoices: response.data || [] };
+    return {
+      companies: [{ ...empresa, empresa_rfc: empresa.rfc }],
+      invoices: (response.data || []).map((invoice) => ({
+        ...invoice,
+        empresa_id: empresa.id,
+        empresa_rfc: empresa.rfc,
+      })),
+    };
+  };
+
+  const prepareDeviceBackup = async () => {
+    const remoteResponse = await api.get('/empresas/');
+    const remoteCompanies = remoteResponse.data || [];
+    const remoteData = await Promise.all(remoteCompanies.map(async (empresa) => {
+      const response = await api.get(`/facturas/?empresa_id=${empresa.id}`);
+      return {
+        company: { ...empresa, empresa_rfc: empresa.rfc },
+        invoices: (response.data || []).map((invoice) => ({
+          ...invoice,
+          empresa_id: empresa.id,
+          empresa_rfc: empresa.rfc,
+        })),
+      };
+    }));
+    return {
+      companies: remoteData.map((item) => item.company),
+      invoices: remoteData.flatMap((item) => item.invoices),
+    };
   };
 
   const handleDeleteCompany = async (empresa, event) => {
@@ -212,6 +239,8 @@ const Dashboard = ({ onLogout }) => {
             <p className="mt-1 text-xl font-black text-white">{empresas.length}</p>
           </div>
         </div>
+
+        <DeviceBackupPanel prepareDeviceBackup={prepareDeviceBackup} />
 
         {loading ? (
           <div className="text-center py-20 text-slate-500">Cargando empresas...</div>

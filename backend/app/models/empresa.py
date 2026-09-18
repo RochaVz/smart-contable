@@ -113,6 +113,18 @@ class Empresa(Base):
         cascade="all, delete-orphan",
     )
 
+    periodos_fiscales = relationship(
+        "PeriodoFiscal",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
+    operaciones_fiscales = relationship(
+        "OperacionFiscal",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
     movimientos_banco = relationship(
         "MovimientoBanco",
         back_populates="empresa",

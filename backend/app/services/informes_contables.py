@@ -144,9 +144,45 @@ def _ingresos_por_concepto_venta(
     return ingresos
 
 
+def _tipo_comprobante(factura: Factura) -> str:
+    tipo = getattr(factura.tipo_comprobante, "value", factura.tipo_comprobante)
+    return str(tipo or "").upper()
+
+
+def _detalle_facturas_por_tipo(
+    facturas: list[Factura], tipo: str, rfc_empresa: str
+) -> list[dict]:
+    detalle = []
+    for factura in facturas:
+        if _tipo_comprobante(factura) != tipo:
+            continue
+
+        es_ingreso = tipo == "I" and es_venta(factura, rfc_empresa)
+        contraparte = getattr(factura, "nombre_receptor", None) if es_ingreso else getattr(factura, "nombre_emisor", None)
+        rfc_contraparte = getattr(factura, "rfc_receptor", None) if es_ingreso else getattr(factura, "rfc_emisor", None)
+        detalle.append({
+            "id": getattr(factura, "id", None),
+            "uuid": getattr(factura, "uuid", ""),
+            "fecha": str(getattr(factura, "fecha_emision", "")),
+            "contraparte": contraparte or "Sin nombre",
+            "rfc": rfc_contraparte or "",
+            "subtotal": round(float(factura.subtotal or 0), 2),
+            "iva": round(float(factura.iva_trasladado or 0), 2),
+            "iva_retenido": round(float(getattr(factura, "iva_retenido", 0) or 0), 2),
+            "isr_retenido": round(float(getattr(factura, "isr_retenido", 0) or 0), 2),
+            "total": round(float(factura.total or 0), 2),
+            "estatus": getattr(getattr(factura, "estatus", ""), "value", getattr(factura, "estatus", "")),
+        })
+    return detalle
+
+
 def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int) -> dict:
     """Estado de resultados: ingresos por concepto de venta (CFDI), gastos desde pólizas."""
     ingresos = _ingresos_por_concepto_venta(db, empresa_id, mes, anio)
+    rfc = _rfc_empresa(db, empresa_id)
+    facturas_periodo = _facturas_periodo(db, empresa_id, mes, anio)
+    facturas_ingreso = _detalle_facturas_por_tipo(facturas_periodo, "I", rfc)
+    facturas_egreso = _detalle_facturas_por_tipo(facturas_periodo, "E", rfc)
 
     lineas_gasto = (
         db.query(
@@ -176,9 +212,8 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
         for r in lineas_gasto
     ]
 
-    rfc = _rfc_empresa(db, empresa_id)
     ventas = [
-        f for f in _facturas_periodo(db, empresa_id, mes, anio) if es_venta(f, rfc)
+        f for f in facturas_periodo if es_venta(f, rfc)
     ]
     total_ingresos = round(
         sum(float(f.subtotal or 0) for f in ventas) or sum(i["monto"] for i in ingresos),
@@ -189,7 +224,11 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
 
     return {
         "ingresos": ingresos,
+        "facturas_ingreso": facturas_ingreso,
+        "facturas_egreso": facturas_egreso,
         "gastos": gastos,
+        "total_facturas_ingreso": round(sum(f["total"] for f in facturas_ingreso), 2),
+        "total_facturas_egreso": round(sum(f["total"] for f in facturas_egreso), 2),
         "total_ingresos": total_ingresos,
         "total_gastos": total_gastos,
         "utilidad_operativa": utilidad,

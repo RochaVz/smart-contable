@@ -4,6 +4,134 @@
 
 **Versión:** MVP Funcional Avanzado
 
+## Plan de seguimiento priorizado — 2026
+
+La prioridad inmediata es mejorar la experiencia de los reportes existentes antes de
+ampliar la cobertura fiscal. Cada etapa debe cerrar con pruebas técnicas y revisión
+funcional antes de iniciar la siguiente.
+
+### Etapa 0 — Reportes profesionales y ligeros
+
+**Prioridad:** Crítica
+**Estado:** En implementación
+
+#### Objetivo
+
+Convertir los reportes actuales en una experiencia clara, rápida y fácil de revisar,
+sin cambiar la lógica contable existente.
+
+#### Alcance
+
+- [x] Reducir tarjetas y superficies visuales pesadas.
+- [x] Mejorar jerarquía de KPI, periodos y pestañas.
+- [x] Separar facturas de ingreso y facturas de egreso en los reportes.
+- [x] Agregar filtro local por texto en las tablas.
+- [x] Agregar ordenamiento por columna.
+- [x] Agregar paginación compacta.
+- [ ] Agregar filtros específicos por proveedor, mes y tipo de operación.
+- [ ] Unificar estados de carga, vacío y error.
+- [ ] Revisar accesibilidad de tablas y controles.
+- [ ] Validar responsive en escritorio, tablet y móvil.
+
+#### Criterios de aceptación
+
+- Los reportes mantienen los datos actuales y cargan sin errores.
+- Una tabla permite filtrar, ordenar y paginar sin recargar la página.
+- El usuario identifica periodo, totales y acción de exportación rápidamente.
+- La interfaz evita paneles anidados, exceso de bordes y radios grandes.
+- `npm run build` pasa antes de integrar cambios adicionales.
+
+### Etapa 1 — Calidad técnica y seguridad
+
+**Prioridad:** Muy alta
+
+- [ ] Corregir errores y advertencias de lint del frontend.
+- [ ] Agregar pruebas para reportes, filtros y exportaciones.
+- [ ] Validar aislamiento entre usuarios y empresas.
+- [ ] Completar pruebas de autenticación y permisos.
+- [ ] Verificar migraciones Alembic desde una base limpia.
+- [ ] Configurar CI para build, lint y pruebas backend.
+
+### Etapa 2 — Modelo fiscal base
+
+**Prioridad:** Crítica
+
+- [x] Crear periodos fiscales mensuales y anuales.
+- [x] Crear operaciones fiscales auditables por empresa.
+- [x] Registrar base gravable, IVA, ISR, IEPS y retenciones.
+- [x] Registrar nacional, extranjero y global para operaciones DIOT.
+- [x] Mantener fuente del dato: XML, póliza o captura manual.
+- [x] Exponer API protegida para crear/listar periodos y operaciones fiscales.
+- [x] Evitar duplicados por origen y referencia de operación.
+- [ ] Crear historial de declaraciones y modificaciones.
+
+### Etapa 3 — Complementos CFDI
+
+**Prioridad:** Alta
+
+- [ ] Procesar percepciones de nómina.
+- [ ] Procesar deducciones de nómina.
+- [ ] Procesar subsidio al empleo.
+- [ ] Almacenar complementos de pago y relacionarlos con CFDI originales.
+- [ ] Incorporar intereses, dividendos y arrendamiento.
+- [ ] Consolidar retenciones ISR/IVA aplicadas a terceros.
+
+### Etapa 4 — Cálculos y declaraciones
+
+**Prioridad:** Crítica
+
+- [x] Implementar endpoint `/fiscal/isr` para pagos provisionales informativos.
+- [x] Calcular ingresos acumulados, deducciones autorizadas y retenciones ISR.
+- [x] Permitir estimación con tasa ISR explícita sin inventar tarifa legal por régimen.
+- [x] Aplicar reglas base por régimen: RESICO sin deducciones, arrendamiento y coeficiente de utilidad parametrizados.
+- [x] Reportar parámetros fiscales faltantes antes de marcar el cálculo como estimado.
+- [ ] Versionar tarifas progresivas oficiales por ejercicio fiscal.
+- [ ] Registrar pagos provisionales anteriores y pérdidas fiscales aplicables.
+- [x] Implementar endpoint `/fiscal/iva` para pagos provisionales informativos.
+- [x] Calcular IVA trasladado, acreditable, retenido y saldo estimado por periodo y acumulado.
+- [ ] Implementar cálculo de IEPS cuando aplique.
+- [ ] Implementar endpoint `/fiscal/anual`.
+- [ ] Calcular ingresos acumulados, deducciones y retenciones.
+- [ ] Calcular saldo a favor o impuesto por pagar.
+- [ ] Agregar pruebas con casos fiscales revisados por contador.
+
+### Etapa 5 — DIOT y exportaciones SAT
+
+**Prioridad:** Crítica
+
+- [ ] Implementar endpoint `/fiscal/diot`.
+- [ ] Agrupar proveedores por RFC y periodo.
+- [ ] Calcular base gravable, IVA acreditable e IVA retenido.
+- [ ] Validar tipo de operación nacional, extranjero o global.
+- [ ] Detectar datos incompletos antes de exportar.
+- [ ] Generar el layout oficial SAT vigente.
+- [ ] Agregar exportación Excel, CSV, PDF y formato SAT según corresponda.
+
+### Etapa 6 — Interfaz fiscal consolidada
+
+**Prioridad:** Alta
+
+- [ ] Agregar pestañas `ISR`, `IVA`, `DIOT` y `Anual`.
+- [ ] Mostrar estado del cálculo y datos pendientes.
+- [ ] Agregar filtros por proveedor, mes y tipo de operación.
+- [ ] Mostrar diferencias entre CFDI, pólizas y cálculo fiscal.
+- [ ] Agregar bitácora de cambios y exportaciones.
+
+### Indicadores de seguimiento
+
+- Porcentaje de requisitos fiscales implementados.
+- Cobertura de pruebas backend y frontend.
+- Porcentaje de tablas con filtro, ordenamiento y paginación.
+- Diferencias entre CFDI, pólizas y reportes fiscales.
+- Operaciones DIOT sin datos faltantes.
+- Errores de exportación por formato.
+- Módulos aprobados por revisión contable.
+
+### Estados de trabajo
+
+`Pendiente` · `En análisis` · `En desarrollo` · `En pruebas` · `Validación contable` ·
+`Listo para beta` · `Productivo` · `Bloqueado`
+
 ### Módulos Implementados
 
 * Gestión de Empresas

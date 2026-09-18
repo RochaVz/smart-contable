@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import {
   Loader2, Calendar, FileBarChart, Users, ArrowDownCircle, ArrowUpCircle,
   Download, Receipt, Lightbulb, TrendingUp, TrendingDown, Search,
+  ChevronLeft, ChevronRight, ChevronsUpDown, SlidersHorizontal, RotateCw,
 } from 'lucide-react';
 import { downloadCsv } from '../utils/csv';
 
@@ -14,30 +15,111 @@ const MESES = [
 
 const fmt = (n) => `$${(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
 
-const TablaSimple = ({ cols, rows }) => (
-  <div className="overflow-x-auto rounded-2xl border border-slate-800">
-    <table className="w-full min-w-[560px] text-left text-sm">
-      <thead className="text-[10px] uppercase font-black text-slate-500 bg-slate-800/50">
-        <tr>
-          {cols.map((c) => (
-            <th key={c} className="p-4">{c}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-800">
-        {rows.length === 0 ? (
-          <tr><td colSpan={cols.length} className="p-8 text-center text-slate-500">Sin datos en este periodo</td></tr>
-        ) : rows.map((row, i) => (
-          <tr key={i} className="hover:bg-slate-800/30">
-            {row.map((cell, j) => (
-              <td key={j} className={`p-4 ${j > 0 ? 'text-right font-mono text-white' : 'text-slate-300'}`}>{cell}</td>
+const TABS = [
+  { id: 'resumen', label: 'Resumen', icon: FileBarChart, keywords: ['resumen', 'ventas', 'ingresos', 'egresos', 'utilidad', 'kpi', 'dashboard'] },
+  { id: 'estado', label: 'Estado de resultados', icon: TrendingUp, keywords: ['estado', 'resultados', 'ganancias', 'perdidas', 'ingresos', 'gastos', 'utilidad', 'costos', 'ventas', 'balance'] },
+  { id: 'padron', label: 'Padrón proveedores', icon: Users, keywords: ['proveedores', 'padron', 'suppliers', 'gastos', 'compras', 'rfc', 'empresa', 'facturas de compra'] },
+  { id: 'trasladados', label: 'IVA trasladado', icon: ArrowUpCircle, keywords: ['iva trasladado', 'ventas', 'emisiones', 'clientes', 'receptor', 'impuesto trasladado', 'facturas emitidas'] },
+  { id: 'acreditables', label: 'IVA acreditable', icon: ArrowDownCircle, keywords: ['iva acreditable', 'compras', 'gastos deducibles', 'proveedores', 'impuesto acreditable', 'facturas recibidas'] },
+  { id: 'retenidos', label: 'Retenciones', icon: Receipt, keywords: ['retenciones', 'isr', 'iva retenido', 'impuestos retenidos', 'pagos', 'proveedores'] },
+  { id: 'sugerencias', label: 'Más informes', icon: Lightbulb, keywords: ['sugerencias', 'alertas', 'recomendaciones', 'analisis', 'resumen fiscal', 'top clientes', 'comisiones', 'reportes'] },
+];
+
+const getCellText = (cell) => {
+  if (typeof cell === 'string' || typeof cell === 'number') return String(cell);
+  return '';
+};
+
+const TablaSimple = ({ cols, rows, pageSize = 8 }) => {
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState({ index: 0, direction: 'asc' });
+  const [page, setPage] = useState(1);
+
+  const filteredRows = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const matchingRows = normalizedQuery
+      ? rows.filter((row) => row.some((cell) => getCellText(cell).toLowerCase().includes(normalizedQuery)))
+      : rows;
+
+    return [...matchingRows].sort((left, right) => {
+      const leftValue = getCellText(left[sort.index]).toLowerCase();
+      const rightValue = getCellText(right[sort.index]).toLowerCase();
+      return leftValue.localeCompare(rightValue, 'es', { numeric: true }) * (sort.direction === 'asc' ? 1 : -1);
+    });
+  }, [query, rows, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visibleRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const handleSort = (index) => {
+    setSort((current) => ({
+      index,
+      direction: current.index === index && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+    setPage(1);
+  };
+
+  return (
+    <div className="overflow-hidden border border-slate-800 bg-slate-950/40">
+      <div className="flex flex-col gap-2 border-b border-slate-800 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+          <SlidersHorizontal className="h-3.5 w-3.5 text-violet-400" />
+          {filteredRows.length} registro{filteredRows.length === 1 ? '' : 's'}
+        </div>
+        <label className="flex min-h-9 items-center gap-2 border border-slate-800 bg-slate-900 px-2.5 text-slate-400 sm:w-64">
+          <Search className="h-3.5 w-3.5 shrink-0" />
+          <input
+            value={query}
+            onChange={(event) => { setQuery(event.target.value); setPage(1); }}
+            placeholder="Filtrar esta tabla..."
+            className="w-full bg-transparent text-xs text-white outline-none placeholder:text-slate-600"
+          />
+        </label>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-left text-sm">
+          <caption className="sr-only">Tabla dinámica de resultados del informe</caption>
+          <thead className="border-b border-slate-800 bg-slate-900/70 text-[10px] uppercase font-black text-slate-500">
+            <tr>
+              {cols.map((column, index) => (
+                <th key={column} scope="col" className="p-3">
+                  <button
+                    type="button"
+                    onClick={() => handleSort(index)}
+                    aria-label={`Ordenar por ${column}`}
+                    className="inline-flex items-center gap-1.5 text-left hover:text-slate-200"
+                  >
+                    {column}
+                    <ChevronsUpDown className="h-3 w-3" />
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/80">
+            {visibleRows.length === 0 ? (
+              <tr><td colSpan={cols.length} className="p-8 text-center text-slate-500">Sin datos para este filtro</td></tr>
+            ) : visibleRows.map((row, rowIndex) => (
+              <tr key={`${rowIndex}-${getCellText(row[0])}`} className="transition-colors hover:bg-slate-900/80">
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex} className={`p-3 ${cellIndex > 0 ? 'text-right font-mono text-white' : 'text-slate-300'}`}>{cell}</td>
+                ))}
+              </tr>
             ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center justify-between border-t border-slate-800 px-3 py-2 text-xs text-slate-500">
+        <span>Página {currentPage} de {totalPages}</span>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1} className="p-1.5 hover:text-white disabled:opacity-30" aria-label="Página anterior"><ChevronLeft className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages} className="p-1.5 hover:text-white disabled:opacity-30" aria-label="Página siguiente"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const InformesPanel = ({
   empresaId,
@@ -51,16 +133,12 @@ const InformesPanel = ({
   const [tab, setTab] = useState(initialTab || 'resumen');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    if (initialTab) {
-      setTab(initialTab);
-    }
-  }, [initialTab]);
 
   const fetchInformes = useCallback(async () => {
     setLoading(true);
+    setError(false);
     try {
       const res = await api.get(
         `/reportes/paquete-fiscal?empresa_id=${empresaId}&mes=${mes}&anio=${anio}`
@@ -69,12 +147,15 @@ const InformesPanel = ({
     } catch (err) {
       console.error(err);
       setData(null);
+      setError(true);
     } finally {
       setLoading(false);
     }
   }, [empresaId, mes, anio]);
 
   useEffect(() => {
+    // La consulta necesita actualizar loading, data y error durante su ciclo de vida.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchInformes();
   }, [fetchInformes, refreshToken]);
 
@@ -82,16 +163,6 @@ const InformesPanel = ({
     downloadCsv(`${nombre}_${anio}-${String(mes).padStart(2, '0')}.csv`, rows);
     toast.success('Reporte descargado en CSV');
   };
-
-  const TABS = [
-    { id: 'resumen', label: 'Resumen', icon: FileBarChart, keywords: ['resumen', 'ventas', 'ingresos', 'egresos', 'utilidad', 'kpi', 'dashboard'] },
-    { id: 'estado', label: 'Estado de resultados', icon: TrendingUp, keywords: ['estado', 'resultados', 'ganancias', 'perdidas', 'ingresos', 'gastos', 'utilidad', 'costos', 'ventas', 'balance'] },
-    { id: 'padron', label: 'Padrón proveedores', icon: Users, keywords: ['proveedores', 'padron', 'suppliers', 'gastos', 'compras', 'rfc', 'empresa', 'facturas de compra'] },
-    { id: 'trasladados', label: 'IVA trasladado', icon: ArrowUpCircle, keywords: ['iva trasladado', 'ventas', 'emisiones', 'clientes', 'receptor', 'impuesto trasladado', 'facturas emitidas'] },
-    { id: 'acreditables', label: 'IVA acreditable', icon: ArrowDownCircle, keywords: ['iva acreditable', 'compras', 'gastos deducibles', 'proveedores', 'impuesto acreditable', 'facturas recibidas'] },
-    { id: 'retenidos', label: 'Retenciones', icon: Receipt, keywords: ['retenciones', 'isr', 'iva retenido', 'impuestos retenidos', 'pagos', 'proveedores'] },
-    { id: 'sugerencias', label: 'Más informes', icon: Lightbulb, keywords: ['sugerencias', 'alertas', 'recomendaciones', 'analisis', 'resumen fiscal', 'top clientes', 'comisiones', 'reportes'] },
-  ];
 
   const tabMatches = useMemo(() => {
     const normalized = search.trim().toLowerCase();
@@ -109,11 +180,7 @@ const InformesPanel = ({
       .map((tabItem) => tabItem.id);
   }, [search]);
 
-  useEffect(() => {
-    if (search.trim() && tabMatches.length > 0 && !tabMatches.includes(tab)) {
-      setTab(tabMatches[0]);
-    }
-  }, [search, tab, tabMatches]);
+  const visibleTab = tabMatches.includes(tab) ? tab : (tabMatches[0] || tab);
 
   const renderResumen = () => {
     const r = data.resumen_ingresos_egresos;
@@ -128,24 +195,24 @@ const InformesPanel = ({
           ])} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-slate-950 border border-emerald-500/30 rounded-2xl p-6">
-            <p className="text-emerald-400 text-[10px] font-black uppercase">Ingresos (ventas)</p>
+          <div className="border-l-2 border-emerald-400 bg-slate-950/60 px-4 py-4">
+            <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">Ingresos (ventas)</p>
             <p className="text-2xl font-black text-white mt-2">{fmt(r.ingresos.total)}</p>
             <p className="text-slate-500 text-xs mt-1">{r.ingresos.cantidad} CFDI · IVA {fmt(r.ingresos.iva)}</p>
           </div>
-          <div className="bg-slate-950 border border-rose-500/30 rounded-2xl p-6">
-            <p className="text-rose-400 text-[10px] font-black uppercase">Egresos (compras)</p>
+          <div className="border-l-2 border-rose-400 bg-slate-950/60 px-4 py-4">
+            <p className="text-rose-400 text-[10px] font-black uppercase tracking-widest">Egresos (compras)</p>
             <p className="text-2xl font-black text-white mt-2">{fmt(r.egresos.total)}</p>
             <p className="text-slate-500 text-xs mt-1">{r.egresos.cantidad} CFDI · IVA {fmt(r.egresos.iva)}</p>
           </div>
-          <div className="bg-blue-600/20 border border-blue-500/40 rounded-2xl p-6">
-            <p className="text-blue-300 text-[10px] font-black uppercase">Utilidad del periodo</p>
+          <div className="border-l-2 border-blue-400 bg-blue-500/10 px-4 py-4">
+            <p className="text-blue-300 text-[10px] font-black uppercase tracking-widest">Utilidad del periodo</p>
             <p className="text-2xl font-black text-white mt-2">{fmt(r.utilidad_neta)}</p>
             <p className="text-slate-400 text-xs mt-1">Margen {r.margen_pct}%</p>
           </div>
         </div>
         {data.sugerencias && (
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5">
+          <div className="border border-slate-800 bg-slate-950/45 p-4">
             <p className="text-slate-400 text-xs font-black uppercase mb-2">IVA neto del mes</p>
             <p className="text-xl font-black text-amber-400">{fmt(data.sugerencias.iva_neto_periodo)}</p>
             <p className="text-slate-500 text-xs mt-1">Trasladado − acreditable (estimado desde CFDI)</p>
@@ -167,6 +234,16 @@ const InformesPanel = ({
             <button
               type="button"
               onClick={() => descargarReporte('estado_resultados', [
+                ...e.facturas_ingreso.map((factura) => ({
+                  Categoria: 'Factura de ingreso', UUID: factura.uuid, Fecha: factura.fecha,
+                  Contraparte: factura.contraparte, RFC: factura.rfc, Subtotal: factura.subtotal,
+                  IVA: factura.iva, Total: factura.total,
+                })),
+                ...e.facturas_egreso.map((factura) => ({
+                  Categoria: 'Factura de egreso', UUID: factura.uuid, Fecha: factura.fecha,
+                  Contraparte: factura.contraparte, RFC: factura.rfc, Subtotal: factura.subtotal,
+                  IVA: factura.iva, Total: factura.total,
+                })),
                 ...e.ingresos.map((ingreso) => ({
                   Categoria: 'Ingreso', Concepto: ingreso.concepto, Cliente: ingreso.cliente || '',
                   CuentaContable: ingreso.nombre_cuenta
@@ -187,6 +264,23 @@ const InformesPanel = ({
               <Download className="h-4 w-4" /> Descargar CSV
             </button>
           </div>
+          <div className="mb-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h4 className="flex items-center gap-2 font-bold text-emerald-400">
+                  <TrendingUp className="h-4 w-4" /> Facturas de ingreso
+                </h4>
+                <p className="mt-1 text-xs text-slate-500">CFDI tipo I emitidos por la empresa en el periodo.</p>
+              </div>
+              <span className="text-xs font-bold text-slate-500">{e.facturas_ingreso.length} CFDI · {fmt(e.total_facturas_ingreso)}</span>
+            </div>
+            <TablaSimple
+              cols={['Fecha', 'Cliente', 'RFC', 'Subtotal', 'IVA', 'Total']}
+              rows={e.facturas_ingreso.map((factura) => [
+                factura.fecha, factura.contraparte, factura.rfc, fmt(factura.subtotal), fmt(factura.iva), fmt(factura.total),
+              ])}
+            />
+          </div>
           <TablaSimple
             cols={['Concepto de venta', 'Cliente', 'Cuenta contable', 'CFDI', 'Monto']}
             rows={e.ingresos.length === 0
@@ -202,13 +296,29 @@ const InformesPanel = ({
           <p className="text-right text-emerald-400 font-black mt-2">Total ingresos: {fmt(e.total_ingresos)}</p>
         </div>
         <div>
-          <h4 className="text-rose-400 font-bold mb-3 flex items-center gap-2">
-            <TrendingDown className="w-4 h-4" /> Gastos y costos
-          </h4>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h4 className="text-rose-400 font-bold flex items-center gap-2">
+                <TrendingDown className="w-4 h-4" /> Facturas de egreso
+              </h4>
+              <p className="mt-1 text-xs text-slate-500">CFDI tipo E recibidos de proveedores en el periodo.</p>
+            </div>
+            <span className="text-xs font-bold text-slate-500">{e.facturas_egreso.length} CFDI · {fmt(e.total_facturas_egreso)}</span>
+          </div>
+          <TablaSimple
+            cols={['Fecha', 'Proveedor', 'RFC', 'Subtotal', 'IVA', 'Total']}
+            rows={e.facturas_egreso.map((factura) => [
+              factura.fecha, factura.contraparte, factura.rfc, fmt(factura.subtotal), fmt(factura.iva), fmt(factura.total),
+            ])}
+          />
+          <div className="mt-6 border-t border-slate-800 pt-5">
+            <h4 className="text-slate-300 font-bold mb-1">Gastos contables sin factura agrupados</h4>
+            <p className="mb-3 text-xs text-slate-500">Movimientos de pólizas; no se mezclan con las facturas de egreso.</p>
           <TablaSimple
             cols={['Concepto', 'Cuenta', 'Monto']}
             rows={e.gastos.map((g) => [g.concepto, g.cuenta, fmt(g.monto)])}
           />
+          </div>
           <p className="text-right text-rose-400 font-black mt-2">Total gastos: {fmt(e.total_gastos)}</p>
         </div>
         <div className="bg-slate-950 border border-slate-700 rounded-2xl p-6 flex justify-between items-center">
@@ -430,8 +540,18 @@ const InformesPanel = ({
   };
 
   const renderContent = () => {
-    if (!data) return <p className="text-slate-500 text-center py-12">No se pudieron cargar los informes.</p>;
-    switch (tab) {
+    if (!data) {
+      return (
+        <div className="border border-rose-500/30 bg-rose-500/5 px-5 py-8 text-center">
+          <p className="text-sm font-bold text-rose-200">{error ? 'No se pudieron cargar los informes.' : 'No hay informes disponibles.'}</p>
+          <p className="mt-1 text-xs text-slate-500">{error ? 'Revisa la conexión y vuelve a intentarlo.' : 'Carga CFDI o pólizas para consultar este periodo.'}</p>
+          <button type="button" onClick={fetchInformes} className="mt-4 inline-flex min-h-10 items-center gap-2 border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200 hover:border-cyan-400 hover:text-white">
+            <RotateCw className="h-3.5 w-3.5" /> Reintentar
+          </button>
+        </div>
+      );
+    }
+    switch (visibleTab) {
       case 'estado': return renderEstado();
       case 'padron': return renderPadron();
       case 'trasladados': return renderTrasladados();
@@ -443,18 +563,18 @@ const InformesPanel = ({
   };
 
   return (
-    <section className="mb-10 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:rounded-3xl sm:p-6">
+    <section className="mb-10 border border-slate-800/90 bg-slate-900/30 p-4 sm:p-6">
       <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-xl font-black text-white sm:text-2xl">
-            <FileBarChart className="h-6 w-6 shrink-0 text-violet-400 sm:h-7 sm:w-7" />
+            <FileBarChart className="h-6 w-6 shrink-0 text-cyan-400 sm:h-7 sm:w-7" />
             Informes fiscales y contables
           </h2>
           <p className="text-slate-500 text-sm mt-1">
             {MESES[mes - 1]} {anio} · Basado en CFDI y pólizas del periodo
           </p>
         </div>
-        <div className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 sm:w-auto">
+        <div className="flex min-h-11 w-full items-center gap-2 border border-slate-800 bg-slate-950/60 px-3 py-2 sm:w-auto">
           <Calendar className="w-4 h-4 text-slate-500" />
           <select
             value={mes}
@@ -477,9 +597,9 @@ const InformesPanel = ({
         </div>
       </div>
 
-      <div className="mb-5 rounded-2xl border border-slate-800 bg-slate-950/80 p-3">
-        <label className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-300">
-          <Search className="h-4 w-4 text-violet-400" />
+      <div className="mb-5 border-y border-slate-800 bg-slate-950/35 px-1 py-3">
+        <label className="flex items-center gap-2 border border-slate-700 bg-slate-900/80 px-3 py-2 text-slate-300">
+          <Search className="h-4 w-4 text-cyan-400" />
           <input
             type="text"
             value={search}
@@ -506,9 +626,9 @@ const InformesPanel = ({
               type="button"
               onClick={() => setTab(id)}
               className={`flex min-h-10 items-center gap-1.5 rounded-lg px-3 py-2 text-left text-xs font-bold transition-all ${
-                tab === id
-                  ? 'bg-violet-600 text-white'
-                  : 'text-slate-500 hover:text-white hover:bg-slate-800'
+                  visibleTab === id
+                  ? 'border-b-2 border-cyan-400 bg-slate-800/80 text-white'
+                  : 'text-slate-500 hover:bg-slate-800/60 hover:text-white'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -519,8 +639,9 @@ const InformesPanel = ({
       </div>
 
       {loading ? (
-        <div className="py-20 flex justify-center">
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-xs text-slate-500" role="status" aria-live="polite">
           <Loader2 className="w-8 h-8 animate-spin text-violet-400" />
+          Cargando informes del periodo...
         </div>
       ) : (
         renderContent()

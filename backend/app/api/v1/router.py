@@ -5,6 +5,7 @@ from app.api.v1.endpoints import (
     configuracion,
     empresas,
     facturas,
+    fiscal,
     polizas,
     reportes
 )
@@ -18,5 +19,6 @@ api_router.include_router(conciliacion.router, prefix="/conciliacion", tags=["Co
 api_router.include_router(configuracion.router, prefix="/configuracion", tags=["Configuración"])
 api_router.include_router(empresas.router, prefix="/empresas", tags=["Empresas"])
 api_router.include_router(facturas.router, prefix="/facturas", tags=["Facturas"])
+api_router.include_router(fiscal.router, prefix="/fiscal", tags=["Fiscal"])
 api_router.include_router(polizas.router, prefix="/polizas", tags=["Pólizas"])
 api_router.include_router(reportes.router, prefix="/reportes", tags=["Reportes Financieros"])

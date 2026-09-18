@@ -72,3 +72,4 @@ class Factura(Base):
 
     empresa          = relationship("Empresa", back_populates="facturas")
     polizas = relationship("Poliza", back_populates="factura", cascade="all, delete-orphan")
+    operaciones_fiscales = relationship("OperacionFiscal", back_populates="factura")

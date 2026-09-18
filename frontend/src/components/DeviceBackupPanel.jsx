@@ -21,7 +21,7 @@ const formatDate = (value) => {
   });
 };
 
-const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBackup = null }) => {
+const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBackup = null, prepareDeviceBackup = null }) => {
   const fileRef = useRef(null);
   const [stats, setStats] = useState({ snapshots: 0, companies: 0, invoices: 0, bankMovements: 0, totalRecords: 0, lastSavedAt: '' });
   const [loading, setLoading] = useState(true);
@@ -70,7 +70,8 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
     setWorking(true);
     try {
       const companyData = company && prepareCompanyBackup ? await prepareCompanyBackup(company) : {};
-      const result = company ? await exportCompanyBackup(company, companyData) : await exportDeviceBackup();
+      const deviceData = !company && prepareDeviceBackup ? await prepareDeviceBackup() : {};
+      const result = company ? await exportCompanyBackup(company, companyData) : await exportDeviceBackup(deviceData);
       toast.success(`Respaldo descargado con ${result.snapshots + result.companies + result.invoices + (result.bankMovements || 0)} registro(s) locales`);
       await refreshStats();
     } catch (error) {

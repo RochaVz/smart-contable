@@ -8,7 +8,7 @@ const STORE_COMPANIES = 'companies';
 const STORE_INVOICES = 'invoices';
 const STORE_BANK_MOVEMENTS = 'bankMovements';
 const BACKUP_FORMAT = 'smartcontable-device-backup';
-const BACKUP_FORMAT_VERSION = 2;
+const BACKUP_FORMAT_VERSION = 3;
 const EXCLUDED_LOCAL_STORAGE_KEYS = new Set(['token']);
 
 const openVault = () => new Promise((resolve, reject) => {
@@ -161,17 +161,27 @@ const downloadJson = (filename, content) => {
   URL.revokeObjectURL(url);
 };
 
-export const exportDeviceBackup = async () => {
+export const exportDeviceBackup = async ({ companies: providedCompanies = [], invoices: providedInvoices = [], bankMovements: providedBankMovements = [] } = {}) => {
   const snapshots = await readAllFromStore(STORE_SNAPSHOTS);
-  const companies = await readAllFromStore(STORE_COMPANIES);
-  const invoices = await readAllFromStore(STORE_INVOICES);
-  const bankMovements = await readAllFromStore(STORE_BANK_MOVEMENTS);
+  const storedCompanies = await readAllFromStore(STORE_COMPANIES);
+  const storedInvoices = await readAllFromStore(STORE_INVOICES);
+  const storedBankMovements = await readAllFromStore(STORE_BANK_MOVEMENTS);
+  const companies = [...new Map([...storedCompanies, ...providedCompanies].map((company) => [
+    String(company.rfc || company.id || '').toUpperCase(), company,
+  ])).values()];
+  const invoices = [...new Map([...storedInvoices, ...providedInvoices].map((invoice, index) => [
+    String(invoice.uuid || invoice.id || `invoice-${index}`).toUpperCase(), invoice,
+  ])).values()];
+  const bankMovements = [...new Map([...storedBankMovements, ...providedBankMovements].map((movement, index) => [
+    movement.fingerprint || movement.id || `movement-${index}`, movement,
+  ])).values()];
   const exportedAt = new Date().toISOString();
   const backup = {
     format: BACKUP_FORMAT,
     formatVersion: BACKUP_FORMAT_VERSION,
     app: 'SmartContable',
     exportedAt,
+    coverage: ['companies', 'invoices', 'bankMovements', 'snapshots'],
     deviceStorage: {
       preferences: getLocalPreferences(),
       snapshots,
@@ -211,6 +221,7 @@ export const exportCompanyBackup = async (company, { invoices: providedInvoices 
     app: 'SmartContable',
     exportedAt,
     scope: 'company',
+    coverage: ['company', 'invoices', 'bankMovements', 'snapshots'],
     deviceStorage: {
       preferences: getLocalPreferences(),
       snapshots: companySnapshots,
@@ -229,7 +240,7 @@ export const importDeviceBackup = async (file) => {
   const text = await file.text();
   const backup = JSON.parse(text);
 
-  if (backup.format !== BACKUP_FORMAT || ![1, 2].includes(backup.formatVersion)) {
+  if (backup.format !== BACKUP_FORMAT || ![1, 2, 3].includes(backup.formatVersion)) {
     throw new Error('El archivo no parece ser un respaldo válido de SmartContable.');
   }
 
@@ -280,15 +291,19 @@ export const importDeviceBackup = async (file) => {
       knownInvoiceUuids.add(uuid);
       return true;
     })
-    .map((invoice) => ({
+    .map((invoice) => {
+      const sourceCompanyId = String(invoice.empresa_id || '');
+      const companyByRfc = importedCompanies.find((company) => String(company.rfc || '').toUpperCase() === String(invoice.empresa_rfc || '').toUpperCase());
+      return ({
       ...invoice,
       id: `local-invoice-${crypto.randomUUID()}`,
-      empresa_id: companyIdMap.get(String(invoice.empresa_id)) || invoice.empresa_id,
-      empresa_rfc: String(invoice.empresa_rfc || '').toUpperCase(),
+      empresa_id: companyIdMap.get(sourceCompanyId) || companyByRfc?.id || invoice.empresa_id,
+      empresa_rfc: String(invoice.empresa_rfc || companyByRfc?.rfc || '').toUpperCase(),
       local_only: true,
       savedAt: now,
       importedAt: now,
-    }));
+      });
+    });
   await runStore(STORE_INVOICES, 'readwrite', (store) => {
     importedInvoices.forEach((invoice) => store.put(invoice));
   });
