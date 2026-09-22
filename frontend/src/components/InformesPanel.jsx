@@ -228,6 +228,12 @@ const InformesPanel = ({
     const facturasEgreso = e?.facturas_egreso || [];
     const ingresos = e?.ingresos || [];
     const gastos = e?.gastos || [];
+    const gastosDetalle = e?.gastos_detalle?.length
+      ? e.gastos_detalle
+      : gastos.map((gasto) => ({
+        fecha: '', cuenta: gasto.cuenta, nombre_cuenta: gasto.concepto,
+        concepto: gasto.concepto, debe: gasto.monto, haber: 0, monto: gasto.monto,
+      }));
     const cuentasT = e?.cuentas_t || [];
     const documentos = [
       ...facturasIngreso.map((factura) => ({ ...factura, tipo: 'Ingreso' })),
@@ -246,7 +252,7 @@ const InformesPanel = ({
               Debe: cuenta.debe, Haber: cuenta.haber, Saldo: cuenta.saldo, Naturaleza: cuenta.naturaleza,
             })),
             ...ingresos.map((ingreso) => ({ Categoria: 'Ingreso', Concepto: ingreso.concepto, Monto: ingreso.monto })),
-            ...gastos.map((gasto) => ({ Categoria: 'Gasto', Concepto: gasto.concepto, Cuenta: gasto.cuenta, Monto: gasto.monto })),
+            ...gastosDetalle.map((gasto) => ({ Categoria: 'Egreso', Fecha: gasto.fecha, Concepto: gasto.concepto, Cuenta: gasto.cuenta, Debe: gasto.debe, Haber: gasto.haber, Monto: gasto.monto })),
             { Categoria: 'Total ingresos', Monto: e.total_ingresos },
             { Categoria: 'Total gastos', Monto: e.total_gastos },
             { Categoria: 'Utilidad neta', Monto: e.utilidad_neta },
@@ -257,6 +263,45 @@ const InformesPanel = ({
           <MetricResultado label="Ingresos" value={fmt(e.total_ingresos)} detail={`${facturasIngreso.length} CFDI`} tone="emerald" icon={TrendingUp} />
           <MetricResultado label="Gastos" value={fmt(e.total_gastos)} detail={`${facturasEgreso.length} CFDI`} tone="rose" icon={TrendingDown} />
           <MetricResultado label="Utilidad neta" value={fmt(e.utilidad_neta)} detail={`Margen ${e.margen_pct ?? 0}%`} tone={e.utilidad_neta >= 0 ? 'cyan' : 'rose'} icon={FileBarChart} />
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <section className="min-w-0 border border-emerald-500/20 bg-emerald-500/5 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="font-bold text-emerald-300">Ingresos desglosados</h4>
+              <span className="text-xs text-slate-500">{ingresos.length} concepto(s)</span>
+            </div>
+            <TablaSimple
+              cols={['Concepto', 'Cliente', 'Cuenta', 'CFDI', 'Monto']}
+              rows={ingresos.length === 0
+                ? [['Sin ingresos', '—', '—', 0, fmt(0)]]
+                : ingresos.map((ingreso) => [
+                  ingreso.concepto,
+                  ingreso.cliente || '—',
+                  ingreso.nombre_cuenta || ingreso.cuenta || '—',
+                  ingreso.num_facturas ?? 1,
+                  fmt(ingreso.monto),
+                ])}
+            />
+          </section>
+          <section className="min-w-0 border border-rose-500/20 bg-rose-500/5 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="font-bold text-rose-300">Egresos desglosados</h4>
+              <span className="text-xs text-slate-500">{gastosDetalle.length} movimiento(s)</span>
+            </div>
+            <TablaSimple
+              cols={['Fecha', 'Concepto', 'Cuenta', 'Debe', 'Haber']}
+              rows={gastosDetalle.length === 0
+                ? [['—', 'Sin egresos', '—', fmt(0), fmt(0)]]
+                : gastosDetalle.map((gasto) => [
+                  gasto.fecha,
+                  gasto.concepto,
+                  gasto.cuenta || gasto.nombre_cuenta || '—',
+                  fmt(gasto.debe),
+                  fmt(gasto.haber),
+                ])}
+            />
+          </section>
         </div>
 
         <div className="border-t border-slate-800 pt-6">

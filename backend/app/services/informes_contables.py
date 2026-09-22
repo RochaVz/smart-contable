@@ -258,6 +258,44 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
         for r in lineas_gasto
     ]
 
+    movimientos_gasto = (
+        db.query(
+            MovimientoPoliza.cuenta,
+            MovimientoPoliza.nombre_cuenta,
+            MovimientoPoliza.concepto,
+            MovimientoPoliza.debe,
+            MovimientoPoliza.haber,
+            Poliza.fecha,
+        )
+        .join(Poliza)
+        .filter(
+            Poliza.empresa_id == empresa_id,
+            Poliza.mes == mes,
+            Poliza.anio == anio,
+            (
+                MovimientoPoliza.cuenta.like("5%")
+                | MovimientoPoliza.cuenta.like("6%")
+                | MovimientoPoliza.cuenta.like("7%")
+            ),
+            MovimientoPoliza.debe > 0,
+        )
+        .order_by(Poliza.fecha, MovimientoPoliza.cuenta)
+        .all()
+    )
+
+    gastos_detalle = [
+        {
+            "fecha": str(movimiento.fecha or ""),
+            "cuenta": movimiento.cuenta or "",
+            "nombre_cuenta": movimiento.nombre_cuenta or "Gastos",
+            "concepto": movimiento.concepto or movimiento.nombre_cuenta or "Gastos",
+            "debe": round(float(movimiento.debe or 0), 2),
+            "haber": round(float(movimiento.haber or 0), 2),
+            "monto": round(float(movimiento.debe or 0), 2),
+        }
+        for movimiento in movimientos_gasto
+    ]
+
     ventas = [
         f for f in facturas_periodo if es_venta(f, rfc)
     ]
@@ -273,6 +311,7 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
         "facturas_ingreso": facturas_ingreso,
         "facturas_egreso": facturas_egreso,
         "gastos": gastos,
+        "gastos_detalle": gastos_detalle,
         "cuentas_t": cuentas_t,
         "total_facturas_ingreso": round(sum(f["total"] for f in facturas_ingreso), 2),
         "total_facturas_egreso": round(sum(f["total"] for f in facturas_egreso), 2),
