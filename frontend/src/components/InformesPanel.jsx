@@ -228,6 +228,7 @@ const InformesPanel = ({
     const facturasEgreso = e?.facturas_egreso || [];
     const ingresos = e?.ingresos || [];
     const gastos = e?.gastos || [];
+    const cuentasT = e?.cuentas_t || [];
     return (
       <div className="space-y-8">
         <div>
@@ -324,6 +325,28 @@ const InformesPanel = ({
           />
           </div>
           <p className="text-right text-rose-400 font-black mt-2">Total gastos: {fmt(e.total_gastos)}</p>
+        </div>
+        <div className="border-t border-slate-800 pt-6">
+          <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+            <div>
+              <h4 className="font-bold text-cyan-300">Cuentas T del estado de resultados</h4>
+              <p className="mt-1 text-xs text-slate-500">Movimientos agrupados por cuenta contable, separados entre Debe y Haber.</p>
+            </div>
+            <span className="text-xs font-bold text-slate-500">{cuentasT.length} cuenta(s)</span>
+          </div>
+          <TablaSimple
+            cols={['Cuenta', 'Nombre', 'Debe', 'Haber', 'Saldo', 'Naturaleza']}
+            rows={cuentasT.length === 0
+              ? [['Sin movimientos en cuentas de resultados', '—', fmt(0), fmt(0), fmt(0), '—']]
+              : cuentasT.map((cuenta) => [
+                cuenta.cuenta,
+                cuenta.nombre,
+                fmt(cuenta.debe),
+                fmt(cuenta.haber),
+                fmt(cuenta.saldo),
+                cuenta.naturaleza,
+              ])}
+          />
         </div>
         <div className="bg-slate-950 border border-slate-700 rounded-2xl p-6 flex justify-between items-center">
           <span className="text-white font-bold">Utilidad neta</span>

@@ -95,6 +95,53 @@ def test_estado_resultados_excluye_nomina_de_ingresos(monkeypatch):
     assert resultado["total_ingresos"] == 1000
 
 
+def test_cuentas_t_calcula_saldo_segun_naturaleza():
+    class QueryCuentasT:
+        def join(self, *_args, **_kwargs):
+            return self
+
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def group_by(self, *_args, **_kwargs):
+            return self
+
+        def order_by(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            return [
+                SimpleNamespace(cuenta="401.01", nombre_cuenta="Ventas", debe=10, haber=110),
+                SimpleNamespace(cuenta="601.01", nombre_cuenta="Gastos", debe=80, haber=5),
+            ]
+
+    resultado = informes_contables._cuentas_t_estado_resultados(
+        db=SimpleNamespace(query=lambda *_args: QueryCuentasT()),
+        empresa_id=1,
+        mes=7,
+        anio=2026,
+    )
+
+    assert resultado == [
+        {
+            "cuenta": "401.01",
+            "nombre": "Ventas",
+            "debe": 10.0,
+            "haber": 110.0,
+            "naturaleza": "Acreedora",
+            "saldo": 100.0,
+        },
+        {
+            "cuenta": "601.01",
+            "nombre": "Gastos",
+            "debe": 80.0,
+            "haber": 5.0,
+            "naturaleza": "Deudora",
+            "saldo": 75.0,
+        },
+    ]
+
+
 def test_desglose_ingresos_separa_clientes_y_conserva_cantidad_cfdi(monkeypatch):
     ventas = [
         SimpleNamespace(id=1, nombre_receptor="Cliente A", xml_contenido="xml-a"),

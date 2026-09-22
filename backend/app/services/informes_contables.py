@@ -144,6 +144,51 @@ def _ingresos_por_concepto_venta(
     return ingresos
 
 
+def _cuentas_t_estado_resultados(
+    db: Session, empresa_id: int, mes: int, anio: int
+) -> list[dict]:
+    """Agrupa las cuentas de resultados conservando los lados Debe y Haber."""
+    movimientos = (
+        db.query(
+            MovimientoPoliza.cuenta,
+            MovimientoPoliza.nombre_cuenta,
+            func.sum(MovimientoPoliza.debe).label("debe"),
+            func.sum(MovimientoPoliza.haber).label("haber"),
+        )
+        .join(Poliza)
+        .filter(
+            Poliza.empresa_id == empresa_id,
+            Poliza.mes == mes,
+            Poliza.anio == anio,
+            (
+                MovimientoPoliza.cuenta.like("4%")
+                | MovimientoPoliza.cuenta.like("5%")
+                | MovimientoPoliza.cuenta.like("6%")
+                | MovimientoPoliza.cuenta.like("7%")
+            ),
+        )
+        .group_by(MovimientoPoliza.cuenta, MovimientoPoliza.nombre_cuenta)
+        .order_by(MovimientoPoliza.cuenta)
+        .all()
+    )
+
+    cuentas = []
+    for movimiento in movimientos:
+        cuenta = movimiento.cuenta or ""
+        debe = round(float(movimiento.debe or 0), 2)
+        haber = round(float(movimiento.haber or 0), 2)
+        acreedora = cuenta.startswith("4")
+        cuentas.append({
+            "cuenta": cuenta,
+            "nombre": movimiento.nombre_cuenta or "Sin nombre",
+            "debe": debe,
+            "haber": haber,
+            "naturaleza": "Acreedora" if acreedora else "Deudora",
+            "saldo": round((haber - debe) if acreedora else (debe - haber), 2),
+        })
+    return cuentas
+
+
 def _tipo_comprobante(factura: Factura) -> str:
     tipo = getattr(factura.tipo_comprobante, "value", factura.tipo_comprobante)
     return str(tipo or "").upper()
@@ -183,6 +228,7 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
     facturas_periodo = _facturas_periodo(db, empresa_id, mes, anio)
     facturas_ingreso = _detalle_facturas_por_tipo(facturas_periodo, "I", rfc)
     facturas_egreso = _detalle_facturas_por_tipo(facturas_periodo, "E", rfc)
+    cuentas_t = _cuentas_t_estado_resultados(db, empresa_id, mes, anio)
 
     lineas_gasto = (
         db.query(
@@ -227,6 +273,7 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
         "facturas_ingreso": facturas_ingreso,
         "facturas_egreso": facturas_egreso,
         "gastos": gastos,
+        "cuentas_t": cuentas_t,
         "total_facturas_ingreso": round(sum(f["total"] for f in facturas_ingreso), 2),
         "total_facturas_egreso": round(sum(f["total"] for f in facturas_egreso), 2),
         "total_ingresos": total_ingresos,
