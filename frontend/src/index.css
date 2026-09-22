@@ -88,10 +88,10 @@ input[type='submit'] {
 
 :root[data-theme='light'] body {
 	background:
-		radial-gradient(circle at 8% 0%, rgba(14, 165, 233, 0.28), transparent 28rem),
-		radial-gradient(circle at 94% 18%, rgba(16, 185, 129, 0.18), transparent 25rem),
-		linear-gradient(135deg, #f8fdff 0%, #e7f8ff 48%, #f1fff8 100%);
-	color: #1e293b;
+		radial-gradient(circle at 8% 0%, rgba(14, 165, 233, 0.14), transparent 28rem),
+		radial-gradient(circle at 94% 18%, rgba(16, 185, 129, 0.1), transparent 25rem),
+		linear-gradient(135deg, #ffffff 0%, #f4fbfd 48%, #f8fffb 100%);
+	color: #172033;
 }
 
 :root[data-theme='light'] .bg-slate-950,
@@ -117,7 +117,7 @@ input[type='submit'] {
 :root[data-theme='light'] [class~='bg-slate-950/70'],
 :root[data-theme='light'] [class~='bg-slate-950/80'],
 :root[data-theme='light'] [class~='bg-slate-950/90'] {
-	background-color: rgba(226, 248, 255, 0.94) !important;
+	background-color: rgba(248, 254, 255, 0.96) !important;
 }
 
 :root[data-theme='light'] [class~='bg-blue-950/40'] {
@@ -137,11 +137,11 @@ input[type='submit'] {
 
 :root[data-theme='light'] .bg-slate-800,
 :root[data-theme='light'] [class~='bg-slate-800'] {
-	background-color: #dff7ff !important;
+	background-color: #e8f8fb !important;
 }
 
 :root[data-theme='light'] [class~='bg-slate-800/50'] {
-	background-color: rgba(220, 250, 255, 0.9) !important;
+	background-color: rgba(232, 248, 251, 0.92) !important;
 }
 
 /* Bordes y contornos de alta definición para tema claro */
@@ -151,14 +151,14 @@ input[type='submit'] {
 :root[data-theme='light'] .border-slate-800,
 :root[data-theme='light'] .border-slate-700,
 :root[data-theme='light'] .border-slate-900 {
-	border-color: #7aaabd !important;
+	border-color: #4f8797 !important;
 }
 
 /* Divisores de tablas y listas */
 :root[data-theme='light'] [class*='divide-slate-800'],
 :root[data-theme='light'] [class*='divide-slate-700'],
 :root[data-theme='light'] .divide-slate-800 {
-	border-color: #8ebdca !important;
+	border-color: #659aa8 !important;
 }
 
 /* Bordes acentuados temáticos en modo claro con suficiente contraste */
@@ -211,21 +211,21 @@ input[type='submit'] {
 
 /* Encabezados y líneas de tabla en modo claro */
 :root[data-theme='light'] thead {
-	background: linear-gradient(90deg, #e0f7fa, #effcff) !important;
-	border-bottom: 3px solid #3b9db5 !important;
+	background: linear-gradient(90deg, #d7f3f8, #eefcff) !important;
+	border-bottom: 3px solid #237f95 !important;
 }
 
 :root[data-theme='light'] thead th {
-	color: #475569 !important;
+	color: #193b49 !important;
 	font-weight: 800 !important;
 }
 
 :root[data-theme='light'] tbody tr {
-	border-bottom: 1px solid #b4d5dd !important;
+	border-bottom: 1px solid #9fc4ce !important;
 }
 
 :root[data-theme='light'] tbody tr:hover {
-	background-color: #ecfbff !important;
+	background-color: #e6f9fc !important;
 }
 
 :root[data-theme='light'] .shadow-xl,
@@ -265,27 +265,27 @@ input[type='submit'] {
 
 :root[data-theme='light'] .text-slate-200,
 :root[data-theme='light'] [class~='text-slate-200'] {
-	color: #1e293b !important;
+	color: #172033 !important;
 }
 
 :root[data-theme='light'] .text-slate-300,
 :root[data-theme='light'] [class~='text-slate-300'] {
-	color: #27364a !important;
+	color: #243447 !important;
 }
 
 :root[data-theme='light'] .text-slate-400,
 :root[data-theme='light'] [class~='text-slate-400'] {
-	color: #40526a !important;
+	color: #334b60 !important;
 }
 
 :root[data-theme='light'] .text-slate-500,
 :root[data-theme='light'] [class~='text-slate-500'] {
-	color: #52657c !important;
+	color: #40596d !important;
 }
 
 :root[data-theme='light'] .text-slate-600,
 :root[data-theme='light'] [class~='text-slate-600'] {
-	color: #5d7087 !important;
+	color: #4d6678 !important;
 }
 
 /* Importes, folios y cifras conservan una jerarquía más legible. */
@@ -415,18 +415,18 @@ input[type='submit'] {
 :root[data-theme='light'] .border-b,
 :root[data-theme='light'] .border-t,
 :root[data-theme='light'] .border-y {
-	border-color: #7aaabd !important;
+	border-color: #4f8797 !important;
 }
 
 :root[data-theme='light'] .border-b.border-slate-800,
 :root[data-theme='light'] .border-t.border-slate-800,
 :root[data-theme='light'] .border-y.border-slate-800 {
-	border-color: #3b9db5 !important;
+	border-color: #237f95 !important;
 	border-width: 2px !important;
 }
 
 :root[data-theme='light'] details > summary {
-	border-bottom: 2px solid #3b9db5;
+	border-bottom: 2px solid #237f95;
 	background: linear-gradient(90deg, #e4f8fb, #ffffff);
 }
 
