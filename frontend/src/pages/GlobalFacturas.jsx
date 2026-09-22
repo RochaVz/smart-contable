@@ -62,7 +62,7 @@ const GlobalFacturas = () => {
     const fetchGlobal = async () => {
       try {
         const res = await api.get('/facturas/global');
-        setFacturas(res.data);
+        setFacturas(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error(err);
       } finally {

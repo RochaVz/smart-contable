@@ -23,7 +23,7 @@ const ComisionesBancoPanel = ({ empresaId }) => {
   const fetchBancos = useCallback(async () => {
     try {
       const res = await api.get(`/configuracion/comisiones-banco/${empresaId}`);
-      setBancos(res.data);
+      setBancos(Array.isArray(res.data) ? res.data : []);
     } catch {
       toast.error('No se pudieron cargar los bancos');
     } finally {

@@ -30,7 +30,7 @@ const getCellText = (cell) => {
   return '';
 };
 
-const TablaSimple = ({ cols, rows, pageSize = 8 }) => {
+const TablaSimple = ({ cols = [], rows = [], pageSize = 8 }) => {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState({ index: 0, direction: 'asc' });
   const [page, setPage] = useState(1);

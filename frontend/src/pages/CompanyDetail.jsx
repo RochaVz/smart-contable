@@ -359,7 +359,7 @@ const CompanyDetail = () => {
           getLocalInvoices(id),
         ]);
         setEmpresa(localEmpresa || { id, razon_social: `Negocio local`, rfc: '' });
-        setFacturas(localFacturas);
+        setFacturas(Array.isArray(localFacturas) ? localFacturas : []);
         return;
       }
 
@@ -367,7 +367,7 @@ const CompanyDetail = () => {
         api.get(`/facturas/?empresa_id=${id}`),
         api.get(`/empresas/${id}`),
       ]);
-      setFacturas(facturasRes.data);
+      setFacturas(Array.isArray(facturasRes.data) ? facturasRes.data : []);
       setEmpresa(empresaRes.data);
     } catch (err) {
       console.error(err);
