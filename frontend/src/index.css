@@ -354,3 +354,57 @@ input[type='submit'] {
 	background-color: #ffffff;
 	color: #172033;
 }
+
+/* Superficies y estados que aparecen en las vistas operativas. */
+:root[data-theme='light'] .app-page,
+:root[data-theme='light'] .min-h-screen {
+	background-color: transparent !important;
+	color: #1e293b;
+}
+
+:root[data-theme='light'] [class~='bg-slate-700'],
+:root[data-theme='light'] [class~='bg-slate-700/50'],
+:root[data-theme='light'] [class~='bg-slate-600'] {
+	background-color: #dbe5f0 !important;
+}
+
+:root[data-theme='light'] [class~='bg-slate-900/90'],
+:root[data-theme='light'] [class~='bg-slate-950/35'],
+:root[data-theme='light'] [class~='bg-slate-950/45'] {
+	background-color: rgba(248, 250, 252, 0.94) !important;
+}
+
+:root[data-theme='light'] [class*='border-slate-600'] {
+	border-color: #b8c6d6 !important;
+}
+
+:root[data-theme='light'] [class~='text-slate-100'] {
+	color: #172033 !important;
+}
+
+:root[data-theme='light'] [class*='hover:bg-slate-800']:hover,
+:root[data-theme='light'] [class*='hover:bg-slate-700']:hover {
+	background-color: #e2e8f0 !important;
+	color: #0f172a !important;
+}
+
+:root[data-theme='light'] [class*='hover:text-white']:hover {
+	color: #0f172a !important;
+}
+
+:root[data-theme='light'] [class*='placeholder:text-slate-']::placeholder {
+	color: #7b8da3 !important;
+	opacity: 1;
+}
+
+:root[data-theme='light'] [class*='focus:ring-offset-slate-'] {
+	--tw-ring-offset-color: #f4f7fa !important;
+}
+
+:root[data-theme='light'] .shadow-black\/25 {
+	--tw-shadow-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+:root[data-theme='light'] [class~='divide-slate-900'] {
+	border-color: #e2e8f0 !important;
+}
