@@ -6,7 +6,7 @@ import {
   Loader2, BrainCircuit, ChevronUp, ChevronDown, Download, Calendar,
   BookOpen, FileBarChart, Landmark, Settings2, Trash2,
   Calculator, Search, Sparkles, TrendingUp, TrendingDown,
-  DollarSign, Receipt, Users, Scale, X, Zap,
+  DollarSign, Receipt, Users, Scale, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
@@ -240,7 +240,7 @@ const CompanyDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const hoy = new Date();
+  const hoy = useMemo(() => new Date(), []);
 
   const seccion = searchParams.get('seccion') || 'historial';
   const tabActual = searchParams.get('tab') || (seccion === 'informes' ? 'resumen' : null);
@@ -377,8 +377,7 @@ const CompanyDetail = () => {
   }, [id]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchDatos();
+    queueMicrotask(fetchDatos);
   }, [fetchDatos]);
 
   const handleRefresh = useCallback(() => {
@@ -524,11 +523,11 @@ const CompanyDetail = () => {
     [facturasProcesadas],
   );
 
-  const facturasVisibles = useMemo(() => {
-    if (filtroMovimiento === 'ingresos') return facturasIngresos;
-    if (filtroMovimiento === 'egresos') return facturasEgresos;
-    return facturasProcesadas;
-  }, [filtroMovimiento, facturasIngresos, facturasEgresos, facturasProcesadas]);
+  const facturasVisibles = filtroMovimiento === 'ingresos'
+    ? facturasIngresos
+    : filtroMovimiento === 'egresos'
+      ? facturasEgresos
+      : facturasProcesadas;
 
   const seccionesFacturas = useMemo(() => {
     if (filtroMovimiento === 'ingresos') {
@@ -561,7 +560,7 @@ const CompanyDetail = () => {
     };
   }, [facturasPeriodo]);
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = () => {
     const rows = facturasVisibles.map((f) => ({
       Fecha: f.fecha,
       Tipo: esIngreso(f) ? 'Ingreso' : 'Egreso',
@@ -580,7 +579,7 @@ const CompanyDetail = () => {
       UUID: f.uuid,
     }));
     downloadCsv(`facturas_empresa_${id}.csv`, rows);
-  }, [facturasVisibles, id]);
+  };
 
   const statsIva = useMemo(() => facturasPeriodo.reduce((acc, f) => {
     const total = toNumber(f.total);

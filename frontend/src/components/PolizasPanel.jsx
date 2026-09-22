@@ -71,8 +71,7 @@ const PolizasPanel = ({ empresaId, mes, anio, onPeriodoChange, onRefreshFacturas
   }, [empresaId, mes, anio]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchPolizas();
+    queueMicrotask(fetchPolizas);
     api.get(`/configuracion/comisiones-banco/${empresaId}`)
       .then((res) => {
         setBancos(res.data);

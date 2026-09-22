@@ -32,7 +32,7 @@ const ComisionesBancoPanel = ({ empresaId }) => {
   }, [empresaId]);
 
   useEffect(() => {
-    fetchBancos();
+    queueMicrotask(fetchBancos);
   }, [fetchBancos]);
 
   const openNew = () => {

@@ -162,8 +162,6 @@ Guia operativa: `docs/PWA_BETA_SIN_CLOUD.md`.
 
 - Catalogo de cuentas contables
 - Reglas automaticas de clasificacion
-- Dashboard financiero
-- Exportacion a Excel y PDF
 - Integracion bancaria avanzada
 - Despliegue beta Vercel + AWS Free Tier + RDS for MySQL + S3
 - Integracion con Oracle Cloud como alternativa futura si hay capacidad disponible

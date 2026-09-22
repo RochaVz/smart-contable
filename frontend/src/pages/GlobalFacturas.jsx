@@ -48,13 +48,15 @@ const formatFecha = (fecha) => {
 };
 
 const GlobalFacturas = () => {
-  const hoy = new Date();
+  const hoy = useMemo(() => new Date(), []);
   // 1. Estados necesarios que faltaban
   const [facturas, setFacturas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(''); // <--- ESTE FALTABA
   const [mesFiltro, setMesFiltro] = useState(hoy.getMonth() + 1);
   const [anioFiltro, setAnioFiltro] = useState(hoy.getFullYear());
+  const [proveedorFiltro, setProveedorFiltro] = useState('');
+  const [tipoFiltro, setTipoFiltro] = useState('todos');
 
   useEffect(() => {
     const fetchGlobal = async () => {
@@ -79,16 +81,27 @@ const GlobalFacturas = () => {
     return [...anios].sort((a, b) => b - a);
   }, [facturas, hoy]);
 
+  const proveedoresDisponibles = useMemo(() => [...new Set(
+    facturas
+      .map((factura) => factura.emisor || factura.nombre_emisor || '')
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'es')), [facturas]);
+
   const facturasFiltradas = useMemo(() => {
     const term = searchTerm.toLowerCase();
     return facturas.filter((f) => {
       const periodo = getPeriodoFactura(f);
-      return periodo?.mes === mesFiltro && periodo?.anio === anioFiltro;
+      const emisor = f.emisor || f.nombre_emisor || '';
+      const tipo = f.tipo_operacion || f.tipo_comprobante || '';
+      return periodo?.mes === mesFiltro
+        && periodo?.anio === anioFiltro
+        && (!proveedorFiltro || emisor === proveedorFiltro)
+        && (tipoFiltro === 'todos' || tipo === tipoFiltro);
     }).filter(f => 
       (typeof f.empresa === 'string' ? f.empresa : f.empresa?.razon_social || '').toLowerCase().includes(term) ||
       (f.emisor || f.nombre_emisor || '').toLowerCase().includes(term)
     ).sort((a, b) => getFechaFactura(b).localeCompare(getFechaFactura(a)));
-  }, [facturas, searchTerm, mesFiltro, anioFiltro]);
+  }, [facturas, searchTerm, mesFiltro, anioFiltro, proveedorFiltro, tipoFiltro]);
 
   const facturasPorFecha = useMemo(() => facturasFiltradas.reduce((acc, factura) => {
     const fecha = getFechaFactura(factura) || 'Sin fecha';
@@ -116,17 +129,18 @@ const GlobalFacturas = () => {
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-8">
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-2xl sm:rounded-3xl sm:p-8">
       
       {/* CABECERA CON BUSCADOR E ICONOS */}
-      <div className="p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900/50">
+      <div className="flex flex-col items-stretch gap-4 border-b border-slate-800 bg-slate-900/50 p-4 sm:p-6">
         <h3 className="font-bold flex items-center gap-2 text-lg text-white">
           <FileText className="text-blue-500 w-5 h-5" /> Listado Global
         </h3>
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5">
+        <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5">
             <Calendar className="w-4 h-4 text-slate-600" />
             <select
+              aria-label="Filtrar por mes"
               value={mesFiltro}
               onChange={(e) => setMesFiltro(Number(e.target.value))}
               className="bg-transparent text-white text-sm outline-none"
@@ -136,6 +150,7 @@ const GlobalFacturas = () => {
               ))}
             </select>
             <select
+              aria-label="Filtrar por año"
               value={anioFiltro}
               onChange={(e) => setAnioFiltro(Number(e.target.value))}
               className="bg-transparent text-white text-sm outline-none"
@@ -145,7 +160,28 @@ const GlobalFacturas = () => {
               ))}
             </select>
           </div>
-          <div className="relative w-full sm:w-80">
+          <select
+            aria-label="Filtrar por proveedor"
+            value={proveedorFiltro}
+            onChange={(e) => setProveedorFiltro(e.target.value)}
+            className="min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Todos los proveedores</option>
+            {proveedoresDisponibles.map((proveedor) => (
+              <option key={proveedor} value={proveedor}>{proveedor}</option>
+            ))}
+          </select>
+          <select
+            aria-label="Filtrar por tipo de operación"
+            value={tipoFiltro}
+            onChange={(e) => setTipoFiltro(e.target.value)}
+            className="min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="todos">Todos los tipos</option>
+            <option value="VENTA">Ingresos / ventas</option>
+            <option value="GASTO">Egresos / gastos</option>
+          </select>
+          <div className="relative min-w-0">
             <Search className="absolute left-3 top-3 text-slate-600 w-4 h-4" />
             <input 
               type="text" 
@@ -159,7 +195,7 @@ const GlobalFacturas = () => {
             type="button"
             onClick={handleExportCsv}
             disabled={loading || facturasFiltradas.length === 0}
-            className="bg-emerald-600 px-4 py-2.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2 lg:col-span-1"
           >
             <Download className="w-4 h-4" /> Exportar CSV
           </button>
@@ -168,7 +204,7 @@ const GlobalFacturas = () => {
 
       {/* TABLA */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left">
+          <table className="w-full min-w-[760px] text-left">
           <thead className="text-slate-500 text-[10px] uppercase font-black tracking-widest bg-slate-800/50">
             <tr>
               <th className="p-6">Fecha</th>

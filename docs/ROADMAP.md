@@ -13,7 +13,7 @@ funcional antes de iniciar la siguiente.
 ### Etapa 0 — Reportes profesionales y ligeros
 
 **Prioridad:** Crítica
-**Estado:** En implementación
+**Estado:** En validacion final
 
 #### Objetivo
 
@@ -28,10 +28,10 @@ sin cambiar la lógica contable existente.
 - [x] Agregar filtro local por texto en las tablas.
 - [x] Agregar ordenamiento por columna.
 - [x] Agregar paginación compacta.
-- [ ] Agregar filtros específicos por proveedor, mes y tipo de operación.
-- [ ] Unificar estados de carga, vacío y error.
-- [ ] Revisar accesibilidad de tablas y controles.
-- [ ] Validar responsive en escritorio, tablet y móvil.
+- [x] Agregar filtros específicos por proveedor, mes y tipo de operación.
+- [x] Unificar estados de carga, vacío y error.
+- [x] Revisar accesibilidad de tablas y controles.
+- [x] Validar responsive en escritorio, tablet y móvil.
 
 #### Criterios de aceptación
 
@@ -45,12 +45,46 @@ sin cambiar la lógica contable existente.
 
 **Prioridad:** Muy alta
 
-- [ ] Corregir errores y advertencias de lint del frontend.
+- [x] Corregir errores y advertencias de lint del frontend.
 - [ ] Agregar pruebas para reportes, filtros y exportaciones.
 - [ ] Validar aislamiento entre usuarios y empresas.
 - [ ] Completar pruebas de autenticación y permisos.
 - [ ] Verificar migraciones Alembic desde una base limpia.
 - [ ] Configurar CI para build, lint y pruebas backend.
+
+### Etapa 1.1 — Respaldo integral y portabilidad
+
+**Prioridad:** Crítica
+**Estado:** Parcial
+
+#### Objetivo
+
+Permitir que la información de una cuenta o empresa pueda trasladarse a otro equipo
+sin depender de los IDs internos del navegador de origen.
+
+#### Completado
+
+- [x] Exportar empresas sincronizadas junto con sus CFDI.
+- [x] Versionar el formato de respaldo.
+- [x] Mantener compatibilidad con respaldos anteriores.
+- [x] Remapear empresas e invoices por RFC y UUID.
+- [x] Mostrar respaldo global desde el Dashboard.
+
+#### Pendiente
+
+- [ ] Incluir polizas y movimientos contables en JSON restaurable.
+- [ ] Incluir mapeos de cuentas y configuraciones por empresa.
+- [ ] Incluir movimientos bancarios remotos.
+- [ ] Agregar resumen de cobertura antes de descargar.
+- [ ] Agregar prueba automatizada de exportar, limpiar, importar y comparar conteos.
+- [ ] Agregar migraciones de versiones del formato de respaldo.
+
+#### Criterios de aceptacion
+
+- Exportar en equipo A e importar en equipo B conserva los conteos por empresa.
+- Ningun registro importado depende del ID local original.
+- UUID de CFDI y RFC son claves de reconciliacion.
+- Un respaldo incompatible genera un mensaje accionable.
 
 ### Etapa 2 — Modelo fiscal base
 
@@ -143,6 +177,12 @@ sin cambiar la lógica contable existente.
 * Dashboard Financiero
 
 ---
+
+## Backlog histórico
+
+Las fases siguientes conservan ideas del roadmap inicial. El plan 2026 anterior es
+la fuente vigente de prioridades y estados; estas fases no deben interpretarse como
+un segundo calendario de ejecución.
 
 # Fase 1 — Estabilización Técnica
 

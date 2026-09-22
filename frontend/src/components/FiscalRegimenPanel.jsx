@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BadgeCheck, Calculator, Loader2, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -26,7 +26,7 @@ const FiscalRegimenPanel = ({ empresa, onUpdated }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const cargar = async () => {
+  const cargar = useCallback(async () => {
     if (!empresa?.id) return;
     setLoading(true);
     try {
@@ -42,13 +42,13 @@ const FiscalRegimenPanel = ({ empresa, onUpdated }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [empresa]);
 
   useEffect(() => {
     if (empresa?.id) {
-      cargar();
+      queueMicrotask(cargar);
     }
-  }, [empresa?.id]);
+  }, [cargar, empresa?.id]);
 
   const guardar = async (event) => {
     event.preventDefault();
