@@ -286,10 +286,22 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
     }
 
 
+def _es_factura_recibida_de_proveedor(factura: Factura, rfc_empresa: str) -> bool:
+    """Identifica CFDI recibidos de terceros que deben aparecer en el padrón."""
+    tipo = _tipo_comprobante(factura)
+    rfc_emisor = (getattr(factura, "rfc_emisor", None) or "").strip().upper()
+    if tipo not in {"I", "E", "P"} or not rfc_emisor:
+        return False
+    return rfc_emisor != rfc_empresa
+
+
 def generar_padron_proveedores(db: Session, empresa_id: int, mes: int, anio: int) -> dict:
     rfc = _rfc_empresa(db, empresa_id)
     facturas = _facturas_periodo(db, empresa_id, mes, anio)
-    gastos = [f for f in facturas if not es_venta(f, rfc)]
+    gastos = [
+        f for f in facturas
+        if _es_factura_recibida_de_proveedor(f, rfc)
+    ]
 
     mapeos = {
         m.rfc_emisor: m
@@ -299,11 +311,13 @@ def generar_padron_proveedores(db: Session, empresa_id: int, mes: int, anio: int
     padron: dict[str, dict] = {}
     for f in gastos:
         rfc_p = (f.rfc_emisor or "").strip().upper()
-        if rfc_p not in padron:
+        nombre_p = (f.nombre_emisor or "Proveedor sin nombre").strip()
+        clave = rfc_p or f"NOMBRE:{nombre_p.upper()}"
+        if clave not in padron:
             m = mapeos.get(rfc_p)
-            padron[rfc_p] = {
+            padron[clave] = {
                 "rfc": rfc_p,
-                "nombre": f.nombre_emisor or "Sin nombre",
+                "nombre": nombre_p,
                 "clasificacion": m.nombre_cuenta if m else "Por clasificar",
                 "codigo_cuenta": m.codigo_cuenta if m else None,
                 "num_facturas": 0,
@@ -314,7 +328,7 @@ def generar_padron_proveedores(db: Session, empresa_id: int, mes: int, anio: int
                 "isr_retenido": 0.0,
                 "deducible": bool(f.es_deducible),
             }
-        p = padron[rfc_p]
+        p = padron[clave]
         p["num_facturas"] += 1
         p["subtotal"] += float(f.subtotal or 0)
         p["iva"] += float(f.iva_trasladado or 0)

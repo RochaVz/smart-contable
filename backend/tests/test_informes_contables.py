@@ -347,6 +347,39 @@ def test_padron_reutiliza_clasificacion_por_rfc_en_periodos_futuros(monkeypatch)
     assert padron_agosto["proveedores"][0]["clasificacion"] == "HONORARIOS"
 
 
+def test_padron_incluye_proveedores_recibidos_y_excluye_cfdi_propios(monkeypatch):
+    class QueryMapeos:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            return []
+
+    class FakeDb:
+        def query(self, modelo):
+            assert modelo is informes_contables.MapeoCuenta
+            return QueryMapeos()
+
+    monkeypatch.setattr(informes_contables, "_rfc_empresa", lambda *_args: "AAA010101AAA")
+    monkeypatch.setattr(
+        informes_contables,
+        "_facturas_periodo",
+        lambda *_args: [
+            SimpleNamespace(tipo_comprobante="I", rfc_emisor="BBB010101BBB", nombre_emisor="Proveedor I", subtotal=100, iva_trasladado=16, total=116, iva_retenido=0, isr_retenido=0, es_deducible=True),
+            SimpleNamespace(tipo_comprobante="P", rfc_emisor="CCC010101CCC", nombre_emisor="Proveedor P", subtotal=200, iva_trasladado=0, total=200, iva_retenido=0, isr_retenido=0, es_deducible=True),
+            SimpleNamespace(tipo_comprobante="N", rfc_emisor="AAA010101AAA", nombre_emisor="Nómina propia", subtotal=500, iva_trasladado=0, total=500, iva_retenido=0, isr_retenido=0, es_deducible=False),
+        ],
+    )
+
+    resultado = informes_contables.generar_padron_proveedores(FakeDb(), 1, 7, 2026)
+
+    assert resultado["total_proveedores"] == 2
+    assert {proveedor["rfc"] for proveedor in resultado["proveedores"]} == {
+        "BBB010101BBB",
+        "CCC010101CCC",
+    }
+
+
 def test_serializar_poliza_recalcula_nomina_para_poliza_historica(monkeypatch):
     movimiento = SimpleNamespace(
         cuenta="601.11.01",
