@@ -408,3 +408,45 @@ input[type='submit'] {
 :root[data-theme='light'] [class~='divide-slate-900'] {
 	border-color: #e2e8f0 !important;
 }
+
+/* Estados seleccionados: color fuerte y texto siempre legible. */
+:root[data-theme='light'] [class*='bg-slate-800'][class*='text-white'],
+:root[data-theme='light'] [class*='bg-slate-900'][class*='text-white'],
+:root[data-theme='light'] [class*='bg-slate-950'][class*='text-white'] {
+	background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+	color: #ffffff !important;
+	border-color: #1d4ed8 !important;
+	box-shadow: 0 8px 18px rgba(37, 99, 235, 0.2) !important;
+}
+
+:root[data-theme='light'] [class*='bg-emerald-'][class*='text-white'],
+:root[data-theme='light'] [class*='bg-emerald-'][class*='text-slate-'] {
+	color: #ffffff !important;
+}
+
+:root[data-theme='light'] [class*='bg-rose-'][class*='text-white'],
+:root[data-theme='light'] [class*='bg-rose-'][class*='text-slate-'] {
+	color: #ffffff !important;
+}
+
+:root[data-theme='light'] [class*='bg-cyan-'][class*='text-white'],
+:root[data-theme='light'] [class*='bg-violet-'][class*='text-white'] {
+	color: #ffffff !important;
+}
+
+/* Acentos suaves para diferenciar zonas sin volver a un fondo gris plano. */
+:root[data-theme='light'] [class*='border-emerald-'][class*='bg-slate-'] {
+	background-color: rgba(236, 253, 245, 0.9) !important;
+}
+
+:root[data-theme='light'] [class*='border-rose-'][class*='bg-slate-'] {
+	background-color: rgba(255, 241, 242, 0.9) !important;
+}
+
+:root[data-theme='light'] [class*='border-cyan-'][class*='bg-slate-'] {
+	background-color: rgba(236, 254, 255, 0.9) !important;
+}
+
+:root[data-theme='light'] [class*='border-blue-'][class*='bg-slate-'] {
+	background-color: rgba(239, 246, 255, 0.92) !important;
+}
