@@ -430,6 +430,106 @@ input[type='submit'] {
 	border-color: #8ebdca !important;
 }
 
+/* Sistema final del tema claro: superficies limpias y acentos controlados. */
+:root[data-theme='light'] body {
+	background: #f6fbfd !important;
+	color: #172033 !important;
+}
+
+:root[data-theme='light'] .app-page,
+:root[data-theme='light'] .min-h-screen {
+	background: transparent !important;
+}
+
+:root[data-theme='light'] [class~='bg-slate-950'],
+:root[data-theme='light'] [class~='bg-slate-900'],
+:root[data-theme='light'] [class~='bg-slate-950/40'],
+:root[data-theme='light'] [class~='bg-slate-950/45'],
+:root[data-theme='light'] [class~='bg-slate-950/50'],
+:root[data-theme='light'] [class~='bg-slate-950/60'],
+:root[data-theme='light'] [class~='bg-slate-950/70'],
+:root[data-theme='light'] [class~='bg-slate-950/80'],
+:root[data-theme='light'] [class~='bg-slate-900/50'],
+:root[data-theme='light'] [class~='bg-slate-900/60'],
+:root[data-theme='light'] [class~='bg-slate-900/70'],
+:root[data-theme='light'] [class~='bg-slate-900/80'],
+:root[data-theme='light'] [class~='bg-slate-900/90'] {
+	background: #ffffff !important;
+}
+
+:root[data-theme='light'] [class~='bg-slate-800'],
+:root[data-theme='light'] [class~='bg-slate-800/50'],
+:root[data-theme='light'] [class~='bg-slate-700'],
+:root[data-theme='light'] [class~='bg-slate-700/50'],
+:root[data-theme='light'] [class~='bg-slate-600'] {
+	background: #eaf6f9 !important;
+}
+
+:root[data-theme='light'] :is(section, article, form, nav).border,
+:root[data-theme='light'] .rounded-xl.border,
+:root[data-theme='light'] .rounded-2xl.border,
+:root[data-theme='light'] .rounded-3xl.border {
+	border-color: #b7d2da !important;
+	box-shadow: 0 8px 22px rgba(25, 75, 91, 0.07) !important;
+}
+
+:root[data-theme='light'] .border-slate-800,
+:root[data-theme='light'] .border-slate-700,
+:root[data-theme='light'] .border-slate-900 {
+	border-color: #b7d2da !important;
+}
+
+:root[data-theme='light'] .text-white,
+:root[data-theme='light'] [class~='text-white'] {
+	color: #172033 !important;
+}
+
+:root[data-theme='light'] .text-slate-200,
+:root[data-theme='light'] [class~='text-slate-200'],
+:root[data-theme='light'] .text-slate-300,
+:root[data-theme='light'] [class~='text-slate-300'] {
+	color: #243447 !important;
+}
+
+:root[data-theme='light'] .text-slate-400,
+:root[data-theme='light'] [class~='text-slate-400'],
+:root[data-theme='light'] .text-slate-500,
+:root[data-theme='light'] [class~='text-slate-500'] {
+	color: #466273 !important;
+}
+
+:root[data-theme='light'] thead {
+	background: #eaf6f9 !important;
+	border-bottom: 2px solid #4f8797 !important;
+}
+
+:root[data-theme='light'] tbody tr {
+	border-bottom: 1px solid #c5dce2 !important;
+}
+
+:root[data-theme='light'] [class~='border-emerald-500/20'] {
+	background: #f4fffb !important;
+	border-color: #8acbbd !important;
+}
+
+:root[data-theme='light'] [class~='border-rose-500/20'] {
+	background: #fff7f9 !important;
+	border-color: #e2a0ae !important;
+}
+
+:root[data-theme='light'] [class*='bg-slate-'][class*='text-white'] {
+	background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+	color: #ffffff !important;
+	border-color: #1d4ed8 !important;
+}
+
+:root[data-theme='light'] [class*='bg-emerald-'][class*='text-white'],
+:root[data-theme='light'] [class*='bg-rose-'][class*='text-white'],
+:root[data-theme='light'] [class*='bg-cyan-'][class*='text-white'],
+:root[data-theme='light'] [class*='bg-violet-'][class*='text-white'] {
+	color: #ffffff !important;
+}
+
 /* Divisores visibles para separar bloques, tablas y navegación. */
 :root[data-theme='light'] hr,
 :root[data-theme='light'] .border-b,
