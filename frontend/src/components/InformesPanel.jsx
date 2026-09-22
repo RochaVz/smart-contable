@@ -229,108 +229,41 @@ const InformesPanel = ({
     const ingresos = e?.ingresos || [];
     const gastos = e?.gastos || [];
     const cuentasT = e?.cuentas_t || [];
+    const documentos = [
+      ...facturasIngreso.map((factura) => ({ ...factura, tipo: 'Ingreso' })),
+      ...facturasEgreso.map((factura) => ({ ...factura, tipo: 'Egreso' })),
+    ].sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
     return (
-      <div className="space-y-8">
-        <div>
-          <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <h4 className="flex items-center gap-2 font-bold text-emerald-400">
-              <TrendingUp className="w-4 h-4" /> Ingresos desglosados
-            </h4>
-            <button
-              type="button"
-              onClick={() => descargarReporte('estado_resultados', [
-                ...facturasIngreso.map((factura) => ({
-                  Categoria: 'Factura de ingreso', UUID: factura.uuid, Fecha: factura.fecha,
-                  Contraparte: factura.contraparte, RFC: factura.rfc, Subtotal: factura.subtotal,
-                  IVA: factura.iva, Total: factura.total,
-                })),
-                ...facturasEgreso.map((factura) => ({
-                  Categoria: 'Factura de egreso', UUID: factura.uuid, Fecha: factura.fecha,
-                  Contraparte: factura.contraparte, RFC: factura.rfc, Subtotal: factura.subtotal,
-                  IVA: factura.iva, Total: factura.total,
-                })),
-                ...ingresos.map((ingreso) => ({
-                  Categoria: 'Ingreso', Concepto: ingreso.concepto, Cliente: ingreso.cliente || '',
-                  CuentaContable: ingreso.nombre_cuenta
-                    ? `${ingreso.nombre_cuenta}${ingreso.cuenta ? ` (${ingreso.cuenta})` : ''}`
-                    : (ingreso.cuenta || ''),
-                  CFDI: ingreso.num_facturas ?? 1, Monto: ingreso.monto,
-                })),
-                ...gastos.map((gasto) => ({
-                  Categoria: 'Gasto o costo', Concepto: gasto.concepto, Cliente: '',
-                  CuentaContable: gasto.cuenta || '', CFDI: '', Monto: gasto.monto,
-                })),
-                { Categoria: 'Total ingresos', Concepto: '', Cliente: '', CuentaContable: '', CFDI: '', Monto: e.total_ingresos },
-                { Categoria: 'Total gastos', Concepto: '', Cliente: '', CuentaContable: '', CFDI: '', Monto: e.total_gastos },
-                { Categoria: 'Utilidad neta', Concepto: '', Cliente: '', CuentaContable: '', CFDI: '', Monto: e.utilidad_neta },
-              ])}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600"
-            >
-              <Download className="h-4 w-4" /> Descargar CSV
-            </button>
+      <div className="space-y-6">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <h4 className="text-lg font-black text-white">Resultado del periodo</h4>
+            <p className="mt-1 text-xs text-slate-500">Resumen contable de ingresos, gastos y utilidad.</p>
           </div>
-          <div className="mb-6">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <h4 className="flex items-center gap-2 font-bold text-emerald-400">
-                  <TrendingUp className="h-4 w-4" /> Facturas de ingreso
-                </h4>
-                <p className="mt-1 text-xs text-slate-500">CFDI tipo I emitidos por la empresa en el periodo.</p>
-              </div>
-              <span className="text-xs font-bold text-slate-500">{facturasIngreso.length} CFDI · {fmt(e.total_facturas_ingreso)}</span>
-            </div>
-            <TablaSimple
-              cols={['Fecha', 'Cliente', 'RFC', 'Subtotal', 'IVA', 'Total']}
-              rows={facturasIngreso.map((factura) => [
-                factura.fecha, factura.contraparte, factura.rfc, fmt(factura.subtotal), fmt(factura.iva), fmt(factura.total),
-              ])}
-            />
-          </div>
-          <TablaSimple
-            cols={['Concepto de venta', 'Cliente', 'Cuenta contable', 'CFDI', 'Monto']}
-            rows={ingresos.length === 0
-              ? [['Sin ventas en el periodo', '—', '—', '—', fmt(0)]]
-              : ingresos.map((i) => [
-                i.concepto,
-                i.cliente || '—',
-                i.nombre_cuenta ? `${i.nombre_cuenta}${i.cuenta ? ` (${i.cuenta})` : ''}` : (i.cuenta || '—'),
-                i.num_facturas ?? 1,
-                fmt(i.monto),
-              ])}
-          />
-          <p className="text-right text-emerald-400 font-black mt-2">Total ingresos: {fmt(e.total_ingresos)}</p>
+          <BotonDescargarCsv onClick={() => descargarReporte('estado_resultados', [
+            ...cuentasT.map((cuenta) => ({
+              Categoria: 'Cuenta T', Cuenta: cuenta.cuenta, Nombre: cuenta.nombre,
+              Debe: cuenta.debe, Haber: cuenta.haber, Saldo: cuenta.saldo, Naturaleza: cuenta.naturaleza,
+            })),
+            ...ingresos.map((ingreso) => ({ Categoria: 'Ingreso', Concepto: ingreso.concepto, Monto: ingreso.monto })),
+            ...gastos.map((gasto) => ({ Categoria: 'Gasto', Concepto: gasto.concepto, Cuenta: gasto.cuenta, Monto: gasto.monto })),
+            { Categoria: 'Total ingresos', Monto: e.total_ingresos },
+            { Categoria: 'Total gastos', Monto: e.total_gastos },
+            { Categoria: 'Utilidad neta', Monto: e.utilidad_neta },
+          ])} />
         </div>
-        <div>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h4 className="text-rose-400 font-bold flex items-center gap-2">
-                <TrendingDown className="w-4 h-4" /> Facturas de egreso
-              </h4>
-              <p className="mt-1 text-xs text-slate-500">CFDI tipo E recibidos de proveedores en el periodo.</p>
-            </div>
-            <span className="text-xs font-bold text-slate-500">{facturasEgreso.length} CFDI · {fmt(e.total_facturas_egreso)}</span>
-          </div>
-          <TablaSimple
-            cols={['Fecha', 'Proveedor', 'RFC', 'Subtotal', 'IVA', 'Total']}
-            rows={facturasEgreso.map((factura) => [
-              factura.fecha, factura.contraparte, factura.rfc, fmt(factura.subtotal), fmt(factura.iva), fmt(factura.total),
-            ])}
-          />
-          <div className="mt-6 border-t border-slate-800 pt-5">
-            <h4 className="text-slate-300 font-bold mb-1">Gastos contables sin factura agrupados</h4>
-            <p className="mb-3 text-xs text-slate-500">Movimientos de pólizas; no se mezclan con las facturas de egreso.</p>
-          <TablaSimple
-            cols={['Concepto', 'Cuenta', 'Monto']}
-            rows={gastos.map((g) => [g.concepto, g.cuenta, fmt(g.monto)])}
-          />
-          </div>
-          <p className="text-right text-rose-400 font-black mt-2">Total gastos: {fmt(e.total_gastos)}</p>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <MetricResultado label="Ingresos" value={fmt(e.total_ingresos)} detail={`${facturasIngreso.length} CFDI`} tone="emerald" icon={TrendingUp} />
+          <MetricResultado label="Gastos" value={fmt(e.total_gastos)} detail={`${facturasEgreso.length} CFDI`} tone="rose" icon={TrendingDown} />
+          <MetricResultado label="Utilidad neta" value={fmt(e.utilidad_neta)} detail={`Margen ${e.margen_pct ?? 0}%`} tone={e.utilidad_neta >= 0 ? 'cyan' : 'rose'} icon={FileBarChart} />
         </div>
+
         <div className="border-t border-slate-800 pt-6">
           <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
             <div>
-              <h4 className="font-bold text-cyan-300">Cuentas T del estado de resultados</h4>
-              <p className="mt-1 text-xs text-slate-500">Movimientos agrupados por cuenta contable, separados entre Debe y Haber.</p>
+              <h4 className="font-bold text-cyan-300">Cuentas del resultado</h4>
+              <p className="mt-1 text-xs text-slate-500">Debe, Haber y saldo por cuenta contable.</p>
             </div>
             <span className="text-xs font-bold text-slate-500">{cuentasT.length} cuenta(s)</span>
           </div>
@@ -348,12 +281,22 @@ const InformesPanel = ({
               ])}
           />
         </div>
-        <div className="bg-slate-950 border border-slate-700 rounded-2xl p-6 flex justify-between items-center">
-          <span className="text-white font-bold">Utilidad neta</span>
-          <span className={`text-2xl font-black ${e.utilidad_neta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {fmt(e.utilidad_neta)}
-          </span>
-        </div>
+
+        <details className="border border-slate-800 bg-slate-950/30">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-300 hover:text-white">
+            Ver documentos del periodo
+            <span className="ml-2 text-xs font-normal text-slate-500">{documentos.length} CFDI</span>
+          </summary>
+          <div className="border-t border-slate-800 p-3">
+            <TablaSimple
+              cols={['Tipo', 'Fecha', 'Contraparte', 'RFC', 'Subtotal', 'IVA', 'Total']}
+              rows={documentos.map((factura) => [
+                factura.tipo, factura.fecha, factura.contraparte, factura.rfc,
+                fmt(factura.subtotal), fmt(factura.iva), fmt(factura.total),
+              ])}
+            />
+          </div>
+        </details>
       </div>
     );
   };
@@ -686,5 +629,24 @@ const BotonDescargarCsv = ({ onClick }) => (
     <Download className="h-4 w-4" /> Descargar CSV
   </button>
 );
+
+const MetricResultado = ({ label, value, detail, tone, icon: Icon }) => {
+  const tones = {
+    emerald: 'border-emerald-400 text-emerald-400',
+    rose: 'border-rose-400 text-rose-400',
+    cyan: 'border-cyan-400 text-cyan-300',
+  };
+
+  return (
+    <article className={`border-l-2 bg-slate-950/60 px-4 py-4 ${tones[tone] || tones.cyan}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] font-black uppercase tracking-widest">{label}</p>
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </div>
+      <p className="mt-2 text-xl font-black text-white">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{detail}</p>
+    </article>
+  );
+};
 
 export default memo(InformesPanel);
