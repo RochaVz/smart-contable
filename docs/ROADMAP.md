@@ -41,6 +41,48 @@ sin cambiar la lógica contable existente.
 - La interfaz evita paneles anidados, exceso de bordes y radios grandes.
 - `npm run build` pasa antes de integrar cambios adicionales.
 
+### Etapa 0.1 — Renovación visual del modo claro
+
+**Prioridad:** Alta
+**Estado:** Pendiente
+
+#### Objetivo
+
+Mejorar la interfaz visual del modo claro en SmartContable para ofrecer una experiencia
+más nítida, moderna y agradable, manteniendo consistencia con el modo oscuro.
+
+#### Alcance
+
+- [ ] Ajustar los fondos y textos de los contenedores de fecha y listados de reportes.
+- [ ] Mejorar el contraste y la legibilidad de las acciones `Ver` y `Documentos`.
+- [ ] Sustituir en modo claro `bg-slate-900/90` y `text-white` por variantes como
+  `bg-slate-100`, `text-slate-800` y `hover:text-blue-600`.
+- [ ] Usar colores más vivos para textos e indicadores, incluyendo azul, verde y grises
+  claros, evitando una apariencia apagada.
+- [ ] Aplicar colores con contraste suficiente a los iconos SVG, por ejemplo
+  `text-blue-500` y `text-emerald-500`.
+- [ ] Reforzar los bordes de contenedores y controles con `border-slate-300` en modo
+  claro, en lugar de `border-slate-800`.
+- [ ] Refactorizar los componentes `select`, `button` y `div` afectados para usar la
+  nueva paleta mediante clases de Tailwind CSS.
+- [ ] Configurar el botón `Ver` con fondo claro y estado hover azul.
+- [ ] Configurar el botón `CSV` con fondo verde claro y hover verde intenso.
+- [ ] Mantener el botón `Cargar CFDI` en azul, con una sombra más suave en modo claro.
+- [ ] Conservar sin regresiones el estilo y contraste actuales del modo oscuro.
+- [ ] Probar los cambios en las vistas de reportes y exportación de datos.
+
+#### Criterios de aceptación
+
+- `Ver` y `Documentos` son legibles en modo claro y cumplen un contraste visual
+  suficiente en estado normal, hover y focus.
+- Los bordes de fechas, filtros, listados y acciones se distinguen claramente.
+- Los botones `Ver`, `CSV` y `Cargar CFDI` presentan jerarquía visual y estados
+  interactivos consistentes.
+- Los iconos SVG mantienen contraste en ambos temas.
+- Las vistas de reportes y exportación conservan su funcionalidad y comportamiento
+  responsive.
+- `npm run build` pasa después del refactor visual.
+
 ### Etapa 1 — Calidad técnica y seguridad
 
 **Prioridad:** Muy alta
@@ -516,3 +558,4 @@ Convertir SmartContable en una plataforma SaaS especializada en automatización 
 
 ```
 ```
+
