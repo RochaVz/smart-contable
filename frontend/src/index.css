@@ -331,6 +331,26 @@ input[type='submit'] {
 	color: #0e7490 !important;
 }
 
+:root[data-theme='light'] .text-emerald-300,
+:root[data-theme='light'] [class~='text-emerald-300'] {
+	color: #047857 !important;
+}
+
+:root[data-theme='light'] .text-rose-300,
+:root[data-theme='light'] [class~='text-rose-300'] {
+	color: #be123c !important;
+}
+
+:root[data-theme='light'] .text-cyan-300,
+:root[data-theme='light'] [class~='text-cyan-300'] {
+	color: #0e7490 !important;
+}
+
+:root[data-theme='light'] .text-amber-300,
+:root[data-theme='light'] [class~='text-amber-300'] {
+	color: #a16207 !important;
+}
+
 :root[data-theme='light'] input,
 :root[data-theme='light'] select,
 :root[data-theme='light'] textarea {
@@ -428,6 +448,30 @@ input[type='submit'] {
 :root[data-theme='light'] details > summary {
 	border-bottom: 2px solid #237f95;
 	background: linear-gradient(90deg, #e4f8fb, #ffffff);
+}
+
+/* Paneles de ingresos y egresos: una superficie clara y un divisor único. */
+:root[data-theme='light'] [class~='border-emerald-500/20'],
+:root[data-theme='light'] [class~='border-rose-500/20'] {
+	background: #ffffff !important;
+	box-shadow: 0 8px 20px rgba(21, 94, 117, 0.08) !important;
+}
+
+:root[data-theme='light'] [class~='border-emerald-500/20'] {
+	border-color: #2f9e8f !important;
+}
+
+:root[data-theme='light'] [class~='border-rose-500/20'] {
+	border-color: #e06b86 !important;
+}
+
+/* Las tablas usan la misma línea exterior, interna y superior para evitar saltos visuales. */
+:root[data-theme='light'] [class~='overflow-hidden'][class*='border-slate-800'] {
+	border-color: #4f8797 !important;
+}
+
+:root[data-theme='light'] [class~='overflow-hidden'][class*='border-slate-800'] > div {
+	border-color: #4f8797 !important;
 }
 
 /* Estados seleccionados: color fuerte y texto siempre legible. */
