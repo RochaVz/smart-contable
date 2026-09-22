@@ -223,7 +223,11 @@ const InformesPanel = ({
   };
 
   const renderEstado = () => {
-    const e = data.estado_resultados;
+    const e = data?.estado_resultados || {};
+    const facturasIngreso = e?.facturas_ingreso || [];
+    const facturasEgreso = e?.facturas_egreso || [];
+    const ingresos = e?.ingresos || [];
+    const gastos = e?.gastos || [];
     return (
       <div className="space-y-8">
         <div>
@@ -234,24 +238,24 @@ const InformesPanel = ({
             <button
               type="button"
               onClick={() => descargarReporte('estado_resultados', [
-                ...e.facturas_ingreso.map((factura) => ({
+                ...facturasIngreso.map((factura) => ({
                   Categoria: 'Factura de ingreso', UUID: factura.uuid, Fecha: factura.fecha,
                   Contraparte: factura.contraparte, RFC: factura.rfc, Subtotal: factura.subtotal,
                   IVA: factura.iva, Total: factura.total,
                 })),
-                ...e.facturas_egreso.map((factura) => ({
+                ...facturasEgreso.map((factura) => ({
                   Categoria: 'Factura de egreso', UUID: factura.uuid, Fecha: factura.fecha,
                   Contraparte: factura.contraparte, RFC: factura.rfc, Subtotal: factura.subtotal,
                   IVA: factura.iva, Total: factura.total,
                 })),
-                ...e.ingresos.map((ingreso) => ({
+                ...ingresos.map((ingreso) => ({
                   Categoria: 'Ingreso', Concepto: ingreso.concepto, Cliente: ingreso.cliente || '',
                   CuentaContable: ingreso.nombre_cuenta
                     ? `${ingreso.nombre_cuenta}${ingreso.cuenta ? ` (${ingreso.cuenta})` : ''}`
                     : (ingreso.cuenta || ''),
                   CFDI: ingreso.num_facturas ?? 1, Monto: ingreso.monto,
                 })),
-                ...e.gastos.map((gasto) => ({
+                ...gastos.map((gasto) => ({
                   Categoria: 'Gasto o costo', Concepto: gasto.concepto, Cliente: '',
                   CuentaContable: gasto.cuenta || '', CFDI: '', Monto: gasto.monto,
                 })),
@@ -272,20 +276,20 @@ const InformesPanel = ({
                 </h4>
                 <p className="mt-1 text-xs text-slate-500">CFDI tipo I emitidos por la empresa en el periodo.</p>
               </div>
-              <span className="text-xs font-bold text-slate-500">{e.facturas_ingreso.length} CFDI · {fmt(e.total_facturas_ingreso)}</span>
+              <span className="text-xs font-bold text-slate-500">{facturasIngreso.length} CFDI · {fmt(e.total_facturas_ingreso)}</span>
             </div>
             <TablaSimple
               cols={['Fecha', 'Cliente', 'RFC', 'Subtotal', 'IVA', 'Total']}
-              rows={e.facturas_ingreso.map((factura) => [
+              rows={facturasIngreso.map((factura) => [
                 factura.fecha, factura.contraparte, factura.rfc, fmt(factura.subtotal), fmt(factura.iva), fmt(factura.total),
               ])}
             />
           </div>
           <TablaSimple
             cols={['Concepto de venta', 'Cliente', 'Cuenta contable', 'CFDI', 'Monto']}
-            rows={e.ingresos.length === 0
+            rows={ingresos.length === 0
               ? [['Sin ventas en el periodo', '—', '—', '—', fmt(0)]]
-              : e.ingresos.map((i) => [
+              : ingresos.map((i) => [
                 i.concepto,
                 i.cliente || '—',
                 i.nombre_cuenta ? `${i.nombre_cuenta}${i.cuenta ? ` (${i.cuenta})` : ''}` : (i.cuenta || '—'),
@@ -303,11 +307,11 @@ const InformesPanel = ({
               </h4>
               <p className="mt-1 text-xs text-slate-500">CFDI tipo E recibidos de proveedores en el periodo.</p>
             </div>
-            <span className="text-xs font-bold text-slate-500">{e.facturas_egreso.length} CFDI · {fmt(e.total_facturas_egreso)}</span>
+            <span className="text-xs font-bold text-slate-500">{facturasEgreso.length} CFDI · {fmt(e.total_facturas_egreso)}</span>
           </div>
           <TablaSimple
             cols={['Fecha', 'Proveedor', 'RFC', 'Subtotal', 'IVA', 'Total']}
-            rows={e.facturas_egreso.map((factura) => [
+            rows={facturasEgreso.map((factura) => [
               factura.fecha, factura.contraparte, factura.rfc, fmt(factura.subtotal), fmt(factura.iva), fmt(factura.total),
             ])}
           />
@@ -316,7 +320,7 @@ const InformesPanel = ({
             <p className="mb-3 text-xs text-slate-500">Movimientos de pólizas; no se mezclan con las facturas de egreso.</p>
           <TablaSimple
             cols={['Concepto', 'Cuenta', 'Monto']}
-            rows={e.gastos.map((g) => [g.concepto, g.cuenta, fmt(g.monto)])}
+            rows={gastos.map((g) => [g.concepto, g.cuenta, fmt(g.monto)])}
           />
           </div>
           <p className="text-right text-rose-400 font-black mt-2">Total gastos: {fmt(e.total_gastos)}</p>
