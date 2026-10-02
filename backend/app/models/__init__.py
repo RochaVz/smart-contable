@@ -5,4 +5,18 @@ from app.models.poliza import Poliza, MovimientoPoliza
 from app.models.mapeo_cuenta import MapeoCuenta
 from app.models.comision_banco import ComisionBanco
 from app.models.conciliacion import EstadoCuentaCarga, MovimientoBanco
-from app.models.fiscal import OperacionFiscal, PeriodoFiscal
+from app.models.fiscal import (
+    DeclaracionFiscal,
+    HistorialFiscal,
+    OperacionFiscal,
+    PeriodoFiscal,
+)
+from app.models.cfdi_complementos import (
+    CfdiClasificacionEspecial,
+    CfdiComplementoPago,
+    CfdiNomina,
+    CfdiNominaLinea,
+    CfdiPagoDocumento,
+)
+from app.models.ajustes_fiscales import PagoProvisionalAnterior, PerdidaFiscal
+

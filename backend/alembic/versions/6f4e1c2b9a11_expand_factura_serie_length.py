@@ -5,6 +5,8 @@ Revises: 35b692510394
 Create Date: 2026-08-11 00:00:00.000000
 
 """
+# pylint: disable=no-member,not-callable
+# pyright: reportAttributeAccessIssue=false
 from typing import Sequence, Union
 
 from alembic import op

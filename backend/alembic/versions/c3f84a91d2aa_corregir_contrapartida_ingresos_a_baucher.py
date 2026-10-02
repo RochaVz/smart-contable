@@ -5,6 +5,8 @@ Revises: 9b2ad1e77c31
 Create Date: 2026-08-11
 
 """
+# pylint: disable=no-member,not-callable
+# pyright: reportAttributeAccessIssue=false
 
 from alembic import op
 

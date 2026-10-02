@@ -1,5 +1,221 @@
 # Reporte Tecnico Detallado
 
+## Actualizacion de sesion: 2026-09-17
+
+### 1. Proposito de esta actualizacion
+
+Esta sesion continuo la evolucion de SmartContable desde un MVP contable hacia una
+plataforma fiscal auditable y util para aprendizaje profesional. El trabajo se
+organizo en cuatro frentes:
+
+1. Hacer los reportes mas claros, ligeros e interactivos.
+2. Separar correctamente facturas de ingreso, facturas de egreso y gastos contables.
+3. Crear la base persistente y la API del modelo fiscal.
+4. Mejorar calculos informativos de IVA, ISR y respaldos entre equipos.
+
+El criterio principal fue no presentar como "declaracion oficial" un calculo que aun
+requiere tarifas, parametros, conciliacion o revision de un contador.
+
+### 2. Estado publicado
+
+- Rama: `main`.
+- Commit publicado: `526a424 feat: mejorar reportes, fiscalidad y respaldos`.
+- Remoto: `origin/main`.
+- Arbol local al cierre: limpio.
+- Push a GitHub: exitoso.
+- Vercel puede detectar el commit y ejecutar el despliegue automatico.
+
+### 3. Reportes profesionales
+
+Archivo principal: `frontend/src/components/InformesPanel.jsx`.
+
+#### Cambios funcionales
+
+- Tablas con filtro local por texto.
+- Ordenamiento por columna.
+- Paginacion compacta.
+- Contador de registros visibles.
+- Estados de carga, error, reintento y tabla vacia.
+- Encabezados accesibles, captions y labels para controles de ordenamiento.
+- Interfaz con menos tarjetas, bordes y superficies oscuras.
+- KPI con jerarquia visual mas clara.
+
+#### Separacion contable y fiscal
+
+El estado de resultados ahora distingue:
+
+- `facturas_ingreso`: CFDI tipo `I` emitidos por la empresa.
+- `facturas_egreso`: CFDI tipo `E` recibidos de proveedores.
+- `gastos`: movimientos agrupados desde polizas, que pueden existir sin una factura.
+
+Esta separacion evita comparar directamente un documento fiscal contra un movimiento
+contable agregado. La exportacion CSV tambien conserva las categorias separadas.
+
+#### Leccion reutilizable
+
+Una interfaz de reportes no debe ocultar el origen del dato. Cada total debe indicar
+si proviene de CFDI, polizas, banco o una estimacion. Esta regla reduce errores de
+interpretacion y facilita futuras conciliaciones.
+
+### 4. Modelo fiscal persistente
+
+Archivos principales:
+
+- `backend/app/models/fiscal.py`
+- `backend/app/schemas/fiscal.py`
+- `backend/app/api/v1/endpoints/fiscal.py`
+- `backend/alembic/versions/a8c7d6e5f4b3_add_fiscal_model.py`
+
+#### Entidades agregadas
+
+`PeriodoFiscal` representa un periodo mensual o anual por empresa.
+
+`OperacionFiscal` representa una operacion fiscal auditable con:
+
+- Empresa y periodo.
+- CFDI opcional relacionado.
+- Tipo de operacion: ingreso, egreso, nomina, pago o ajuste.
+- Origen: CFDI, poliza o manual.
+- Referencia de origen unica.
+- RFC y nombre de contraparte.
+- Tipo DIOT: nacional, extranjero o global.
+- Base gravable.
+- IVA trasladado y acreditable.
+- IVA retenido.
+- ISR retenido.
+- IEPS.
+- Total y notas.
+
+#### API agregada
+
+- `POST /api/v1/fiscal/periodos`
+- `GET /api/v1/fiscal/periodos/{empresa_id}`
+- `POST /api/v1/fiscal/operaciones`
+- `GET /api/v1/fiscal/operaciones/{empresa_id}`
+
+Todos los endpoints validan pertenencia de la empresa al usuario actual. Las
+operaciones duplicadas por origen y referencia devuelven conflicto en lugar de
+duplicar informacion.
+
+#### Leccion reutilizable
+
+El modelo fiscal se mantuvo separado de `facturas` y `polizas`. Esto permite conservar
+la fuente original y registrar ajustes o clasificaciones sin modificar historicos.
+Para sistemas contables, separar "documento de origen", "asiento contable" y
+"operacion fiscal" es una frontera arquitectonica importante.
+
+### 5. Calculo informativo de IVA
+
+Archivo principal: `backend/app/services/calculos_fiscales.py`.
+
+Endpoint:
+
+`GET /api/v1/fiscal/iva?empresa_id=1&mes=9&anio=2026`
+
+Entrega resultados del periodo y acumulados de enero al mes consultado:
+
+- IVA trasladado desde CFDI tipo `I` emitidos.
+- IVA acreditable desde CFDI tipo `E` recibidos.
+- IVA retenido.
+- IVA estimado a cargo.
+- Saldo a favor estimado.
+
+El servicio usa `Decimal` y redondeo a centavos para evitar errores comunes de
+aritmetica binaria con `float`.
+
+### 6. Calculo informativo de ISR por regimen
+
+Endpoint:
+
+`GET /api/v1/fiscal/isr?empresa_id=1&mes=9&anio=2026`
+
+Parametros opcionales:
+
+- `tasa_isr` para una estimacion explicita.
+- `coeficiente_utilidad` para regimenes que lo requieren.
+- `deduccion_ciega_pct` para arrendamiento cuando aplique.
+
+Reglas implementadas:
+
+- RESICO: no aplica deducciones autorizadas dentro de esta estimacion.
+- Arrendamiento: permite deduccion ciega parametrizada.
+- Personas morales: permite coeficiente de utilidad parametrizado.
+- Tarifas progresivas: requieren tasa o tabla versionada.
+- Parametros ausentes: el resultado queda como
+  `requiere_parametros_del_regimen`.
+
+La aplicacion no inventa una tasa fiscal. Este comportamiento es intencional: una
+cifra aparentemente precisa pero basada en una tasa incorrecta es mas peligrosa que
+un resultado pendiente de parametros.
+
+### 7. Respaldos entre equipos
+
+Archivos principales:
+
+- `frontend/src/services/localBackup.js`
+- `frontend/src/components/DeviceBackupPanel.jsx`
+- `frontend/src/pages/Dashboard.jsx`
+
+#### Correcciones realizadas
+
+- El respaldo global ahora consulta empresas sincronizadas y sus CFDI antes de
+  descargar el JSON.
+- El respaldo por empresa incluye la empresa y sus CFDI con `empresa_id` y RFC.
+- La restauracion remapea registros por ID original y, como respaldo, por RFC.
+- Se evitan duplicados de facturas por UUID.
+- El formato se versiono a `3`, manteniendo lectura de versiones `1` y `2`.
+- El Dashboard ahora muestra un control global de respaldo.
+
+#### Alcance actual
+
+El respaldo transporta empresas, CFDI, movimientos bancarios locales y snapshots.
+Las polizas remotas aun se exportan como CSV y no se reconstruyen automaticamente como
+registros editables. La siguiente mejora debe crear un paquete JSON de polizas,
+movimientos contables, mapeos y configuraciones para lograr una restauracion integral.
+
+#### Leccion reutilizable
+
+Un respaldo debe conservar dos identidades: una identidad humana estable, como RFC, y
+una identidad tecnica local, como el ID de IndexedDB. Nunca se debe confiar solamente
+en IDs generados por otro dispositivo.
+
+### 8. Validaciones realizadas
+
+- Pruebas fiscales e informes: `14 passed`.
+- Importacion de `app.main`: correcta.
+- ESLint de los archivos de respaldo y Dashboard: correcto.
+- Build frontend: correcto.
+- `git diff --check`: correcto.
+- Alembic reconoce una sola cabeza: `a8c7d6e5f4b3`.
+
+### 9. Limitaciones conocidas
+
+- ISR aun es informativo y no sustituye declaraciones SAT.
+- Faltan tarifas progresivas oficiales versionadas por ejercicio.
+- Faltan pagos provisionales anteriores y perdidas fiscales.
+- DIOT y declaracion anual aun no tienen endpoint operativo.
+- IEPS aun no esta calculado.
+- Los complementos de nomina y pago no estan completamente desglosados.
+- Las polizas remotas no se restauran como entidades editables desde el JSON.
+- El lint completo del frontend conserva pendientes fuera de los archivos validados.
+
+### 10. Aprendizajes para futuros proyectos
+
+1. Definir primero el origen y la autoridad de cada dato antes de construir KPI.
+2. Separar modelos de documento, contabilidad y fiscalidad.
+3. Hacer que los calculos declaren sus supuestos y parametros faltantes.
+4. Usar `Decimal` para importes financieros.
+5. Validar multiempresa en cada endpoint, no solo en la interfaz.
+6. Diseñar respaldos con versionado, migraciones y claves estables.
+7. Probar primero los servicios de negocio y despues los endpoints.
+8. Validar build, lint, pruebas y formato antes de publicar.
+9. Documentar las limitaciones para evitar que un MVP sea confundido con software
+   fiscal certificado.
+10. Mantener el roadmap como contrato de aprendizaje: cada tarea debe tener estado,
+    criterio de aceptacion y evidencia tecnica.
+
+---
+
 ## Sesion de trabajo: PWA movil, modo local y respaldo en dispositivo
 
 ## Fecha

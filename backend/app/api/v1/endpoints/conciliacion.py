@@ -270,6 +270,47 @@ async def cargar_estado_cuenta(
     }
 
 
+def _serializar_movimiento_export(mov: MovimientoBanco) -> dict:
+    """Serializa movimiento bancario para respaldo portable (fingerprint = hash_movimiento)."""
+    fecha = mov.fecha
+    fecha_str = str(fecha.date() if hasattr(fecha, "date") else fecha)
+    tipo = str(mov.tipo or "").lower()
+    monto = float(mov.monto or 0)
+    return {
+        "id": mov.id,
+        "empresa_id": mov.empresa_id,
+        "banco_id": mov.banco_id,
+        "carga_id": mov.carga_id,
+        "fecha": fecha_str,
+        "tipo": tipo,
+        "descripcion": mov.descripcion or "",
+        "referencia": mov.referencia or "",
+        "monto": monto,
+        "cargo": monto if tipo == "cargo" else None,
+        "abono": monto if tipo == "abono" else None,
+        "saldo": float(mov.saldo) if mov.saldo is not None else None,
+        "hash_movimiento": mov.hash_movimiento,
+        "fingerprint": mov.hash_movimiento,
+    }
+
+
+@router.get("/movimientos")
+def listar_movimientos_banco(
+    empresa_id: int = Query(..., description="Empresa dueña de los movimientos"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Lista todos los movimientos bancarios de la empresa (sin filtro de periodo) para respaldo."""
+    _validar_empresa(db, empresa_id, current_user)
+    movimientos = (
+        db.query(MovimientoBanco)
+        .filter(MovimientoBanco.empresa_id == empresa_id)
+        .order_by(MovimientoBanco.fecha.asc(), MovimientoBanco.id.asc())
+        .all()
+    )
+    return [_serializar_movimiento_export(mov) for mov in movimientos]
+
+
 @router.post("/convertir-pdf-csv")
 async def convertir_pdf_a_csv(
     archivo: UploadFile = File(...),

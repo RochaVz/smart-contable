@@ -19,7 +19,23 @@ from app.models.poliza import Poliza, MovimientoPoliza # noqa: F401
 from app.models.mapeo_cuenta import MapeoCuenta # noqa: F401
 from app.models.comision_banco import ComisionBanco # noqa: F401
 from app.models.conciliacion import EstadoCuentaCarga, MovimientoBanco # noqa: F401
-from app.models.fiscal import OperacionFiscal, PeriodoFiscal # noqa: F401
+from app.models.fiscal import (  # noqa: F401
+    DeclaracionFiscal,
+    HistorialFiscal,
+    OperacionFiscal,
+    PeriodoFiscal,
+)
+from app.models.ajustes_fiscales import (  # noqa: F401
+    PagoProvisionalAnterior,
+    PerdidaFiscal,
+)
+from app.models.cfdi_complementos import (  # noqa: F401
+    CfdiClasificacionEspecial,
+    CfdiComplementoPago,
+    CfdiNomina,
+    CfdiNominaLinea,
+    CfdiPagoDocumento,
+)
 
 logger = get_logger(__name__)
 
@@ -209,3 +225,4 @@ def readiness(db: Session = Depends(get_db)):
             status_code=503,
             detail="Base de datos no disponible",
         ) from None
+

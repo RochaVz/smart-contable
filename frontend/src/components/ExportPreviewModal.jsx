@@ -188,11 +188,11 @@ const ExportPreviewModal = ({ isOpen, onClose, title, content, loading, onDownlo
 
           {!loading && !hasError && sections.length > 0 && (
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-              <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
-                <Rows3 className="h-4 w-4 text-blue-400" />
+              <div className="export-preview-chip flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
+                <Rows3 className="h-4 w-4 text-blue-500" />
                 <span><strong className="text-white">{visibleRows}</strong> filas visibles</span>
               </div>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
+              <div className="export-preview-chip flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
                 <Columns3 className="h-4 w-4 text-violet-400" />
                 <span><strong className="text-white">{columnCount}</strong> columnas máximas</span>
               </div>
@@ -274,7 +274,7 @@ const ExportPreviewModal = ({ isOpen, onClose, title, content, loading, onDownlo
             type="button"
             onClick={onDownload}
             disabled={loading || hasError || sections.length === 0}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.75 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition-all hover:bg-emerald-500 hover:shadow-emerald-800/40 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="btn-action-csv flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.75 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition-all hover:bg-emerald-500 hover:shadow-emerald-800/40 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             <Download className="h-4 w-4" />
             Descargar archivo CSV

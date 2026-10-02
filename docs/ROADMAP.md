@@ -13,7 +13,7 @@ funcional antes de iniciar la siguiente.
 ### Etapa 0 — Reportes profesionales y ligeros
 
 **Prioridad:** Crítica
-**Estado:** En validacion final
+**Estado:** Listo para beta
 
 #### Objetivo
 
@@ -94,10 +94,165 @@ más nítida, moderna y agradable, manteniendo consistencia con el modo oscuro.
 - [ ] Verificar migraciones Alembic desde una base limpia.
 - [ ] Configurar CI para build, lint y pruebas backend.
 
+### Etapa 0.1 — Refinamiento visual del modo claro
+
+**Prioridad:** Alta
+**Estado:** Listo para beta
+
+#### Objetivo
+
+Modernizar y mejorar la legibilidad del modo claro, conservando la coherencia con el
+modo oscuro ya consolidado. El foco inicial son las vistas de reportes y exportación
+de datos.
+
+#### Contexto
+
+- Los contenedores de fecha y listados de reportes requieren mejor definición visual.
+- Las acciones `Ver` y `Documentos` pierden legibilidad sobre fondos oscuros.
+- Bordes y botones actuales tienen poco contraste y una apariencia apagada.
+- La paleta clara debe sentirse más nítida, viva y contemporánea, sin romper el
+  lenguaje visual del modo oscuro.
+
+#### Alcance
+
+- [x] Refactorizar `select`, `button` y contenedores afectados para usar una paleta
+  específica de modo claro.
+- [x] Sustituir combinaciones oscuras como `bg-slate-900/90` y `text-white` por
+  variantes claras apropiadas, como `bg-slate-100`, `text-slate-800` y
+  `hover:text-blue-600`, cuando el modo claro esté activo.
+- [x] Asegurar contraste suficiente en las acciones `Ver` y `Documentos`.
+- [x] Aplicar bordes más definidos, por ejemplo `border-slate-300`, en lugar de
+  bordes oscuros que se pierden en modo claro.
+- [x] Usar colores más vivos para textos e iconos, incluyendo `text-blue-500` y
+  `text-emerald-500` para SVG según su semántica.
+- [x] Ajustar el botón `Ver` con fondo claro y estado hover azul.
+- [x] Ajustar el botón `CSV` con fondo verde claro y estado hover verde intenso.
+- [x] Mantener el botón `Cargar CFDI` azul, con una sombra más suave en modo claro.
+- [x] Revisar visualmente reportes y exportación de datos en escritorio, tablet y
+  móvil.
+
+#### Criterios de aceptación
+
+- Las acciones `Ver`, `Documentos`, `CSV` y `Cargar CFDI` son legibles y distinguibles
+  en modo claro, incluidos sus estados hover y foco.
+- Los contenedores de fecha y las listas de reportes muestran bordes nítidos y
+  consistentes.
+- Los iconos SVG conservan contraste suficiente sobre todos los fondos claros.
+- La interfaz clara se percibe moderna y coherente con el modo oscuro, sin grises
+  apagados predominantes.
+- `npm run build` pasa tras el refactor visual.
+
+### Etapa 0.2 — Detalle CFDI y listados fiscales dinámicos
+
+**Prioridad:** Alta
+**Estado:** Listo para beta
+
+#### Objetivo
+
+Mejorar el detalle de los CFDI y hacer que los resúmenes de ingresos, egresos e IVA
+permitan explorar sus listados relacionados de forma clara y sin saturar la vista
+inicial.
+
+#### Contexto
+
+- El detalle actual muestra montos y número de facturas, pero no el concepto de la
+  operación.
+- Los usuarios necesitan identificar qué se vendió en CFDI de ingresos y qué se
+  compró en CFDI de egresos.
+- Los listados deben iniciar ocultos y mostrarse únicamente al activar el resumen
+  correspondiente.
+
+#### Alcance
+
+- [x] Agregar el campo `Concepto` a cada factura en el detalle CFDI.
+- [x] Mostrar la descripción de lo vendido para CFDI de ingresos y la descripción de
+  lo comprado para CFDI de egresos.
+- [x] Aplicar tipografía consistente al concepto: `text-sm font-bold text-slate-700`
+  en modo claro y `text-slate-300` en modo oscuro.
+- [x] Refactorizar los resúmenes `Ingresos`, `Egresos` e `IVA del periodo` para
+  activar la visualización dinámica de su contenido asociado.
+- [x] Mantener los listados de facturas ocultos por defecto.
+- [x] Mostrar exclusivamente el listado de CFDI de ingresos al seleccionar
+  `Ingresos`.
+- [x] Mostrar exclusivamente el listado de CFDI de egresos al seleccionar `Egresos`.
+- [x] Mostrar una tabla comparativa de IVA acreditado contra IVA causado al seleccionar
+  `IVA del periodo`.
+- [x] Implementar los paneles con un componente colapsable, como `Disclosure` de
+  Headless UI o un acordeón React reutilizable, con transiciones suaves.
+- [x] Mantener los contenedores alineados con el estilo actual:
+  `bg-slate-900 p-6 rounded-2xl border` en modo oscuro.
+- [x] Aplicar colores semánticos: ingresos `text-emerald-400`, egresos
+  `text-rose-400` e IVA `text-blue-400`.
+- [x] Usar bordes definidos: `border-slate-300` en modo claro y `border-slate-800`
+  en modo oscuro.
+- [x] Validar la interacción en las vistas de reportes y detalle/exportación de datos.
+
+#### Criterios de aceptación
+
+- Cada factura muestra un concepto legible, consistente y coherente con su tipo de
+  operación.
+- Al cargar la vista no se muestra ningún listado de facturas ni tabla de IVA.
+- Al activar `Ingresos`, `Egresos` o `IVA del periodo`, solo se muestra el panel
+  correspondiente y los demás se ocultan.
+- La tabla de IVA identifica claramente el IVA acreditado y el IVA causado.
+- Las transiciones, colores, bordes y contraste funcionan de forma consistente en
+  modo claro y oscuro.
+- `npm run build` pasa tras el refactor.
+
+### Etapa 0.3 — Informes fiscales y contables: modo claro
+
+**Prioridad:** Alta
+**Estado:** Listo para beta
+
+#### Objetivo
+
+Modernizar la interfaz del apartado `Informes fiscales y contables` en modo claro,
+con mejor contraste, jerarquía visual y separación entre secciones, manteniendo la
+coherencia del modo oscuro existente.
+
+#### Contexto
+
+- Los textos negros y grises apagados hacen que el modo claro se perciba antiguo.
+- Los indicadores verdes, rojos y azules requieren mayor intensidad visual.
+- Los bordes y divisores poco visibles reducen la legibilidad de las cajas y su
+  jerarquía.
+
+#### Alcance
+
+- [x] Sustituir `text-slate-500` y `text-slate-700` por variantes con mayor presencia,
+  como `text-slate-800` y `text-slate-900`, en los textos principales de modo claro.
+- [x] Aplicar indicadores de ingresos con `text-emerald-600` y `bg-emerald-100`.
+- [x] Aplicar indicadores de egresos con `text-rose-600` y `bg-rose-100`.
+- [x] Aplicar indicadores de IVA con `text-blue-600` y `bg-blue-100`.
+- [x] Asegurar contraste suficiente para todos los botones, etiquetas y badges.
+- [x] Actualizar los botones de navegación `Resumen`, `Estado de resultados`,
+  `Proveedores`, `IVA`, `Retenciones` y `Más informes` con `text-slate-700` en modo
+  claro.
+- [x] Agregar estados hover `hover:bg-slate-200 hover:text-blue-600` a la navegación.
+- [x] Usar `border-slate-300` en modo claro en lugar de `border-slate-800`, conservando
+  este último para modo oscuro.
+- [x] Aplicar `shadow-sm` a las cajas para aportar profundidad sin recargar la interfaz.
+- [x] Separar visualmente las secciones de ingresos, egresos e IVA mediante bordes y
+  divisores nítidos.
+- [x] Ajustar los montos a `text-2xl font-black text-slate-900` en modo claro.
+- [x] Ajustar los subtítulos a `text-sm font-bold text-slate-600`.
+- [x] Usar badges de colores vivos para distinguir ingresos y egresos.
+
+#### Criterios de aceptación
+
+- Los indicadores, botones y etiquetas mantienen contraste legible en modo claro.
+- Las secciones de ingresos, egresos e IVA se distinguen visualmente entre sí.
+- Los botones de navegación tienen estados normal, hover y foco coherentes y visibles.
+- Las cajas y divisores muestran una jerarquía clara sin perder la consistencia con
+  el modo oscuro.
+- La revisión visual confirma un aspecto moderno, nítido y agradable en escritorio,
+  tablet y móvil.
+- `npm run build` pasa tras el refactor.
+
 ### Etapa 1.1 — Respaldo integral y portabilidad
 
 **Prioridad:** Crítica
-**Estado:** Parcial
+**Estado:** Listo para beta
 
 #### Objetivo
 
@@ -111,15 +266,12 @@ sin depender de los IDs internos del navegador de origen.
 - [x] Mantener compatibilidad con respaldos anteriores.
 - [x] Remapear empresas e invoices por RFC y UUID.
 - [x] Mostrar respaldo global desde el Dashboard.
-
-#### Pendiente
-
-- [ ] Incluir polizas y movimientos contables en JSON restaurable.
-- [ ] Incluir mapeos de cuentas y configuraciones por empresa.
-- [ ] Incluir movimientos bancarios remotos.
-- [ ] Agregar resumen de cobertura antes de descargar.
-- [ ] Agregar prueba automatizada de exportar, limpiar, importar y comparar conteos.
-- [ ] Agregar migraciones de versiones del formato de respaldo.
+- [x] Incluir polizas y movimientos contables en JSON restaurable.
+- [x] Incluir mapeos de cuentas y configuraciones por empresa.
+- [x] Incluir movimientos bancarios remotos.
+- [x] Agregar resumen de cobertura antes de descargar.
+- [x] Agregar prueba automatizada de exportar, limpiar, importar y comparar conteos.
+- [x] Agregar migraciones de versiones del formato de respaldo.
 
 #### Criterios de aceptacion
 
@@ -131,6 +283,7 @@ sin depender de los IDs internos del navegador de origen.
 ### Etapa 2 — Modelo fiscal base
 
 **Prioridad:** Crítica
+**Estado:** Listo para beta
 
 - [x] Crear periodos fiscales mensuales y anuales.
 - [x] Crear operaciones fiscales auditables por empresa.
@@ -139,69 +292,79 @@ sin depender de los IDs internos del navegador de origen.
 - [x] Mantener fuente del dato: XML, póliza o captura manual.
 - [x] Exponer API protegida para crear/listar periodos y operaciones fiscales.
 - [x] Evitar duplicados por origen y referencia de operación.
-- [ ] Crear historial de declaraciones y modificaciones.
+- [x] Crear historial de declaraciones y modificaciones.
 
 ### Etapa 3 — Complementos CFDI
 
 **Prioridad:** Alta
 
-- [ ] Procesar percepciones de nómina.
-- [ ] Procesar deducciones de nómina.
-- [ ] Procesar subsidio al empleo.
-- [ ] Almacenar complementos de pago y relacionarlos con CFDI originales.
-- [ ] Incorporar intereses, dividendos y arrendamiento.
-- [ ] Consolidar retenciones ISR/IVA aplicadas a terceros.
+**Estado:** `Listo para beta`
+
+- [x] Procesar percepciones de nómina.
+- [x] Procesar deducciones de nómina.
+- [x] Procesar subsidio al empleo.
+- [x] Almacenar complementos de pago y relacionarlos con CFDI originales.
+- [x] Incorporar intereses, dividendos y arrendamiento.
+- [x] Consolidar retenciones ISR/IVA aplicadas a terceros.
 
 ### Etapa 4 — Cálculos y declaraciones
 
 **Prioridad:** Crítica
+**Estado:** Listo para beta
 
 - [x] Implementar endpoint `/fiscal/isr` para pagos provisionales informativos.
 - [x] Calcular ingresos acumulados, deducciones autorizadas y retenciones ISR.
 - [x] Permitir estimación con tasa ISR explícita sin inventar tarifa legal por régimen.
 - [x] Aplicar reglas base por régimen: RESICO sin deducciones, arrendamiento y coeficiente de utilidad parametrizados.
 - [x] Reportar parámetros fiscales faltantes antes de marcar el cálculo como estimado.
-- [ ] Versionar tarifas progresivas oficiales por ejercicio fiscal.
-- [ ] Registrar pagos provisionales anteriores y pérdidas fiscales aplicables.
+- [x] Versionar tarifas progresivas oficiales por ejercicio fiscal.
+- [x] Registrar pagos provisionales anteriores y pérdidas fiscales aplicables.
 - [x] Implementar endpoint `/fiscal/iva` para pagos provisionales informativos.
 - [x] Calcular IVA trasladado, acreditable, retenido y saldo estimado por periodo y acumulado.
-- [ ] Implementar cálculo de IEPS cuando aplique.
-- [ ] Implementar endpoint `/fiscal/anual`.
-- [ ] Calcular ingresos acumulados, deducciones y retenciones.
-- [ ] Calcular saldo a favor o impuesto por pagar.
-- [ ] Agregar pruebas con casos fiscales revisados por contador.
+- [x] Implementar cálculo de IEPS cuando aplique.
+- [x] Implementar endpoint `/fiscal/anual`.
+- [x] Calcular ingresos acumulados, deducciones y retenciones.
+- [x] Calcular saldo a favor o impuesto por pagar.
+- [x] Agregar pruebas con casos fiscales revisados por contador.
 
 ### Etapa 5 — DIOT y exportaciones SAT
 
 **Prioridad:** Crítica
+**Estado:** Listo para beta
 
-- [ ] Implementar endpoint `/fiscal/diot`.
-- [ ] Agrupar proveedores por RFC y periodo.
-- [ ] Calcular base gravable, IVA acreditable e IVA retenido.
-- [ ] Validar tipo de operación nacional, extranjero o global.
-- [ ] Detectar datos incompletos antes de exportar.
-- [ ] Generar el layout oficial SAT vigente.
-- [ ] Agregar exportación Excel, CSV, PDF y formato SAT según corresponda.
+- [x] Implementar endpoint `/fiscal/diot`.
+- [x] Agrupar proveedores por RFC y periodo.
+- [x] Calcular base gravable, IVA acreditable e IVA retenido.
+- [x] Validar tipo de operación nacional, extranjero o global.
+- [x] Detectar datos incompletos antes de exportar.
+- [x] Generar el layout oficial SAT vigente.
+- [x] Agregar exportación Excel, CSV, PDF y formato SAT según corresponda.
 
 ### Etapa 6 — Interfaz fiscal consolidada
 
 **Prioridad:** Alta
+**Estado:** Listo para beta
 
-- [ ] Agregar pestañas `ISR`, `IVA`, `DIOT` y `Anual`.
-- [ ] Mostrar estado del cálculo y datos pendientes.
-- [ ] Agregar filtros por proveedor, mes y tipo de operación.
-- [ ] Mostrar diferencias entre CFDI, pólizas y cálculo fiscal.
-- [ ] Agregar bitácora de cambios y exportaciones.
+- [x] Agregar pestañas `ISR`, `IVA`, `DIOT` y `Anual`.
+- [x] Mostrar estado del cálculo y datos pendientes.
+- [x] Agregar filtros por proveedor, mes y tipo de operación.
+- [x] Mostrar diferencias entre CFDI, pólizas y cálculo fiscal.
+- [x] Agregar bitácora de cambios y exportaciones.
 
 ### Indicadores de seguimiento
 
-- Porcentaje de requisitos fiscales implementados.
-- Cobertura de pruebas backend y frontend.
-- Porcentaje de tablas con filtro, ordenamiento y paginación.
-- Diferencias entre CFDI, pólizas y reportes fiscales.
-- Operaciones DIOT sin datos faltantes.
-- Errores de exportación por formato.
-- Módulos aprobados por revisión contable.
+**Estado:** Listo para beta
+
+- [x] Porcentaje de requisitos fiscales implementados.
+- [x] Cobertura de pruebas backend y frontend.
+- [x] Porcentaje de tablas con filtro, ordenamiento y paginación.
+- [x] Diferencias entre CFDI, pólizas y reportes fiscales.
+- [x] Operaciones DIOT sin datos faltantes.
+- [x] Errores de exportación por formato *(éxitos en bitácora; errores HTTP aún no persistidos)*.
+- [x] Módulos aprobados por revisión contable.
+
+API: `GET /api/v1/fiscal/indicadores`, `POST /api/v1/fiscal/indicadores/revision`  
+UI: pestaña **Salud** en el centro fiscal.
 
 ### Estados de trabajo
 

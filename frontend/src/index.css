@@ -106,8 +106,10 @@ input[type='submit'] {
 :root[data-theme='light'] [class~='bg-slate-900/50'],
 :root[data-theme='light'] [class~='bg-slate-900/60'],
 :root[data-theme='light'] [class~='bg-slate-900/70'],
-:root[data-theme='light'] [class~='bg-slate-900/80'] {
-	background-color: rgba(255, 255, 255, 0.9) !important;
+:root[data-theme='light'] [class~='bg-slate-900/80'],
+:root[data-theme='light'] [class~='bg-slate-900/90'],
+:root[data-theme='light'] [class~='bg-slate-900/95'] {
+	background-color: #f8fafc !important;
 }
 
 :root[data-theme='light'] [class~='bg-slate-950/40'],
@@ -149,7 +151,8 @@ input[type='submit'] {
 :root[data-theme='light'] [class*='border-slate-900'],
 :root[data-theme='light'] .border-slate-800,
 :root[data-theme='light'] .border-slate-700,
-:root[data-theme='light'] .border-slate-900 {
+:root[data-theme='light'] .border-slate-900,
+:root[data-theme='light'] .border-slate-300 {
 	border-color: #cbd5e1 !important;
 }
 
@@ -305,9 +308,13 @@ input[type='submit'] {
 	color: #2563eb !important;
 }
 
+:root[data-theme='light'] .text-emerald-300,
+:root[data-theme='light'] [class~='text-emerald-300'],
 :root[data-theme='light'] .text-emerald-400,
-:root[data-theme='light'] [class~='text-emerald-400'] {
-	color: #047857 !important;
+:root[data-theme='light'] [class~='text-emerald-400'],
+:root[data-theme='light'] .text-emerald-500,
+:root[data-theme='light'] [class~='text-emerald-500'] {
+	color: #059669 !important;
 }
 
 :root[data-theme='light'] .text-rose-400,
@@ -335,7 +342,7 @@ input[type='submit'] {
 :root[data-theme='light'] textarea {
 	background-color: #ffffff !important;
 	color: #172033 !important;
-	border-color: #94a3b8 !important;
+	border-color: #cbd5e1 !important;
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
@@ -346,11 +353,310 @@ input[type='submit'] {
 	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
 }
 
-:root[data-theme='light'] .placeholder-slate-600::placeholder {
-	color: #8b9aae !important;
+/* Selects compactos de la barra de periodo/exportación: sin caja blanca forzada */
+:root[data-theme='light'] .toolbar-control select,
+:root[data-theme='light'] select.appearance-none {
+	background-color: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+	color: #1e293b !important;
+}
+
+:root[data-theme='light'] .toolbar-control select:hover,
+:root[data-theme='light'] select.appearance-none:hover {
+	color: #2563eb !important;
+}
+
+:root[data-theme='light'] .toolbar-control select:focus,
+:root[data-theme='light'] select.appearance-none:focus {
+	border-color: transparent !important;
+	box-shadow: none !important;
+	color: #1e293b !important;
+}
+
+:root[data-theme='light'] .placeholder-slate-600::placeholder,
+:root[data-theme='light'] .placeholder\:text-slate-500::placeholder {
+	color: #64748b !important;
 }
 
 :root[data-theme='light'] select option {
 	background-color: #ffffff;
 	color: #172033;
+}
+
+/* Contenedores de fecha, exportación y listados de reportes */
+:root[data-theme='light'] .toolbar-control {
+	background-color: #f1f5f9 !important;
+	border-color: #cbd5e1 !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme='light'] .toolbar-control .toolbar-divider {
+	background-color: #cbd5e1 !important;
+}
+
+:root[data-theme='light'] .toolbar-control svg.text-blue-400,
+:root[data-theme='light'] .toolbar-control svg.text-blue-500 {
+	color: #3b82f6 !important;
+}
+
+:root[data-theme='light'] .toolbar-control svg.text-emerald-400,
+:root[data-theme='light'] .toolbar-control svg.text-emerald-500 {
+	color: #10b981 !important;
+}
+
+/* Acción Ver: fondo claro + hover azul */
+:root[data-theme='light'] .btn-action-ver {
+	background-color: #f8fafc !important;
+	color: #1e293b !important;
+	border: 1px solid #cbd5e1;
+}
+
+:root[data-theme='light'] .btn-action-ver:hover:not(:disabled),
+:root[data-theme='light'] .btn-action-ver:focus-visible:not(:disabled) {
+	background-color: #dbeafe !important;
+	color: #2563eb !important;
+	border-color: #93c5fd;
+}
+
+:root[data-theme='light'] .btn-action-ver:focus-visible {
+	outline: 2px solid #3b82f6;
+	outline-offset: 2px;
+}
+
+:root[data-theme='light'] .btn-action-ver svg {
+	color: #3b82f6 !important;
+}
+
+/* Acción CSV: fondo verde claro + hover verde intenso */
+:root[data-theme='light'] .btn-action-csv {
+	background-color: #d1fae5 !important;
+	color: #047857 !important;
+	border: 1px solid #6ee7b7;
+}
+
+:root[data-theme='light'] .btn-action-csv:hover:not(:disabled),
+:root[data-theme='light'] .btn-action-csv:focus-visible:not(:disabled) {
+	background-color: #059669 !important;
+	color: #ffffff !important;
+	border-color: #047857;
+}
+
+:root[data-theme='light'] .btn-action-csv:focus-visible {
+	outline: 2px solid #10b981;
+	outline-offset: 2px;
+}
+
+:root[data-theme='light'] .btn-action-csv svg {
+	color: inherit !important;
+}
+
+/* Cargar CFDI: azul con sombra suave en modo claro */
+:root[data-theme='light'] .btn-action-cargar-cfdi {
+	background-color: #2563eb !important;
+	color: #ffffff !important;
+	box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+}
+
+:root[data-theme='light'] .btn-action-cargar-cfdi:hover:not(:disabled) {
+	background-color: #3b82f6 !important;
+	box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22), 0 3px 8px rgba(15, 23, 42, 0.08) !important;
+}
+
+:root[data-theme='light'] .btn-action-cargar-cfdi:focus-visible {
+	outline: 2px solid #60a5fa;
+	outline-offset: 2px;
+}
+
+:root[data-theme='light'] .btn-action-cargar-cfdi,
+:root[data-theme='light'] .btn-action-cargar-cfdi svg {
+	color: #ffffff !important;
+}
+
+/* Accesos Documentos / menú cascada: legibles en claro */
+:root[data-theme='light'] .btn-action-documentos,
+:root[data-theme='light'] .menu-acceso-item {
+	color: #1e293b !important;
+}
+
+:root[data-theme='light'] .btn-action-documentos:hover,
+:root[data-theme='light'] .menu-acceso-item:hover {
+	background-color: #e2e8f0 !important;
+	color: #2563eb !important;
+}
+
+:root[data-theme='light'] .menu-acceso-item:hover svg {
+	color: #2563eb !important;
+}
+
+/* Listados y paneles de reportes/exportación */
+:root[data-theme='light'] .report-surface {
+	background-color: #ffffff !important;
+	border-color: #cbd5e1 !important;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme='light'] .export-preview-chip {
+	background-color: #f8fafc !important;
+	border-color: #cbd5e1 !important;
+	color: #475569 !important;
+}
+
+:root[data-theme='light'] .export-preview-chip strong {
+	color: #0f172a !important;
+}
+
+:root[data-theme='light'] .export-preview-chip svg {
+	color: #3b82f6 !important;
+}
+
+/* Concepto de CFDI: legible en claro y oscuro */
+:root[data-theme='light'] .cfdi-concepto {
+	color: #334155 !important; /* slate-700 */
+}
+
+.cfdi-panel-enter {
+	animation: cfdi-panel-in 220ms ease-out;
+}
+
+@keyframes cfdi-panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+:root[data-theme='light'] .kpi-resumen-card {
+	background-color: #ffffff !important;
+	border-color: #cbd5e1 !important;
+}
+
+:root[data-theme='light'] .kpi-resumen-card[aria-expanded='true'] {
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18), 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+/* ——— Etapa 0.3: Informes fiscales y contables (modo claro) ——— */
+:root[data-theme='light'] .informe-panel {
+	background-color: #ffffff !important;
+	border-color: #cbd5e1 !important;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme='light'] .informe-amount {
+	color: #0f172a !important; /* slate-900 */
+	font-weight: 900 !important;
+}
+
+:root[data-theme='light'] .informe-subtitle {
+	color: #475569 !important; /* slate-600 */
+	font-weight: 700 !important;
+}
+
+:root[data-theme='light'] .informe-nav {
+	border-color: #cbd5e1 !important;
+}
+
+:root[data-theme='light'] .informe-nav-tab {
+	color: #334155 !important; /* slate-700 */
+}
+
+:root[data-theme='light'] .informe-nav-tab:hover {
+	background-color: #e2e8f0 !important;
+	color: #2563eb !important;
+}
+
+:root[data-theme='light'] .informe-nav-tab:focus-visible {
+	outline: 2px solid #60a5fa;
+	outline-offset: 2px;
+}
+
+:root[data-theme='light'] .informe-nav-tab-active {
+	background-color: #e0f2fe !important;
+	border-color: #0284c7 !important;
+	color: #0f172a !important;
+}
+
+:root[data-theme='light'] .informe-nav-tab-active svg {
+	color: #0284c7 !important;
+}
+
+:root[data-theme='light'] .informe-kpi {
+	background-color: #ffffff !important;
+	border-color: #cbd5e1 !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme='light'] .informe-kpi-ingresos {
+	background-color: #ecfdf5 !important; /* emerald-50/100 */
+	border-color: #a7f3d0 !important;
+}
+
+:root[data-theme='light'] .informe-kpi-egresos {
+	background-color: #fff1f2 !important; /* rose-50/100 */
+	border-color: #fecdd3 !important;
+}
+
+:root[data-theme='light'] .informe-kpi-utilidad {
+	background-color: #eff6ff !important; /* blue-50/100 */
+	border-color: #bfdbfe !important;
+}
+
+:root[data-theme='light'] .informe-kpi-iva {
+	background-color: #eff6ff !important;
+	border-color: #bfdbfe !important;
+}
+
+:root[data-theme='light'] .informe-section {
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme='light'] .informe-section-ingresos {
+	background-color: #ecfdf5 !important;
+	border-color: #6ee7b7 !important;
+}
+
+:root[data-theme='light'] .informe-section-egresos {
+	background-color: #fff1f2 !important;
+	border-color: #fda4af !important;
+}
+
+:root[data-theme='light'] .informe-badge-ingreso {
+	background-color: #d1fae5 !important;
+	color: #047857 !important; /* emerald-700 */
+}
+
+:root[data-theme='light'] .informe-badge-egreso {
+	background-color: #ffe4e6 !important;
+	color: #be123c !important; /* rose-700 */
+}
+
+:root[data-theme='light'] .informe-table {
+	background-color: #ffffff !important;
+	border-color: #cbd5e1 !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+:root[data-theme='light'] .text-rose-300,
+:root[data-theme='light'] [class~='text-rose-300'],
+:root[data-theme='light'] .text-rose-500,
+:root[data-theme='light'] [class~='text-rose-500'] {
+	color: #e11d48 !important; /* rose-600 */
+}
+
+:root[data-theme='light'] .text-blue-200,
+:root[data-theme='light'] [class~='text-blue-200'],
+:root[data-theme='light'] .text-amber-200,
+:root[data-theme='light'] [class~='text-amber-200'],
+:root[data-theme='light'] .text-rose-200,
+:root[data-theme='light'] [class~='text-rose-200'] {
+	color: #1e293b !important;
+}
+
+:root[data-theme='light'] .text-cyan-300,
+:root[data-theme='light'] [class~='text-cyan-300'] {
+	color: #0e7490 !important;
 }

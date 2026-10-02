@@ -29,9 +29,13 @@ from app.services.cfdi_helpers import (
     validar_factura_no_duplicada,
     marcar_uuid_en_lote,
 )
+from app.services.cfdi_complementos import (
+    guardar_clasificaciones_especiales,
+    guardar_complemento_pago,
+    guardar_nomina_desde_factura,
+    serializar_complemento_pago,
+)
 from app.models.poliza import Poliza, MovimientoPoliza 
-from typing import List, Optional
-from app.schemas.factura import FacturaResponse
 
 router = APIRouter()
 
@@ -56,30 +60,61 @@ def _validar_tamano_upload(archivo: UploadFile, limite: int, tipo: str) -> None:
         )
 
 
-class ComplementoPagoOmitido(Exception):
-    def __init__(self, uuid: str | None = None):
-        self.uuid = uuid
-        super().__init__("Complemento de pago omitido")
+class ComplementoPagoRegistrado:
+    """Resultado de procesar un CFDI tipo P (complemento de pago)."""
+
+    def __init__(self, complemento):
+        self.complemento = complemento
+        self.uuid = getattr(complemento, "uuid", None)
+        self.id = getattr(complemento, "id", None)
 
 
 def _es_complemento_pago(datos: dict) -> bool:
     return str(datos.get("tipo_comprobante") or "").upper() == "P"
 
 
+def _respuesta_complemento_pago_registrado(complemento) -> dict:
+    payload = serializar_complemento_pago(complemento) if complemento is not None else {}
+    return {
+        "mensaje": "Complemento de pago registrado",
+        "omitido": False,
+        "registrado": True,
+        "motivo": "complemento_pago",
+        "tipo_comprobante": "P",
+        "uuid": payload.get("uuid"),
+        "complemento_pago_id": payload.get("id"),
+        "num_documentos": payload.get("num_documentos", 0),
+        "documentos_relacionados": payload.get("documentos", []),
+        "detalle": (
+            f"Complemento de pago almacenado (UUID: {payload.get('uuid')})."
+            if payload.get("uuid")
+            else "Complemento de pago almacenado."
+        ),
+        "exitos": 1,
+        "pagos_registrados": 1,
+        "duplicados": 0,
+        "omitidos_complemento_pago": 0,
+        "errores": 0,
+        "polizas_generadas": 0,
+    }
+
+
+# Compatibilidad temporal para pruebas antiguas
+ComplementoPagoOmitido = ComplementoPagoRegistrado
+
+
 def _respuesta_complemento_pago_omitido(uuid: str | None = None) -> dict:
-    detalle = "El CFDI es un complemento de pago y no se registra en facturas."
-    if uuid:
-        detalle = f"{detalle} UUID: {uuid}"
+    """Compat: ya no se omiten; respuesta informativa de registro pendiente/legacy."""
     return {
         "mensaje": "Complemento de pago omitido",
         "omitido": True,
         "motivo": "complemento_pago",
         "tipo_comprobante": "P",
         "uuid": uuid,
-        "detalle": detalle,
+        "detalle": "Legacy: los complementos de pago ahora se registran.",
         "exitos": 0,
         "duplicados": 0,
-        "omitidos_complemento_pago": 1,
+        "omitidos_complemento_pago": 0,
         "errores": 0,
         "polizas_generadas": 0,
     }
@@ -93,6 +128,7 @@ def procesar_xml_interno(
     empresa_rfc: str,
     empresa_razon_social: str | None = None,
     uuids_en_lote: set[str] | None = None,
+    archivo_s3_key: str | None = None,
 ):
     uuid_norm = None
     try:
@@ -101,7 +137,16 @@ def procesar_xml_interno(
         validar_cfdi_empresa(datos, empresa_rfc, empresa_razon_social)
 
         if _es_complemento_pago(datos):
-            raise ComplementoPagoOmitido(datos.get("uuid"))
+            complemento = guardar_complemento_pago(
+                db,
+                empresa_id=empresa_id,
+                datos=datos,
+                xml_str=None if settings.S3_ENABLED else xml_str,
+                archivo_s3_key=archivo_s3_key,
+                commit=False,
+            )
+            marcar_uuid_en_lote(uuids_en_lote, complemento.uuid)
+            return ComplementoPagoRegistrado(complemento)
 
         uuid_norm = validar_factura_no_duplicada(
             db,
@@ -158,18 +203,31 @@ def procesar_xml_interno(
                 ),
             ) from exc
 
+        guardar_nomina_desde_factura(
+            db,
+            empresa_id=empresa_id,
+            factura=factura,
+            datos=datos,
+            commit=False,
+        )
+        guardar_clasificaciones_especiales(
+            db,
+            empresa_id=empresa_id,
+            factura=factura,
+            datos=datos,
+            commit=False,
+        )
+
         marcar_uuid_en_lote(uuids_en_lote, uuid_norm)
 
         return factura
 
     except HTTPException:
         raise
-    except ComplementoPagoOmitido:
-        raise
 
     except ValueError as e:
         msg = str(e)
-        status = 409 if "ya está registrada" in msg or "repetida en este archivo" in msg else 400
+        status = 409 if "ya está registrada" in msg or "repetida en este archivo" in msg or "ya esta registrado" in msg else 400
         raise HTTPException(status_code=status, detail=msg) from e
 
     except IntegrityError as exc:
@@ -252,13 +310,27 @@ async def subir_xml(
         xml_str = contenido.decode('latin-1')
 
     try:
-        factura = procesar_xml_interno(
+        resultado = procesar_xml_interno(
             empresa_id,
             xml_str,
             db,
             empresa_rfc=empresa.rfc,
             empresa_razon_social=empresa.razon_social,
         )
+
+        if isinstance(resultado, ComplementoPagoRegistrado):
+            if storage:
+                archivo_s3_key = storage.upload(
+                    cfdi_object_key(empresa_id, resultado.uuid),
+                    contenido,
+                    "application/xml",
+                )
+                resultado.complemento.archivo_s3_key = archivo_s3_key
+            db.commit()
+            db.refresh(resultado.complemento)
+            return _respuesta_complemento_pago_registrado(resultado.complemento)
+
+        factura = resultado
 
         banco_id = obtener_banco_default_id(db, empresa_id)
         polizas_creadas = auto_generar_poliza_factura(factura, db, banco_id)
@@ -283,13 +355,6 @@ async def subir_xml(
             "polizas_generadas": len(polizas_creadas),
             "poliza_ids": [p.id for p in polizas_creadas],
         }
-
-    except ComplementoPagoOmitido as exc:
-        db.rollback()
-        return JSONResponse(
-            status_code=200,
-            content=_respuesta_complemento_pago_omitido(exc.uuid),
-        )
 
     except HTTPException:
         db.rollback()
@@ -337,6 +402,7 @@ async def subir_zip(
     exitos = 0
     duplicados = 0
     omitidos_complemento_pago = 0
+    pagos_registrados = 0
     no_xml = 0
     archivos_no_xml: list[str] = []
     uuids_en_lote: set[str] = set()
@@ -412,7 +478,7 @@ async def subir_zip(
                         # db.flush() (IntegrityError) only rolls back that file's
                         # changes without corrupting the outer transaction.
                         with db.begin_nested():
-                            factura = procesar_xml_interno(
+                            resultado = procesar_xml_interno(
                                 empresa_id,
                                 xml_str,
                                 db,
@@ -420,35 +486,54 @@ async def subir_zip(
                                 empresa_razon_social=empresa.razon_social,
                                 uuids_en_lote=uuids_en_lote,
                             )
-                            if storage:
-                                archivo_s3_key = storage.upload(
-                                    cfdi_object_key(empresa_id, factura.uuid),
-                                    xml_bytes,
-                                    "application/xml",
-                                )
-                                factura.archivo_s3_key = archivo_s3_key
-                                archivos_s3_keys.append(archivo_s3_key)
-                        fecha_f = factura.fecha_emision
-                        resultados.append({
-                            "archivo": nombre_archivo,
-                            "status": "ok",
-                            "uuid": factura.uuid,
-                            "periodo": (
-                                f"{fecha_f.year}-{fecha_f.month:02d}"
-                                if fecha_f else None
-                            ),
-                            "tipo_comprobante": factura.tipo_comprobante,
-                            "total": float(factura.total or 0),
-                        })
-                        exitos += 1
-                    except ComplementoPagoOmitido as exc:
-                        omitidos_complemento_pago += 1
-                        resultados.append({
-                            "archivo": nombre_archivo,
-                            "status": "omitido_complemento_pago",
-                            "uuid": exc.uuid,
-                            "detalle": _respuesta_complemento_pago_omitido(exc.uuid)["detalle"],
-                        })
+                            if isinstance(resultado, ComplementoPagoRegistrado):
+                                if storage:
+                                    archivo_s3_key = storage.upload(
+                                        cfdi_object_key(empresa_id, resultado.uuid),
+                                        xml_bytes,
+                                        "application/xml",
+                                    )
+                                    resultado.complemento.archivo_s3_key = archivo_s3_key
+                                    archivos_s3_keys.append(archivo_s3_key)
+                                fecha_p = getattr(resultado.complemento, "fecha_emision", None)
+                                resultados.append({
+                                    "archivo": nombre_archivo,
+                                    "status": "ok_pago",
+                                    "uuid": resultado.uuid,
+                                    "periodo": (
+                                        f"{fecha_p.year}-{fecha_p.month:02d}"
+                                        if fecha_p else None
+                                    ),
+                                    "tipo_comprobante": "P",
+                                    "total": float(getattr(resultado.complemento, "total_pagos", 0) or 0),
+                                    "complemento_pago_id": resultado.id,
+                                    "num_documentos": getattr(resultado.complemento, "num_documentos", 0),
+                                })
+                                pagos_registrados += 1
+                                exitos += 1
+                            else:
+                                factura = resultado
+                                if storage:
+                                    archivo_s3_key = storage.upload(
+                                        cfdi_object_key(empresa_id, factura.uuid),
+                                        xml_bytes,
+                                        "application/xml",
+                                    )
+                                    factura.archivo_s3_key = archivo_s3_key
+                                    archivos_s3_keys.append(archivo_s3_key)
+                                fecha_f = factura.fecha_emision
+                                resultados.append({
+                                    "archivo": nombre_archivo,
+                                    "status": "ok",
+                                    "uuid": factura.uuid,
+                                    "periodo": (
+                                        f"{fecha_f.year}-{fecha_f.month:02d}"
+                                        if fecha_f else None
+                                    ),
+                                    "tipo_comprobante": factura.tipo_comprobante,
+                                    "total": float(factura.total or 0),
+                                })
+                                exitos += 1
                     except HTTPException as e:
                         detalle = e.detail if isinstance(e.detail, str) else str(e.detail)
                         es_dup = e.status_code == 409 or "registrada" in str(detalle).lower()
@@ -513,6 +598,7 @@ async def subir_zip(
                 "mensaje": "Procesamiento masivo completado y guardado en BD",
                 "exitos": exitos,
                 "duplicados": duplicados,
+                "pagos_registrados": pagos_registrados,
                 "omitidos_complemento_pago": omitidos_complemento_pago,
                 "no_xml": no_xml,
                 "archivos_no_xml": archivos_no_xml,
@@ -538,15 +624,16 @@ async def subir_zip(
         mensaje = "No se guardo nada nuevo: se detectaron XML con error o vacios dentro del ZIP."
     elif no_xml > 0 and duplicados == 0 and errores == 0 and omitidos_complemento_pago == 0:
         mensaje = "ZIP invalido para CFDI: contiene archivos que no son XML."
-    elif omitidos_complemento_pago > 0:
-        mensaje = "No se guardo nada nuevo: los XML del ZIP eran complementos de pago y se omitieron."
+    elif pagos_registrados > 0:
+        mensaje = "Solo se registraron complementos de pago del ZIP."
     else:
         mensaje = "No se guardo nada nuevo. Revisa el contenido del ZIP."
 
     return {
         "mensaje": mensaje,
-        "exitos": 0,
+        "exitos": exitos if pagos_registrados else 0,
         "duplicados": duplicados,
+        "pagos_registrados": pagos_registrados,
         "omitidos_complemento_pago": omitidos_complemento_pago,
         "no_xml": no_xml,
         "archivos_no_xml": archivos_no_xml,
@@ -604,6 +691,20 @@ def listar_facturas(
                     cuenta_nombre = mov.nombre_cuenta
 
             tiene_poliza = bool(f.polizas)
+            datos_xml = extraer_datos_xml(f.xml_contenido)
+            conceptos = datos_xml.get("conceptos") or []
+            descripciones = [
+                str(c.get("descripcion") or "").strip()
+                for c in conceptos
+                if str(c.get("descripcion") or "").strip()
+            ]
+            if not descripciones:
+                concepto = ""
+            elif len(descripciones) == 1:
+                concepto = descripciones[0]
+            else:
+                concepto = f"{descripciones[0]} (+{len(descripciones) - 1} más)"
+
             respuesta.append({
                 "id": f.id,
                 "uuid": f.uuid,
@@ -622,6 +723,15 @@ def listar_facturas(
                 "total": float(f.total),
                 "cuenta_contable": cuenta_nombre,
                 "tiene_poliza": tiene_poliza,
+                "concepto": concepto,
+                "conceptos": [
+                    {
+                        "descripcion": c.get("descripcion") or "",
+                        "importe": float(c.get("importe") or 0),
+                        "cantidad": float(c.get("cantidad") or 1),
+                    }
+                    for c in conceptos
+                ],
             })
             
         return respuesta
@@ -679,6 +789,11 @@ def detalle_factura(
             "metodo_pago": factura.metodo_pago,
         },
         "conceptos": datos_xml.get("conceptos", []),
+        "concepto": (
+            (datos_xml.get("conceptos") or [{}])[0].get("descripcion")
+            if datos_xml.get("conceptos")
+            else ""
+        ) or "",
         "desglose_impuestos": desglose_impuestos(factura),
         "preview_poliza": preview_poliza_desde_factura(factura, rfc, db),
         "tiene_poliza": bool(factura.polizas),

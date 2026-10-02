@@ -60,7 +60,10 @@ const Dashboard = ({ onLogout }) => {
     setImportingBackup(true);
     try {
       const result = await importDeviceBackup(file);
-      toast.success(`Respaldo restaurado: ${result.snapshots + result.companies + result.invoices + (result.bankMovements || 0)} registro(s)`);
+      const total = result.totalRecords
+        ?? ((result.snapshots || 0) + (result.companies || 0) + (result.invoices || 0)
+          + (result.bankMovements || 0) + (result.polizas || 0) + (result.accountMappings || 0));
+      toast.success(`Respaldo restaurado: ${total} registro(s)`);
       await fetchEmpresas();
     } catch (error) {
       toast.error(error.message || 'No se pudo restaurar el respaldo');
@@ -107,36 +110,69 @@ const Dashboard = ({ onLogout }) => {
     await fetchEmpresas();
   };
 
+  const fetchRemoteCompanyBackupSlice = async (empresa) => {
+    const rfc = String(empresa.rfc || '').toUpperCase();
+    const [facturasRes, polizasRes, mapeosRes, movimientosRes] = await Promise.all([
+      api.get(`/facturas/?empresa_id=${empresa.id}`).catch(() => ({ data: [] })),
+      api.get(`/polizas/?empresa_id=${empresa.id}`).catch(() => ({ data: [] })),
+      api.get(`/configuracion/mapeos/${empresa.id}`).catch(() => ({ data: [] })),
+      api.get(`/conciliacion/movimientos?empresa_id=${empresa.id}`).catch(() => ({ data: [] })),
+    ]);
+
+    const invoices = (facturasRes.data || []).map((invoice) => ({
+      ...invoice,
+      empresa_id: empresa.id,
+      empresa_rfc: rfc,
+    }));
+    const polizas = (polizasRes.data || []).map((poliza) => ({
+      ...poliza,
+      empresa_id: empresa.id,
+      empresa_rfc: rfc,
+      factura_uuid: poliza.cfdi?.uuid || poliza.factura_uuid || null,
+    }));
+    const accountMappings = (mapeosRes.data || []).map((mapping) => ({
+      ...mapping,
+      empresa_id: empresa.id,
+      empresa_rfc: rfc,
+    }));
+    const bankMovements = (movimientosRes.data || []).map((movement) => ({
+      ...movement,
+      empresa_id: empresa.id,
+      empresa_rfc: rfc,
+      fingerprint: movement.fingerprint || movement.hash_movimiento,
+    }));
+
+    return {
+      company: { ...empresa, empresa_rfc: rfc },
+      invoices,
+      polizas,
+      accountMappings,
+      bankMovements,
+    };
+  };
+
   const prepareCompanyBackup = async (empresa) => {
     if (empresa.local_only) return {};
-    const response = await api.get(`/facturas/?empresa_id=${empresa.id}`);
+    const slice = await fetchRemoteCompanyBackupSlice(empresa);
     return {
-      companies: [{ ...empresa, empresa_rfc: empresa.rfc }],
-      invoices: (response.data || []).map((invoice) => ({
-        ...invoice,
-        empresa_id: empresa.id,
-        empresa_rfc: empresa.rfc,
-      })),
+      companies: [slice.company],
+      invoices: slice.invoices,
+      polizas: slice.polizas,
+      accountMappings: slice.accountMappings,
+      bankMovements: slice.bankMovements,
     };
   };
 
   const prepareDeviceBackup = async () => {
     const remoteResponse = await api.get('/empresas/');
     const remoteCompanies = remoteResponse.data || [];
-    const remoteData = await Promise.all(remoteCompanies.map(async (empresa) => {
-      const response = await api.get(`/facturas/?empresa_id=${empresa.id}`);
-      return {
-        company: { ...empresa, empresa_rfc: empresa.rfc },
-        invoices: (response.data || []).map((invoice) => ({
-          ...invoice,
-          empresa_id: empresa.id,
-          empresa_rfc: empresa.rfc,
-        })),
-      };
-    }));
+    const remoteData = await Promise.all(remoteCompanies.map((empresa) => fetchRemoteCompanyBackupSlice(empresa)));
     return {
       companies: remoteData.map((item) => item.company),
       invoices: remoteData.flatMap((item) => item.invoices),
+      polizas: remoteData.flatMap((item) => item.polizas),
+      accountMappings: remoteData.flatMap((item) => item.accountMappings),
+      bankMovements: remoteData.flatMap((item) => item.bankMovements),
     };
   };
 

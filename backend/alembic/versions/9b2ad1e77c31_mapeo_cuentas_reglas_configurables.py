@@ -5,6 +5,8 @@ Revises: 6f4e1c2b9a11
 Create Date: 2026-08-11
 
 """
+# pylint: disable=no-member,not-callable
+# pyright: reportAttributeAccessIssue=false
 
 from alembic import op
 import sqlalchemy as sa

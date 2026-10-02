@@ -1,2 +1,14 @@
 [MAIN]
 init-hook='import sys; sys.path.append("backend"); sys.path.append("./backend")'
+ignore=venv,.venv,node_modules,__pycache__,.git
+ignore-patterns=alembic/versions/.*
+
+[MESSAGES CONTROL]
+# Alembic/SQLAlchemy dinamicos: op.* y func.now() generan falsos positivos
+disable=no-member,not-callable,too-few-public-methods,missing-module-docstring,missing-class-docstring,missing-function-docstring
+
+[TYPECHECK]
+ignored-modules=alembic,alembic.op,sqlalchemy,sqlalchemy.orm,sqlalchemy.sql
+
+[REPORTS]
+output-format=colorized

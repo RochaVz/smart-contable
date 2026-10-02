@@ -1,0 +1,19 @@
+{
+  "include": ["backend"],
+  "exclude": [
+    "**/venv/**",
+    "**/node_modules/**",
+    "backend/alembic/versions/**"
+  ],
+  "reportMissingImports": true,
+  "reportAttributeAccessIssue": "none",
+  "reportUnusedImport": "none",
+  "reportGeneralTypeIssues": "warning",
+  "pythonVersion": "3.13",
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "extraPaths": ["backend"]
+    }
+  ]
+}

@@ -6,9 +6,23 @@ import {
   deleteLocalCompany,
   exportDeviceBackup,
   exportCompanyBackup,
+  formatCoverageSummaryMessage,
   getLocalBackupStats,
   importDeviceBackup,
+  previewDeviceBackupCoverage,
+  summarizeCoverage,
 } from '../services/localBackup';
+
+const EMPTY_STATS = {
+  snapshots: 0,
+  companies: 0,
+  invoices: 0,
+  bankMovements: 0,
+  polizas: 0,
+  accountMappings: 0,
+  totalRecords: 0,
+  lastSavedAt: '',
+};
 
 const formatDate = (value) => {
   if (!value) return 'Aún sin respaldo local';
@@ -21,9 +35,17 @@ const formatDate = (value) => {
   });
 };
 
+const totalFromResult = (result = {}) => result.totalRecords
+  ?? ((result.snapshots || 0)
+    + (result.companies || 0)
+    + (result.invoices || 0)
+    + (result.bankMovements || 0)
+    + (result.polizas || 0)
+    + (result.accountMappings || 0));
+
 const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBackup = null, prepareDeviceBackup = null }) => {
   const fileRef = useRef(null);
-  const [stats, setStats] = useState({ snapshots: 0, companies: 0, invoices: 0, bankMovements: 0, totalRecords: 0, lastSavedAt: '' });
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -33,7 +55,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
     try {
       setStats(await getLocalBackupStats());
     } catch {
-      setStats({ snapshots: 0, companies: 0, invoices: 0, bankMovements: 0, totalRecords: 0, lastSavedAt: '' });
+      setStats(EMPTY_STATS);
     } finally {
       setLoading(false);
     }
@@ -47,7 +69,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
         const nextStats = await getLocalBackupStats();
         if (!cancelled) setStats(nextStats);
       } catch {
-        if (!cancelled) setStats({ snapshots: 0, companies: 0, invoices: 0, bankMovements: 0, totalRecords: 0, lastSavedAt: '' });
+        if (!cancelled) setStats(EMPTY_STATS);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -71,8 +93,30 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
     try {
       const companyData = company && prepareCompanyBackup ? await prepareCompanyBackup(company) : {};
       const deviceData = !company && prepareDeviceBackup ? await prepareDeviceBackup() : {};
-      const result = company ? await exportCompanyBackup(company, companyData) : await exportDeviceBackup(deviceData);
-      toast.success(`Respaldo descargado con ${result.snapshots + result.companies + result.invoices + (result.bankMovements || 0)} registro(s) locales`);
+      const payload = company ? companyData : deviceData;
+      const coverage = company
+        ? summarizeCoverage({
+          companies: [company],
+          invoices: payload.invoices || [],
+          bankMovements: payload.bankMovements || [],
+          polizas: payload.polizas || [],
+          accountMappings: payload.accountMappings || [],
+          snapshots: [],
+        })
+        : await previewDeviceBackupCoverage(payload);
+
+      const confirmed = window.confirm(
+        formatCoverageSummaryMessage(coverage, {
+          scope: company ? 'company' : 'device',
+          label: company?.razon_social || company?.rfc || '',
+        }),
+      );
+      if (!confirmed) return;
+
+      const result = company
+        ? await exportCompanyBackup(company, companyData)
+        : await exportDeviceBackup(deviceData);
+      toast.success(`Respaldo descargado con ${totalFromResult(result)} registro(s)`);
       await refreshStats();
     } catch (error) {
       toast.error(error.message || 'No se pudo generar el respaldo');
@@ -88,7 +132,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
     setWorking(true);
     try {
       const result = await importDeviceBackup(file);
-      toast.success(`Respaldo restaurado: ${result.snapshots + result.companies + result.invoices + (result.bankMovements || 0)} registro(s)`);
+      toast.success(`Respaldo restaurado: ${totalFromResult(result)} registro(s)`);
       await refreshStats();
     } catch (error) {
       toast.error(error.message || 'No se pudo restaurar el respaldo');
@@ -190,17 +234,29 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
           <div className="min-w-0">
             <h2 className="text-lg font-black text-white">Respaldo en este dispositivo</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Guarda una copia descargable de la información local del celular. No incluye contraseña ni token de sesión.
+              Guarda una copia descargable de la información local. Incluye CFDI, pólizas, mapeos y movimientos bancarios. No incluye contraseña ni token de sesión.
             </p>
           </div>
         </div>
       </div>
 
       <div className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Registros locales</p>
             <p className="mt-1 text-2xl font-black text-white">{loading ? '...' : stats.totalRecords}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">CFDI / Pólizas</p>
+            <p className="mt-1 text-sm font-bold text-slate-300">
+              {loading ? '...' : `${stats.invoices || 0} / ${stats.polizas || 0}`}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Banco / Mapeos</p>
+            <p className="mt-1 text-sm font-bold text-slate-300">
+              {loading ? '...' : `${stats.bankMovements || 0} / ${stats.accountMappings || 0}`}
+            </p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Última copia local</p>
@@ -237,7 +293,6 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={handleImport} />
         </div>
       </div>
-
     </section>
   );
 };

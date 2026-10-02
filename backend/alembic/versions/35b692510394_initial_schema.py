@@ -5,6 +5,8 @@ Revises:
 Create Date: 2026-08-01 20:31:02.447250
 
 """
+# pylint: disable=no-member,not-callable
+# pyright: reportAttributeAccessIssue=false
 from alembic import op
 from app.core.database import Base
 import app.models  # noqa: F401

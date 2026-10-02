@@ -125,11 +125,54 @@ class Empresa(Base):
         cascade="all, delete-orphan",
     )
 
+    declaraciones_fiscales = relationship(
+        "DeclaracionFiscal",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
+    historial_fiscal = relationship(
+        "HistorialFiscal",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
     movimientos_banco = relationship(
         "MovimientoBanco",
         back_populates="empresa",
         cascade="all, delete-orphan",
     )
 
+    complementos_pago = relationship(
+        "CfdiComplementoPago",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
+    nominas_cfdi = relationship(
+        "CfdiNomina",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
+    clasificaciones_especiales = relationship(
+        "CfdiClasificacionEspecial",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
+    pagos_provisionales_anteriores = relationship(
+        "PagoProvisionalAnterior",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
+    perdidas_fiscales = relationship(
+        "PerdidaFiscal",
+        back_populates="empresa",
+        cascade="all, delete-orphan",
+    )
+
     def __repr__(self):
         return f"<Empresa {self.rfc} - {self.razon_social}>"
+

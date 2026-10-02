@@ -78,50 +78,74 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
   const d = factura.local_only ? factura : detalle || factura;
   const impuestos = d.desglose_impuestos || [];
   const conceptos = d.conceptos || d.conceptos_vendidos || [];
+  const esIngreso = d.tipo_operacion === 'VENTA' || d.tipo_comprobante === 'I';
+  const etiquetaConcepto = esIngreso ? 'Concepto de venta' : 'Concepto de compra';
+  const conceptoResumen = d.concepto
+    || conceptos.map((c) => c.descripcion).filter(Boolean).join(' · ')
+    || 'Sin concepto registrado en el CFDI';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl sm:rounded-3xl sm:p-8">
-        <div className="flex justify-between items-center mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-xl font-bold text-white sm:text-2xl">
             <FileText className="text-blue-500" /> Detalles del CFDI
           </h2>
-          <button type="button" onClick={onClose}><X className="text-slate-500 hover:text-white" /></button>
+          <button type="button" onClick={onClose} aria-label="Cerrar detalle"><X className="text-slate-500 hover:text-white" /></button>
         </div>
 
         {loading ? (
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-500" />
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-500" />
         ) : (
           <>
             <div className="mb-6 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div>
-                <p className="text-slate-500 text-[10px] font-black uppercase">Emisor / Cliente</p>
-                <p className="text-white font-bold">{d.emisor || d.receptor}</p>
+                <p className="text-[10px] font-black uppercase text-slate-500">Emisor / Cliente</p>
+                <p className="font-bold text-white">{d.emisor || d.receptor}</p>
               </div>
               <div>
-                <p className="text-slate-500 text-[10px] font-black uppercase">Forma de pago</p>
+                <p className="text-[10px] font-black uppercase text-slate-500">Forma de pago</p>
                 <p className="text-white">{d.forma_pago?.etiqueta || d.forma_pago_label || '—'}</p>
-                <p className="text-slate-500 text-xs">{d.forma_pago?.metodo_pago || d.metodo_pago}</p>
+                <p className="text-xs text-slate-500">{d.forma_pago?.metodo_pago || d.metodo_pago}</p>
               </div>
             </div>
 
-            {conceptos.length > 0 && (
-              <div className="mb-6 p-4 bg-slate-950 rounded-2xl border border-slate-800">
-                <p className="text-[10px] font-black uppercase text-slate-500 mb-2">Qué se vendió / compró</p>
-                {conceptos.map((c, i) => (
-                  <p key={i} className="text-sm text-slate-300 py-1 border-b border-slate-800 last:border-0">
-                    {c.descripcion} — ${Number(c.importe || 0).toLocaleString()}
-                  </p>
-                ))}
-              </div>
-            )}
+            <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <p className={`mb-2 text-[10px] font-black uppercase ${esIngreso ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {etiquetaConcepto}
+              </p>
+              <p className="cfdi-concepto text-sm font-bold text-slate-300">
+                {conceptoResumen}
+              </p>
+              {conceptos.length > 1 && (
+                <ul className="mt-3 space-y-2 border-t border-slate-800 pt-3">
+                  {conceptos.map((c, i) => (
+                    <li key={`${c.descripcion || 'concepto'}-${i}`} className="flex items-start justify-between gap-3">
+                      <span className="cfdi-concepto text-sm font-bold text-slate-300">
+                        {c.descripcion || 'Concepto sin descripción'}
+                      </span>
+                      <span className="shrink-0 text-sm font-black text-white">
+                        ${Number(c.importe || 0).toLocaleString('es-MX')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {conceptos.length === 1 && Number(conceptos[0]?.importe || 0) > 0 && (
+                <p className="mt-2 text-xs font-bold text-slate-500">
+                  Importe del concepto: ${Number(conceptos[0].importe || 0).toLocaleString('es-MX')}
+                </p>
+              )}
+            </div>
 
-            <div className="mb-6 p-4 bg-slate-950 rounded-2xl border border-slate-800">
-              <p className="text-[10px] font-black uppercase text-slate-500 mb-2">Desglose de impuestos</p>
-              {impuestos.map((imp, i) => (
-                <div key={i} className="flex justify-between text-sm py-1">
+            <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <p className="mb-2 text-[10px] font-black uppercase text-slate-500">Desglose de impuestos</p>
+              {impuestos.length === 0 ? (
+                <p className="text-sm text-slate-500">Sin desglose de impuestos disponible.</p>
+              ) : impuestos.map((imp, i) => (
+                <div key={`${imp.concepto || 'imp'}-${i}`} className="flex justify-between py-1 text-sm">
                   <span className="text-slate-400">{imp.concepto}</span>
-                  <span className="text-white font-bold">${Math.abs(imp.importe).toLocaleString()}</span>
+                  <span className="font-bold text-white">${Math.abs(imp.importe).toLocaleString()}</span>
                 </div>
               ))}
             </div>

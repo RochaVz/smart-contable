@@ -61,13 +61,13 @@ const TablaSimple = ({ cols = [], rows = [], pageSize = 8 }) => {
   };
 
   return (
-    <div className="overflow-hidden border border-slate-800 bg-slate-950/40">
+    <div className="informe-table overflow-hidden rounded-xl border border-slate-800 bg-slate-950/40 shadow-sm">
       <div className="flex flex-col gap-2 border-b border-slate-800 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+        <div className="informe-subtitle flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
           <SlidersHorizontal className="h-3.5 w-3.5 text-violet-400" />
           {filteredRows.length} registro{filteredRows.length === 1 ? '' : 's'}
         </div>
-        <label className="flex min-h-9 items-center gap-2 border border-slate-800 bg-slate-900 px-2.5 text-slate-400 sm:w-64">
+        <label className="flex min-h-9 items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-2.5 text-slate-400 sm:w-64">
           <Search className="h-3.5 w-3.5 shrink-0" />
           <input
             value={query}
@@ -80,7 +80,7 @@ const TablaSimple = ({ cols = [], rows = [], pageSize = 8 }) => {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-left text-sm">
           <caption className="sr-only">Tabla dinámica de resultados del informe</caption>
-          <thead className="border-b border-slate-800 bg-slate-900/70 text-[10px] uppercase font-black text-slate-500">
+          <thead className="border-b border-slate-800 bg-slate-900/70 text-[10px] font-black uppercase text-slate-500">
             <tr>
               {cols.map((column, index) => (
                 <th key={column} scope="col" className="p-3">
@@ -113,8 +113,8 @@ const TablaSimple = ({ cols = [], rows = [], pageSize = 8 }) => {
       <div className="flex items-center justify-between border-t border-slate-800 px-3 py-2 text-xs text-slate-500">
         <span>Página {currentPage} de {totalPages}</span>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1} className="p-1.5 hover:text-white disabled:opacity-30" aria-label="Página anterior"><ChevronLeft className="h-4 w-4" /></button>
-          <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages} className="p-1.5 hover:text-white disabled:opacity-30" aria-label="Página siguiente"><ChevronRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1} className="rounded-md p-1.5 hover:text-white disabled:opacity-30" aria-label="Página anterior"><ChevronLeft className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages} className="rounded-md p-1.5 hover:text-white disabled:opacity-30" aria-label="Página siguiente"><ChevronRight className="h-4 w-4" /></button>
         </div>
       </div>
     </div>
@@ -194,28 +194,28 @@ const InformesPanel = ({
             { Concepto: 'IVA neto del periodo', CFDI: '', Subtotal: '', IVA: '', Total: data.sugerencias?.iva_neto_periodo ?? 0 },
           ])} />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="border-l-2 border-emerald-400 bg-slate-950/60 px-4 py-4">
-            <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">Ingresos (ventas)</p>
-            <p className="text-2xl font-black text-white mt-2">{fmt(r.ingresos.total)}</p>
-            <p className="text-slate-500 text-xs mt-1">{r.ingresos.cantidad} CFDI · IVA {fmt(r.ingresos.iva)}</p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="informe-kpi informe-kpi-ingresos rounded-xl border border-emerald-500/30 border-l-4 border-l-emerald-400 bg-slate-950/60 px-4 py-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Ingresos (ventas)</p>
+            <p className="informe-amount mt-2 text-2xl font-black text-white">{fmt(r.ingresos.total)}</p>
+            <p className="informe-subtitle mt-1 text-xs font-bold text-slate-500">{r.ingresos.cantidad} CFDI · IVA {fmt(r.ingresos.iva)}</p>
           </div>
-          <div className="border-l-2 border-rose-400 bg-slate-950/60 px-4 py-4">
-            <p className="text-rose-400 text-[10px] font-black uppercase tracking-widest">Egresos (compras)</p>
-            <p className="text-2xl font-black text-white mt-2">{fmt(r.egresos.total)}</p>
-            <p className="text-slate-500 text-xs mt-1">{r.egresos.cantidad} CFDI · IVA {fmt(r.egresos.iva)}</p>
+          <div className="informe-kpi informe-kpi-egresos rounded-xl border border-rose-500/30 border-l-4 border-l-rose-400 bg-slate-950/60 px-4 py-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-400">Egresos (compras)</p>
+            <p className="informe-amount mt-2 text-2xl font-black text-white">{fmt(r.egresos.total)}</p>
+            <p className="informe-subtitle mt-1 text-xs font-bold text-slate-500">{r.egresos.cantidad} CFDI · IVA {fmt(r.egresos.iva)}</p>
           </div>
-          <div className="border-l-2 border-blue-400 bg-blue-500/10 px-4 py-4">
-            <p className="text-blue-300 text-[10px] font-black uppercase tracking-widest">Utilidad del periodo</p>
-            <p className="text-2xl font-black text-white mt-2">{fmt(r.utilidad_neta)}</p>
-            <p className="text-slate-400 text-xs mt-1">Margen {r.margen_pct}%</p>
+          <div className="informe-kpi informe-kpi-utilidad rounded-xl border border-blue-500/30 border-l-4 border-l-blue-400 bg-blue-500/10 px-4 py-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Utilidad del periodo</p>
+            <p className="informe-amount mt-2 text-2xl font-black text-white">{fmt(r.utilidad_neta)}</p>
+            <p className="informe-subtitle mt-1 text-xs font-bold text-slate-400">Margen {r.margen_pct}%</p>
           </div>
         </div>
         {data.sugerencias && (
-          <div className="border border-slate-800 bg-slate-950/45 p-4">
-            <p className="text-slate-400 text-xs font-black uppercase mb-2">IVA neto del mes</p>
-            <p className="text-xl font-black text-amber-400">{fmt(data.sugerencias.iva_neto_periodo)}</p>
-            <p className="text-slate-500 text-xs mt-1">Trasladado − acreditable (estimado desde CFDI)</p>
+          <div className="informe-kpi informe-kpi-iva rounded-xl border border-slate-800 bg-slate-950/45 p-4 shadow-sm">
+            <p className="mb-2 text-xs font-black uppercase text-slate-400">IVA neto del mes</p>
+            <p className="informe-amount text-xl font-black text-amber-400">{fmt(data.sugerencias.iva_neto_periodo)}</p>
+            <p className="informe-subtitle mt-1 text-xs font-bold text-slate-500">Trasladado − acreditable (estimado desde CFDI)</p>
           </div>
         )}
       </div>
@@ -244,7 +244,7 @@ const InformesPanel = ({
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <h4 className="text-lg font-black text-white">Resultado del periodo</h4>
-            <p className="mt-1 text-xs text-slate-500">Resumen contable de ingresos, gastos y utilidad.</p>
+            <p className="informe-subtitle mt-1 text-sm font-bold text-slate-500">Resumen contable de ingresos, gastos y utilidad.</p>
           </div>
           <BotonDescargarCsv onClick={() => descargarReporte('estado_resultados', [
             ...cuentasT.map((cuenta) => ({
@@ -266,10 +266,10 @@ const InformesPanel = ({
         </div>
 
         <div className="grid gap-5 lg:grid-cols-2">
-          <section className="min-w-0 border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <section className="informe-section informe-section-ingresos min-w-0 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h4 className="font-bold text-emerald-300">Ingresos desglosados</h4>
-              <span className="text-xs text-slate-500">{ingresos.length} concepto(s)</span>
+              <span className="informe-badge informe-badge-ingreso rounded-full px-2 py-0.5 text-xs font-black">{ingresos.length} concepto(s)</span>
             </div>
             <TablaSimple
               cols={['Concepto', 'Cliente', 'Cuenta', 'CFDI', 'Monto']}
@@ -284,10 +284,10 @@ const InformesPanel = ({
                 ])}
             />
           </section>
-          <section className="min-w-0 border border-rose-500/20 bg-rose-500/5 p-4">
+          <section className="informe-section informe-section-egresos min-w-0 rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h4 className="font-bold text-rose-300">Egresos desglosados</h4>
-              <span className="text-xs text-slate-500">{gastosDetalle.length} movimiento(s)</span>
+              <span className="informe-badge informe-badge-egreso rounded-full px-2 py-0.5 text-xs font-black">{gastosDetalle.length} movimiento(s)</span>
             </div>
             <TablaSimple
               cols={['Fecha', 'Concepto', 'Cuenta', 'Debe', 'Haber']}
@@ -388,22 +388,22 @@ const InformesPanel = ({
             { Receptor: 'TOTAL', Subtotal: t.total_subtotal_ventas, IVA: t.total_iva_trasladado, ISH: t.total_impuestos_locales, Total: '' },
           ])} />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">IVA trasladado</p>
-            <p className="text-lg font-black text-white">{fmt(t.total_iva_trasladado)}</p>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="informe-kpi informe-kpi-iva rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">IVA trasladado</p>
+            <p className="informe-amount text-lg font-black text-blue-400">{fmt(t.total_iva_trasladado)}</p>
           </div>
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">ISH / locales</p>
-            <p className="text-lg font-black text-white">{fmt(t.total_impuestos_locales)}</p>
+          <div className="informe-kpi rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">ISH / locales</p>
+            <p className="informe-amount text-lg font-black text-white">{fmt(t.total_impuestos_locales)}</p>
           </div>
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">Subtotal ventas</p>
-            <p className="text-lg font-black text-white">{fmt(t.total_subtotal_ventas)}</p>
+          <div className="informe-kpi rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">Subtotal ventas</p>
+            <p className="informe-amount text-lg font-black text-white">{fmt(t.total_subtotal_ventas)}</p>
           </div>
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">CFDI emitidos</p>
-            <p className="text-lg font-black text-white">{t.num_cfdi_venta}</p>
+          <div className="informe-kpi rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">CFDI emitidos</p>
+            <p className="informe-amount text-lg font-black text-white">{t.num_cfdi_venta}</p>
           </div>
         </div>
         <TablaSimple
@@ -427,17 +427,17 @@ const InformesPanel = ({
           ])} />
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">IVA acreditable</p>
-            <p className="text-lg font-black text-emerald-400">{fmt(a.total_iva_acreditable)}</p>
+          <div className="informe-kpi informe-kpi-ingresos rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">IVA acreditable</p>
+            <p className="informe-amount text-lg font-black text-emerald-400">{fmt(a.total_iva_acreditable)}</p>
           </div>
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">Subtotal compras</p>
-            <p className="text-lg font-black text-white">{fmt(a.total_subtotal_compras)}</p>
+          <div className="informe-kpi rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">Subtotal compras</p>
+            <p className="informe-amount text-lg font-black text-white">{fmt(a.total_subtotal_compras)}</p>
           </div>
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">CFDI recibidos</p>
-            <p className="text-lg font-black text-white">{a.num_cfdi_compra}</p>
+          <div className="informe-kpi rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">CFDI recibidos</p>
+            <p className="informe-amount text-lg font-black text-white">{a.num_cfdi_compra}</p>
           </div>
         </div>
         <TablaSimple
@@ -462,17 +462,17 @@ const InformesPanel = ({
           ])} />
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">IVA retenido</p>
-            <p className="text-lg font-black text-amber-400">{fmt(r.total_iva_retenido)}</p>
+          <div className="informe-kpi rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">IVA retenido</p>
+            <p className="informe-amount text-lg font-black text-amber-400">{fmt(r.total_iva_retenido)}</p>
           </div>
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">ISR retenido</p>
-            <p className="text-lg font-black text-amber-400">{fmt(r.total_isr_retenido)}</p>
+          <div className="informe-kpi rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">ISR retenido</p>
+            <p className="informe-amount text-lg font-black text-amber-400">{fmt(r.total_isr_retenido)}</p>
           </div>
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <p className="text-[10px] text-slate-500 uppercase font-black">Total retenciones</p>
-            <p className="text-lg font-black text-white">{fmt(r.total_retenciones)}</p>
+          <div className="informe-kpi rounded-xl border border-slate-800 bg-slate-950 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-slate-500">Total retenciones</p>
+            <p className="informe-amount text-lg font-black text-white">{fmt(r.total_retenciones)}</p>
           </div>
         </div>
         <TablaSimple
@@ -578,23 +578,23 @@ const InformesPanel = ({
   };
 
   return (
-    <section className="mb-10 border border-slate-800/90 bg-slate-900/30 p-4 sm:p-6">
+    <section className="informe-panel report-surface mb-10 rounded-2xl border border-slate-800/90 bg-slate-900/30 p-4 shadow-sm sm:p-6">
       <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-xl font-black text-white sm:text-2xl">
             <FileBarChart className="h-6 w-6 shrink-0 text-cyan-400 sm:h-7 sm:w-7" />
             Informes fiscales y contables
           </h2>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="informe-subtitle mt-1 text-sm font-bold text-slate-500">
             {MESES[mes - 1]} {anio} · Basado en CFDI y pólizas del periodo
           </p>
         </div>
-        <div className="flex min-h-11 w-full items-center gap-2 border border-slate-800 bg-slate-950/60 px-3 py-2 sm:w-auto">
-          <Calendar className="w-4 h-4 text-slate-500" />
+        <div className="toolbar-control flex min-h-11 w-full items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 sm:w-auto">
+          <Calendar className="h-4 w-4 text-slate-500" />
           <select
             value={mes}
             onChange={(e) => onPeriodoChange(Number(e.target.value), anio)}
-            className="bg-transparent text-white text-sm outline-none"
+            className="appearance-none bg-transparent text-sm text-white outline-none"
           >
             {MESES.map((nombre, i) => (
               <option key={nombre} value={i + 1}>{nombre}</option>
@@ -603,7 +603,7 @@ const InformesPanel = ({
           <select
             value={anio}
             onChange={(e) => onPeriodoChange(mes, Number(e.target.value))}
-            className="bg-transparent text-white text-sm outline-none"
+            className="appearance-none bg-transparent text-sm text-white outline-none"
           >
             {[anio - 1, anio, anio + 1].map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -613,14 +613,14 @@ const InformesPanel = ({
       </div>
 
       <div className="mb-5 border-y border-slate-800 bg-slate-950/35 px-1 py-3">
-        <label className="flex items-center gap-2 border border-slate-700 bg-slate-900/80 px-3 py-2 text-slate-300">
+        <label className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-slate-300">
           <Search className="h-4 w-4 text-cyan-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar ingreso, egreso, iva, proveedores, retenciones..."
-            className="w-full bg-transparent text-sm text-white placeholder:text-slate-500 outline-none"
+            className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
           />
         </label>
         {search.trim() && tabMatches.length === 0 && (
@@ -630,7 +630,7 @@ const InformesPanel = ({
         )}
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-800 pb-4 sm:flex sm:flex-wrap">
+      <nav className="informe-nav mb-6 grid grid-cols-2 gap-2 border-b border-slate-800 pb-4 sm:flex sm:flex-wrap" aria-label="Secciones de informes">
         {TABS.map(({ id, label, icon: Icon }) => {
           const isVisible = !search.trim() || tabMatches.includes(id);
           if (!isVisible) return null;
@@ -640,18 +640,18 @@ const InformesPanel = ({
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`flex min-h-10 items-center gap-1.5 rounded-lg px-3 py-2 text-left text-xs font-bold transition-all ${
-                  visibleTab === id
-                  ? 'border-b-2 border-cyan-400 bg-slate-800/80 text-white'
+              className={`informe-nav-tab flex min-h-10 items-center gap-1.5 rounded-lg px-3 py-2 text-left text-xs font-bold transition-all ${
+                visibleTab === id
+                  ? 'informe-nav-tab-active border-b-2 border-cyan-400 bg-slate-800/80 text-white'
                   : 'text-slate-500 hover:bg-slate-800/60 hover:text-white'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="h-3.5 w-3.5" />
               {label}
             </button>
           );
         })}
-      </div>
+      </nav>
 
       {loading ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-xs text-slate-500" role="status" aria-live="polite">
@@ -669,7 +669,7 @@ const BotonDescargarCsv = ({ onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600"
+    className="btn-action-csv inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600"
   >
     <Download className="h-4 w-4" /> Descargar CSV
   </button>
@@ -677,19 +677,19 @@ const BotonDescargarCsv = ({ onClick }) => (
 
 const MetricResultado = ({ label, value, detail, tone, icon: Icon }) => {
   const tones = {
-    emerald: 'border-emerald-400 text-emerald-400',
-    rose: 'border-rose-400 text-rose-400',
-    cyan: 'border-cyan-400 text-cyan-300',
+    emerald: 'informe-kpi-ingresos border-emerald-400 text-emerald-400',
+    rose: 'informe-kpi-egresos border-rose-400 text-rose-400',
+    cyan: 'informe-kpi-utilidad border-cyan-400 text-cyan-300',
   };
 
   return (
-    <article className={`border-l-2 bg-slate-950/60 px-4 py-4 ${tones[tone] || tones.cyan}`}>
+    <article className={`informe-kpi rounded-xl border border-l-4 bg-slate-950/60 px-4 py-4 shadow-sm ${tones[tone] || tones.cyan}`}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] font-black uppercase tracking-widest">{label}</p>
         <Icon className="h-4 w-4" aria-hidden="true" />
       </div>
-      <p className="mt-2 text-xl font-black text-white">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{detail}</p>
+      <p className="informe-amount mt-2 text-xl font-black text-white">{value}</p>
+      <p className="informe-subtitle mt-1 text-xs font-bold text-slate-500">{detail}</p>
     </article>
   );
 };

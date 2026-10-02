@@ -73,3 +73,18 @@ class Factura(Base):
     empresa          = relationship("Empresa", back_populates="facturas")
     polizas = relationship("Poliza", back_populates="factura", cascade="all, delete-orphan")
     operaciones_fiscales = relationship("OperacionFiscal", back_populates="factura")
+    pagos_relacionados = relationship(
+        "CfdiPagoDocumento",
+        back_populates="factura",
+    )
+    nomina_detalle = relationship(
+        "CfdiNomina",
+        back_populates="factura",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    clasificaciones_especiales = relationship(
+        "CfdiClasificacionEspecial",
+        back_populates="factura",
+        cascade="all, delete-orphan",
+    )

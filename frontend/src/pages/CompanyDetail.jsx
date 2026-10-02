@@ -18,7 +18,7 @@ import ComisionesBancoPanel from '../components/ComisionesBancoPanel';
 import ConciliacionBancariaPanel from '../components/ConciliacionBancariaPanel';
 import InformesPanel from '../components/InformesPanel';
 import LocalConciliacionPanel from '../components/LocalConciliacionPanel';
-import FiscalRegimenPanel from '../components/FiscalRegimenPanel';
+import FiscalConsolidadosPanel from '../components/FiscalConsolidadosPanel';
 import { downloadCsv } from '../utils/csv';
 import { downloadBlob, filenameFromContentDisposition } from '../utils/download';
 import { deleteLocalInvoice, getLocalCompany, getLocalInvoices } from '../services/localBackup';
@@ -223,6 +223,20 @@ const toNumber = (value) => Number.parseFloat(value) || 0;
 
 const esIngreso = (factura) => factura.tipo_operacion === 'VENTA';
 
+const formatMoney = (value) =>
+  `$${toNumber(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+
+const getConceptoFactura = (factura) => {
+  if (factura?.concepto) return String(factura.concepto).trim();
+  const conceptos = factura?.conceptos || factura?.conceptos_vendidos || [];
+  const descripciones = conceptos
+    .map((item) => (item?.descripcion || '').trim())
+    .filter(Boolean);
+  if (descripciones.length === 0) return 'Sin concepto';
+  if (descripciones.length === 1) return descripciones[0];
+  return `${descripciones[0]} (+${descripciones.length - 1} más)`;
+};
+
 const agruparPorFecha = (lista) => lista.reduce((acc, factura) => {
   const fecha = getFechaFactura(factura) || 'Sin fecha';
   if (!acc[fecha]) acc[fecha] = [];
@@ -230,10 +244,10 @@ const agruparPorFecha = (lista) => lista.reduce((acc, factura) => {
   return acc;
 }, {});
 
-const FILTROS_MOVIMIENTO = [
-  { id: 'todos', label: 'Todos' },
-  { id: 'ingresos', label: 'Ingresos' },
-  { id: 'egresos', label: 'Egresos' },
+const PANELES_MOVIMIENTO = [
+  { id: 'ingresos', label: 'Ingresos', descripcion: 'Facturas emitidas' },
+  { id: 'egresos', label: 'Egresos', descripcion: 'Facturas recibidas' },
+  { id: 'iva', label: 'IVA del periodo', descripcion: 'Causado y acreditable' },
 ];
 
 const CompanyDetail = () => {
@@ -263,7 +277,7 @@ const CompanyDetail = () => {
   const [anioFiltro, setAnioFiltro] = useState(hoy.getFullYear());
   const [empresa, setEmpresa] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const [filtroMovimiento, setFiltroMovimiento] = useState('todos');
+  const [filtroMovimiento, setFiltroMovimiento] = useState('ninguno');
   const [exportandoEmpresa, setExportandoEmpresa] = useState(false);
   const [tipoExportacion, setTipoExportacion] = useState('todo');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -502,6 +516,7 @@ const CompanyDetail = () => {
     return [...facturasPeriodo].filter((f) =>
       (f.emisor || '').toLowerCase().includes(term)
       || (f.uuid || '').toLowerCase().includes(term)
+      || getConceptoFactura(f).toLowerCase().includes(term)
     ).sort((a, b) => {
       if (sortConfig.key === 'fecha') {
         const dateA = parseFechaFactura(a)?.getTime() || 0;
@@ -527,7 +542,7 @@ const CompanyDetail = () => {
     ? facturasIngresos
     : filtroMovimiento === 'egresos'
       ? facturasEgresos
-      : facturasProcesadas;
+      : [];
 
   const seccionesFacturas = useMemo(() => {
     if (filtroMovimiento === 'ingresos') {
@@ -536,11 +551,15 @@ const CompanyDetail = () => {
     if (filtroMovimiento === 'egresos') {
       return [{ id: 'egresos', titulo: 'Egresos', lista: facturasEgresos, acento: 'rose' }];
     }
-    return [
-      { id: 'ingresos', titulo: 'Ingresos', lista: facturasIngresos, acento: 'emerald' },
-      { id: 'egresos', titulo: 'Egresos', lista: facturasEgresos, acento: 'rose' },
-    ];
+    return [];
   }, [filtroMovimiento, facturasIngresos, facturasEgresos]);
+
+  const ivaComparativo = useMemo(() => facturasPeriodo.reduce((acc, factura) => {
+    const iva = toNumber(factura.iva ?? factura.iva_trasladado);
+    if (esIngreso(factura)) acc.causado += iva;
+    else acc.acreditable += iva;
+    return acc;
+  }, { causado: 0, acreditable: 0 }), [facturasPeriodo]);
 
   const totalesMovimiento = useMemo(() => {
     const sumar = (lista) => lista.reduce((acc, f) => {
@@ -560,11 +579,16 @@ const CompanyDetail = () => {
     };
   }, [facturasPeriodo]);
 
+  const activarPanelMovimiento = useCallback((panelId) => {
+    setFiltroMovimiento((current) => (current === panelId ? 'ninguno' : panelId));
+  }, []);
+
   const handleExportCsv = () => {
     const rows = facturasVisibles.map((f) => ({
       Fecha: f.fecha,
       Tipo: esIngreso(f) ? 'Ingreso' : 'Egreso',
       Emisor: f.emisor,
+      Concepto: getConceptoFactura(f),
       RFC: f.rfc_emisor,
       Cliente: f.nombre_cliente || '',
       FormaPago: f.forma_pago_label || f.forma_pago || '',
@@ -638,7 +662,12 @@ const CompanyDetail = () => {
           {esIngreso(f) ? 'Ingreso' : 'Egreso'}
         </span>
       </td>
-      <td className="p-4 font-medium text-white">{f.emisor}</td>
+      <td className="p-4">
+        <p className="font-medium text-white">{f.emisor}</p>
+        <p className="cfdi-concepto mt-1 line-clamp-2 text-sm font-bold text-slate-300">
+          {getConceptoFactura(f)}
+        </p>
+      </td>
       <td className={`p-4 text-right font-black ${esIngreso(f) ? 'text-emerald-400' : 'text-rose-400'}`}>
         {esIngreso(f) ? '+' : '−'}${f.total.toLocaleString()}
       </td>
@@ -687,6 +716,9 @@ const CompanyDetail = () => {
         <div className="min-w-0">
           <p className="text-xs font-bold text-slate-500">{formatFecha(getFechaFactura(f))}</p>
           <h4 className="mt-1 line-clamp-2 break-words text-sm font-black text-white">{f.emisor}</h4>
+          <p className="cfdi-concepto mt-1 line-clamp-2 text-sm font-bold text-slate-300">
+            {getConceptoFactura(f)}
+          </p>
         </div>
         <span
           className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-black uppercase ${
@@ -761,114 +793,204 @@ const CompanyDetail = () => {
     );
   };
 
+  const renderRelacionIva = () => {
+    const saldo = ivaComparativo.causado - ivaComparativo.acreditable;
+    return (
+      <div className="space-y-4 p-4 sm:p-5">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <article className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">IVA acreditable</p>
+            <p className="mt-2 text-2xl font-black text-emerald-400">
+              {formatMoney(ivaComparativo.acreditable)}
+            </p>
+            <p className="mt-1 text-xs font-bold text-slate-500">Compras y gastos del periodo</p>
+          </article>
+          <article className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">IVA causado</p>
+            <p className="mt-2 text-2xl font-black text-blue-400">
+              {formatMoney(ivaComparativo.causado)}
+            </p>
+            <p className="mt-1 text-xs font-bold text-slate-500">Ventas e ingresos del periodo</p>
+          </article>
+          <article className={`rounded-xl border p-4 shadow-sm ${saldo >= 0 ? 'border-amber-500/30 bg-amber-500/10' : 'border-emerald-500/30 bg-emerald-500/10'}`}>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Saldo estimado</p>
+            <p className={`mt-2 text-2xl font-black ${saldo >= 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {formatMoney(Math.abs(saldo))}
+            </p>
+            <p className="mt-1 text-xs font-bold text-slate-500">{saldo >= 0 ? 'IVA por pagar' : 'Saldo a favor'}</p>
+          </article>
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full min-w-[480px] text-left text-sm">
+            <caption className="sr-only">Relación de IVA acreditable contra IVA causado</caption>
+            <thead className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+              <tr>
+                <th className="p-4">Concepto</th>
+                <th className="p-4 text-right">Importe</th>
+                <th className="p-4 text-right">CFDI</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              <tr>
+                <td className="p-4 font-bold text-emerald-400">IVA acreditable</td>
+                <td className="p-4 text-right font-black text-emerald-400">{formatMoney(ivaComparativo.acreditable)}</td>
+                <td className="p-4 text-right text-slate-400">{facturasEgresos.length}</td>
+              </tr>
+              <tr>
+                <td className="p-4 font-bold text-blue-400">IVA causado</td>
+                <td className="p-4 text-right font-black text-blue-400">{formatMoney(ivaComparativo.causado)}</td>
+                <td className="p-4 text-right text-slate-400">{facturasIngresos.length}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderHistorial = () => (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-slate-900 p-6 rounded-2xl border border-emerald-500/20">
-          <p className="text-slate-500 text-[10px] font-black uppercase">Ingresos</p>
-          <h2 className="text-2xl font-black text-emerald-400 mt-1">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <button
+          type="button"
+          aria-expanded={filtroMovimiento === 'ingresos'}
+          onClick={() => activarPanelMovimiento('ingresos')}
+          className={`kpi-resumen-card rounded-2xl border bg-slate-900 p-6 text-left transition-all duration-200 ${
+            filtroMovimiento === 'ingresos'
+              ? 'border-emerald-400 ring-2 ring-emerald-500/30'
+              : 'border-emerald-500/20 hover:border-emerald-400/60'
+          }`}
+        >
+          <p className="text-[10px] font-black uppercase text-slate-500">Ingresos</p>
+          <h2 className="mt-1 text-2xl font-black text-emerald-400">
             ${totalesMovimiento.ingresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </h2>
-          <p className="text-slate-500 text-xs mt-1">{totalesMovimiento.conteoIngresos} factura(s)</p>
-        </div>
-        <div className="bg-slate-900 p-6 rounded-2xl border border-rose-500/20">
-          <p className="text-slate-500 text-[10px] font-black uppercase">Egresos</p>
-          <h2 className="text-2xl font-black text-rose-400 mt-1">
+          <p className="mt-1 text-xs text-slate-500">{totalesMovimiento.conteoIngresos} factura(s) · toca para ver listado</p>
+        </button>
+        <button
+          type="button"
+          aria-expanded={filtroMovimiento === 'egresos'}
+          onClick={() => activarPanelMovimiento('egresos')}
+          className={`kpi-resumen-card rounded-2xl border bg-slate-900 p-6 text-left transition-all duration-200 ${
+            filtroMovimiento === 'egresos'
+              ? 'border-rose-400 ring-2 ring-rose-500/30'
+              : 'border-rose-500/20 hover:border-rose-400/60'
+          }`}
+        >
+          <p className="text-[10px] font-black uppercase text-slate-500">Egresos</p>
+          <h2 className="mt-1 text-2xl font-black text-rose-400">
             ${totalesMovimiento.egresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </h2>
-          <p className="text-slate-500 text-xs mt-1">{totalesMovimiento.conteoEgresos} factura(s)</p>
-        </div>
-        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-          <p className="text-slate-500 text-[10px] font-black uppercase">Resultado neto</p>
-          <h2 className={`text-2xl font-black mt-1 ${totalesMovimiento.neto >= 0 ? 'text-white' : 'text-amber-400'}`}>
+          <p className="mt-1 text-xs text-slate-500">{totalesMovimiento.conteoEgresos} factura(s) · toca para ver listado</p>
+        </button>
+        <div className="kpi-resumen-card rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <p className="text-[10px] font-black uppercase text-slate-500">Resultado neto</p>
+          <h2 className={`mt-1 text-2xl font-black ${totalesMovimiento.neto >= 0 ? 'text-white' : 'text-amber-400'}`}>
             ${totalesMovimiento.neto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </h2>
-          <p className="text-slate-500 text-xs mt-1">Ingresos − egresos</p>
+          <p className="mt-1 text-xs text-slate-500">Ingresos − egresos</p>
         </div>
-        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-          <p className="text-slate-500 text-[10px] font-black uppercase">IVA del periodo</p>
-          <h2 className="text-2xl font-black text-blue-400 mt-1">
+        <button
+          type="button"
+          aria-expanded={filtroMovimiento === 'iva'}
+          onClick={() => activarPanelMovimiento('iva')}
+          className={`kpi-resumen-card rounded-2xl border bg-slate-900 p-6 text-left transition-all duration-200 ${
+            filtroMovimiento === 'iva'
+              ? 'border-blue-400 ring-2 ring-blue-500/30'
+              : 'border-slate-800 hover:border-blue-400/60'
+          }`}
+        >
+          <p className="text-[10px] font-black uppercase text-slate-500">IVA del periodo</p>
+          <h2 className="mt-1 text-2xl font-black text-blue-400">
             ${statsIva.ivaEstimado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </h2>
-        </div>
+          <p className="mt-1 text-xs text-slate-500">Toca para ver acreditable vs causado</p>
+        </button>
       </div>
 
       {!loading && (
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl mb-8">
-          <h3 className="text-lg font-bold text-white mb-1">Tendencia {anioFiltro}</h3>
-          <p className="text-slate-500 text-sm mb-4">Ingresos vs egresos por mes</p>
+        <div className="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h3 className="mb-1 text-lg font-bold text-white">Tendencia {anioFiltro}</h3>
+          <p className="mb-4 text-sm text-slate-500">Ingresos vs egresos por mes</p>
           {chartMax === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-10 text-center text-sm text-slate-500">
               Sin movimientos para graficar en {anioFiltro}.
             </div>
           ) : (
             <>
-          <div className="space-y-4 sm:hidden">
-            {chartDataVisible.map((item) => (
-              <div key={item.mes} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">{item.fullName}</p>
-                  <p className="text-xs font-bold text-slate-400">
-                    Neto ${(item.ingresos - item.egresos).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <div className="mb-1 flex justify-between text-[11px] font-bold text-emerald-400">
-                      <span>Ingresos</span>
-                      <span>${item.ingresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+              <div className="space-y-4 sm:hidden">
+                {chartDataVisible.map((item) => (
+                  <div key={item.mes} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-500">{item.fullName}</p>
+                      <p className="text-xs font-bold text-slate-400">
+                        Neto ${(item.ingresos - item.egresos).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </p>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-800">
-                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max((item.ingresos / chartMax) * 100, item.ingresos > 0 ? 4 : 0)}%` }} />
+                    <div className="space-y-3">
+                      <div>
+                        <div className="mb-1 flex justify-between text-[11px] font-bold text-emerald-400">
+                          <span>Ingresos</span>
+                          <span>${item.ingresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-800">
+                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max((item.ingresos / chartMax) * 100, item.ingresos > 0 ? 4 : 0)}%` }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-1 flex justify-between text-[11px] font-bold text-rose-400">
+                          <span>Egresos</span>
+                          <span>${item.egresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-800">
+                          <div className="h-full rounded-full bg-rose-500" style={{ width: `${Math.max((item.egresos / chartMax) * 100, item.egresos > 0 ? 4 : 0)}%` }} />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="mb-1 flex justify-between text-[11px] font-bold text-rose-400">
-                      <span>Egresos</span>
-                      <span>${item.egresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-800">
-                      <div className="h-full rounded-full bg-rose-500" style={{ width: `${Math.max((item.egresos / chartMax) * 100, item.egresos > 0 ? 4 : 0)}%` }} />
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="hidden h-[280px] w-full min-h-[280px] sm:block">
-            <ResponsiveContainer width="100%" height={280} initialDimension={{ width: 800, height: 280 }}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: '1px solid #1e293b' }}
-                  formatter={(value) => `$${toNumber(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
-                />
-                <Legend wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
-                <Bar dataKey="ingresos" name="Ingresos" fill="#10b981" radius={[6, 6, 0, 0]} barSize={28} />
-                <Bar dataKey="egresos" name="Egresos" fill="#f43f5e" radius={[6, 6, 0, 0]} barSize={28} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+              <div className="hidden h-[280px] min-h-[280px] w-full sm:block">
+                <ResponsiveContainer width="100%" height={280} initialDimension={{ width: 800, height: 280 }}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: '1px solid #1e293b' }}
+                      formatter={(value) => `$${toNumber(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+                    />
+                    <Legend wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
+                    <Bar dataKey="ingresos" name="Ingresos" fill="#10b981" radius={[6, 6, 0, 0]} barSize={28} />
+                    <Bar dataKey="egresos" name="Egresos" fill="#f43f5e" radius={[6, 6, 0, 0]} barSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </>
           )}
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
+      <div className="report-surface overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
         <div className="flex flex-col justify-between gap-4 border-b border-slate-800 p-4 sm:flex-row sm:p-5">
-          <h3 className="font-bold text-white flex items-center gap-2">
-            <FileText className="text-blue-500 w-5 h-5" />
+          <h3 className="flex items-center gap-2 font-bold text-white">
+            <FileText className="h-5 w-5 text-blue-500" />
             Facturas · {MESES[mesFiltro - 1]} {anioFiltro}
           </h3>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1 sm:flex">
-              {FILTROS_MOVIMIENTO.map((opt) => (
+            <div
+              className="grid grid-cols-1 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1 sm:flex"
+              role="tablist"
+              aria-label="Resúmenes fiscales del periodo"
+            >
+              {PANELES_MOVIMIENTO.map((opt) => (
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => setFiltroMovimiento(opt.id)}
+                  role="tab"
+                  aria-selected={filtroMovimiento === opt.id}
+                  aria-expanded={filtroMovimiento === opt.id}
+                  onClick={() => activarPanelMovimiento(opt.id)}
                   className={`min-h-10 rounded-lg px-2 py-1.5 text-xs font-bold transition-colors sm:min-h-0 sm:px-3 ${
                     filtroMovimiento === opt.id
                       ? opt.id === 'ingresos'
@@ -876,19 +998,18 @@ const CompanyDetail = () => {
                         : opt.id === 'egresos'
                           ? 'bg-rose-600 text-white'
                           : 'bg-blue-600 text-white'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-slate-500 hover:bg-slate-200 hover:text-blue-600'
                   }`}
                 >
                   {opt.label}
                   {opt.id === 'ingresos' && ` (${facturasIngresos.length})`}
                   {opt.id === 'egresos' && ` (${facturasEgresos.length})`}
-                  {opt.id === 'todos' && ` (${facturasProcesadas.length})`}
                 </button>
               ))}
             </div>
             <input
               className="min-h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-base text-white sm:min-w-[200px] sm:text-sm"
-              placeholder="Buscar emisor o UUID..."
+              placeholder="Buscar emisor, concepto o UUID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -896,55 +1017,68 @@ const CompanyDetail = () => {
               type="button"
               onClick={handleExportCsv}
               disabled={loading || facturasVisibles.length === 0}
-              className="bg-emerald-600 px-4 py-2 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 hover:bg-emerald-500 disabled:opacity-50"
+              className="btn-action-csv flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              <Download className="w-4 h-4" /> CSV
+              <Download className="h-4 w-4" /> CSV
             </button>
           </div>
         </div>
-        <div className="space-y-3 p-3 sm:hidden">
-          {loading ? (
-            <div className="py-12 text-center"><Loader2 className="mx-auto animate-spin text-blue-500" /></div>
-          ) : facturasVisibles.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-10 text-center text-sm text-slate-500">
-              {filtroMovimiento === 'ingresos' && 'No hay ingresos en este periodo.'}
-              {filtroMovimiento === 'egresos' && 'No hay egresos en este periodo.'}
-              {filtroMovimiento === 'todos' && 'No hay facturas en este periodo. Usa "Cargar CFDI" para agregar.'}
-            </div>
-          ) : facturasVisibles.map((f) => renderFacturaCard(f))}
-        </div>
-        <div className="hidden overflow-x-auto sm:block">
-          <table className="w-full text-left min-w-[720px]">
-            <thead className="text-slate-500 text-[10px] uppercase font-black bg-slate-800/50">
-              <tr>
-                <th className="p-4 cursor-pointer" onClick={() => requestSort('fecha')}>
-                  Fecha {sortConfig.key === 'fecha' ? (sortConfig.direction === 'asc' ? <ChevronUp className="inline w-3" /> : <ChevronDown className="inline w-3" />) : ''}
-                </th>
-                <th className="p-4">Tipo</th>
-                <th className="p-4">Emisor / Proveedor</th>
-                <th className="p-4 cursor-pointer" onClick={() => requestSort('total')}>
-                  Monto {sortConfig.key === 'total' ? (sortConfig.direction === 'asc' ? <ChevronUp className="inline w-3" /> : <ChevronDown className="inline w-3" />) : ''}
-                </th>
-                <th className="p-4">Clasificación</th>
-                <th className="p-4 text-center">UUID</th>
-                <th className="p-4 text-center w-16"> </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {loading ? (
-                <tr><td colSpan="7" className="text-center py-16"><Loader2 className="animate-spin mx-auto text-blue-500" /></td></tr>
-              ) : facturasVisibles.length === 0 ? (
-                <tr>
-                  <td colSpan="7" className="text-center py-16 text-slate-500">
-                    {filtroMovimiento === 'ingresos' && 'No hay ingresos en este periodo.'}
-                    {filtroMovimiento === 'egresos' && 'No hay egresos en este periodo.'}
-                    {filtroMovimiento === 'todos' && 'No hay facturas en este periodo. Usa "Cargar CFDI" para agregar.'}
-                  </td>
-                </tr>
-              ) : seccionesFacturas.map((sec) => renderBloqueFacturas(sec))}
-            </tbody>
-          </table>
-        </div>
+        {filtroMovimiento === 'ninguno' ? (
+          <div className="px-4 py-10 text-center sm:px-6">
+            <p className="text-sm font-bold text-slate-300">Selecciona un resumen para ver su detalle.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Los listados permanecen ocultos hasta que actives Ingresos, Egresos o IVA del periodo.
+            </p>
+          </div>
+        ) : (
+          <div key={filtroMovimiento} className="cfdi-panel-enter" role="tabpanel">
+            {filtroMovimiento === 'iva' ? renderRelacionIva() : (
+              <>
+                <div className="space-y-3 p-3 sm:hidden">
+                  {loading ? (
+                    <div className="py-12 text-center"><Loader2 className="mx-auto animate-spin text-blue-500" /></div>
+                  ) : facturasVisibles.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-10 text-center text-sm text-slate-500">
+                      {filtroMovimiento === 'ingresos' && 'No hay ingresos en este periodo.'}
+                      {filtroMovimiento === 'egresos' && 'No hay egresos en este periodo.'}
+                    </div>
+                  ) : facturasVisibles.map((f) => renderFacturaCard(f))}
+                </div>
+                <div className="hidden overflow-x-auto sm:block">
+                  <table className="w-full min-w-[720px] text-left">
+                    <thead className="bg-slate-800/50 text-[10px] font-black uppercase text-slate-500">
+                      <tr>
+                        <th className="cursor-pointer p-4" onClick={() => requestSort('fecha')}>
+                          Fecha {sortConfig.key === 'fecha' ? (sortConfig.direction === 'asc' ? <ChevronUp className="inline w-3" /> : <ChevronDown className="inline w-3" />) : ''}
+                        </th>
+                        <th className="p-4">Tipo</th>
+                        <th className="p-4">Emisor / Proveedor y concepto</th>
+                        <th className="cursor-pointer p-4" onClick={() => requestSort('total')}>
+                          Monto {sortConfig.key === 'total' ? (sortConfig.direction === 'asc' ? <ChevronUp className="inline w-3" /> : <ChevronDown className="inline w-3" />) : ''}
+                        </th>
+                        <th className="p-4">Clasificación</th>
+                        <th className="p-4 text-center">UUID</th>
+                        <th className="w-16 p-4 text-center"> </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {loading ? (
+                        <tr><td colSpan="7" className="py-16 text-center"><Loader2 className="mx-auto animate-spin text-blue-500" /></td></tr>
+                      ) : facturasVisibles.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="py-16 text-center text-slate-500">
+                            {filtroMovimiento === 'ingresos' && 'No hay ingresos en este periodo.'}
+                            {filtroMovimiento === 'egresos' && 'No hay egresos en este periodo.'}
+                          </td>
+                        </tr>
+                      ) : seccionesFacturas.map((sec) => renderBloqueFacturas(sec))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
@@ -1266,7 +1400,7 @@ const CompanyDetail = () => {
         if (isLocalCompany) {
           return <p className="py-12 text-center text-sm text-slate-500">Configura un negocio sincronizado para usar el motor fiscal.</p>;
         }
-        return <FiscalRegimenPanel empresa={empresa} onUpdated={handleRefresh} />;
+        return <FiscalConsolidadosPanel empresa={empresa} onUpdated={handleRefresh} />;
       default:
         return renderHistorial();
     }
@@ -1612,4 +1746,5 @@ const CompanyDetail = () => {
 };
 
 export default CompanyDetail;
+
 

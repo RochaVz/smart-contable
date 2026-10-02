@@ -40,26 +40,26 @@ const Reportes = ({ empresaId }) => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* TARJETAS DE RESUMEN */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
-          <TrendingUp className="text-emerald-500 mb-4" />
-          <p className="text-slate-400 text-xs uppercase font-black tracking-widest">Ingresos Totales</p>
-          <h3 className="text-2xl font-black text-white mt-2">${stats.ingresos.toLocaleString()}</h3>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="informe-kpi informe-kpi-ingresos report-surface rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
+          <TrendingUp className="mb-4 text-emerald-500" />
+          <p className="informe-subtitle text-xs font-black uppercase tracking-widest text-slate-400">Ingresos Totales</p>
+          <h3 className="informe-amount mt-2 text-2xl font-black text-white">${stats.ingresos.toLocaleString()}</h3>
         </div>
-        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
-          <DollarSign className="text-rose-500 mb-4" />
-          <p className="text-slate-400 text-xs uppercase font-black tracking-widest">Gastos Totales</p>
-          <h3 className="text-2xl font-black text-rose-400 mt-2">${stats.gastos.toLocaleString()}</h3>
+        <div className="informe-kpi informe-kpi-egresos report-surface rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
+          <DollarSign className="mb-4 text-rose-500" />
+          <p className="informe-subtitle text-xs font-black uppercase tracking-widest text-slate-400">Gastos Totales</p>
+          <h3 className="informe-amount mt-2 text-2xl font-black text-rose-400">${stats.gastos.toLocaleString()}</h3>
         </div>
-        <div className="bg-blue-600 p-6 rounded-3xl shadow-xl shadow-blue-900/20">
-          <PieChart className="text-blue-100 mb-4" />
-          <p className="text-blue-100 text-xs uppercase font-black tracking-widest">Utilidad Neta</p>
-          <h3 className="text-2xl font-black text-white mt-2">${stats.utilidad.toLocaleString()}</h3>
+        <div className="rounded-3xl border border-blue-500/30 bg-blue-600 p-6 shadow-sm shadow-blue-900/20">
+          <PieChart className="mb-4 text-blue-100" />
+          <p className="text-xs font-black uppercase tracking-widest text-blue-100">Utilidad Neta</p>
+          <h3 className="mt-2 text-2xl font-black text-white">${stats.utilidad.toLocaleString()}</h3>
         </div>
       </div>
 
       {/* GRÁFICA */}
-      <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl">
+      <div className="report-surface rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
         <h3 className="text-xl font-bold text-white mb-8">Tendencia Financiera</h3>
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
