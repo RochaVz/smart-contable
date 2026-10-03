@@ -1,4 +1,4 @@
-import { Fragment, useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Fragment, useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import {
@@ -66,12 +66,11 @@ const SECCIONES = [
 ];
 
 const CATEGORIAS_RAPIDAS_EMPRESA = [
-  { id: 'documentos', label: 'Documentos', desc: 'Facturas de ingresos y gastos del periodo', seccion: 'historial', tab: null, icon: FileText },
-  { id: 'ingresos', label: 'Ingresos & Ventas', desc: 'Estado de resultados y detalle de ventas', seccion: 'informes', tab: 'estado', icon: TrendingUp },
-  { id: 'egresos', label: 'Gastos & Egresos', desc: 'Gastos clasificados por proveedor y cuenta', seccion: 'informes', tab: 'estado', icon: TrendingDown },
-  { id: 'utilidades', label: 'Utilidades', desc: 'Resumen financiero, margen y balance', seccion: 'informes', tab: 'resumen', icon: DollarSign },
+  { id: 'documentos', label: 'Facturas de ingresos y gastos del periodo', desc: 'Documentos CFDI del periodo', seccion: 'historial', tab: null, icon: FileText },
+  { id: 'ingresos', label: 'Informes fiscales y contables', desc: 'Estado de resultados y detalle de ventas', seccion: 'informes', tab: 'estado', icon: TrendingUp },
+  { id: 'egresos', label: 'Gastos clasificados por proveedor', desc: 'Directorio de proveedores y gasto acumulado por RFC', seccion: 'informes', tab: 'padron', icon: TrendingDown },
+  { id: 'utilidades', label: 'Resumen financiero', desc: 'Resumen financiero, margen y balance', seccion: 'informes', tab: 'resumen', icon: DollarSign },
   { id: 'impuestos', label: 'Pago de Impuestos', desc: 'IVA trasladado y desglose impositivo', seccion: 'informes', tab: 'trasladados', icon: Receipt },
-  { id: 'proveedores', label: 'Padrón Proveedores', desc: 'Directorio y acumulados por RFC', seccion: 'informes', tab: 'padron', icon: Users },
   { id: 'polizas', label: 'Registro Contable', desc: 'Pólizas de diario, ingresos y egresos', seccion: 'polizas', tab: null, icon: BookOpen },
   { id: 'conciliacion', label: 'Conciliación Bancaria', desc: 'Cruce bancario con pólizas y comisiones', seccion: 'conciliacion', tab: null, icon: Landmark },
   { id: 'fiscal', label: 'Motor Fiscal SAT', desc: 'Validaciones de régimen y obligaciones', seccion: 'fiscal', tab: null, icon: Scale },
@@ -99,7 +98,7 @@ const TOPICOS_BUSQUEDA = [
   {
     id: 'egresos',
     label: 'Gastos & Egresos',
-    desc: 'Gastos clasificados por proveedor y cuenta contable',
+    desc: 'Gastos desglosados por cuenta contable y concepto',
     seccion: 'informes',
     tab: 'estado',
     icon: TrendingDown,
@@ -260,8 +259,6 @@ const CompanyDetail = () => {
   const tabActual = searchParams.get('tab') || (seccion === 'informes' ? 'resumen' : null);
 
   const [busquedaGlobal, setBusquedaGlobal] = useState('');
-  const [menuAccesosAbierto, setMenuAccesosAbierto] = useState(false);
-  const accesosMenuRef = useRef(null);
   const [facturas, setFacturas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -283,25 +280,6 @@ const CompanyDetail = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (accesosMenuRef.current && !accesosMenuRef.current.contains(event.target)) {
-        setMenuAccesosAbierto(false);
-      }
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setMenuAccesosAbierto(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
 
   const handleSelectSeccion = useCallback((nuevaSeccion, nuevoTab = null) => {
     setSearchParams((prev) => {
@@ -1539,96 +1517,71 @@ const CompanyDetail = () => {
             </div>
           </div>
 
-          {/* Barra de Búsqueda y Accesos Rápidos en Cascada */}
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-            {/* Buscador global dentro de la empresa */}
-            <div className="relative min-w-0 flex-1">
-              <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
-              <input
-                type="text"
-                value={busquedaGlobal}
-                onChange={(e) => setBusquedaGlobal(e.target.value)}
-                placeholder="Buscar en este negocio (ingresos, gastos, utilidades, IVA, retenciones, proveedores, conciliación, SAT, pólizas)..."
-                className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 py-3 pl-10 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:bg-slate-900 focus:ring-1 focus:ring-blue-500"
-              />
-              {busquedaGlobal && (
-                <button
-                  type="button"
-                  onClick={() => setBusquedaGlobal('')}
-                  className="absolute right-3.5 top-3 text-slate-400 hover:text-white"
-                  title="Limpiar búsqueda"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-
-            {/* Botón único en cascada de Accesos Rápidos */}
-            <div className="relative shrink-0" ref={accesosMenuRef}>
+          {/* Buscador global dentro de la empresa */}
+          <div className="relative min-w-0">
+            <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
+            <input
+              type="text"
+              value={busquedaGlobal}
+              onChange={(e) => setBusquedaGlobal(e.target.value)}
+              placeholder="Buscar en este negocio (ingresos, gastos, utilidades, IVA, retenciones, proveedores, conciliación, SAT, pólizas)..."
+              className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 py-3 pl-10 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:bg-slate-900 focus:ring-1 focus:ring-blue-500"
+            />
+            {busquedaGlobal && (
               <button
                 type="button"
-                onClick={() => setMenuAccesosAbierto((prev) => !prev)}
-                className={`flex min-h-11 w-full items-center justify-between gap-2.5 rounded-2xl border px-4 py-2.5 text-sm font-bold transition-all sm:w-auto ${
-                  menuAccesosAbierto
-                    ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-                    : 'border-slate-800 bg-slate-900/90 text-slate-200 hover:border-slate-700 hover:bg-slate-800 hover:text-white'
-                }`}
-                aria-expanded={menuAccesosAbierto}
-                aria-haspopup="true"
+                onClick={() => setBusquedaGlobal('')}
+                className="absolute right-3.5 top-3 text-slate-400 hover:text-white"
+                title="Limpiar búsqueda"
               >
-                <div className="flex items-center gap-2">
-                  <SeccionIconActual className={`h-4 w-4 shrink-0 ${menuAccesosAbierto ? 'text-white' : 'text-blue-400'}`} />
-                  <span>{seccionLabelActual}</span>
-                </div>
-                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${menuAccesosAbierto ? 'rotate-180 text-white' : 'text-slate-400'}`} />
+                <X className="h-5 w-5" />
               </button>
+            )}
+          </div>
 
-              {/* Menú desplegable en cascada */}
-              {menuAccesosAbierto && (
-                <div className="absolute right-0 top-full z-30 mt-2 w-full min-w-[290px] rounded-2xl border border-slate-800 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-xl sm:w-84">
-                  <div className="mb-1 flex items-center justify-between border-b border-slate-800/80 px-3 py-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Módulos y Reportes del Negocio
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      {CATEGORIAS_RAPIDAS_EMPRESA.length} opciones
-                    </span>
-                  </div>
-                  <div className="max-h-96 space-y-1 overflow-y-auto">
-                    {CATEGORIAS_RAPIDAS_EMPRESA.map((cat) => {
-                      const Icon = cat.icon;
-                      const activa = isCatActiva(cat);
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => {
-                            handleSelectSeccion(cat.seccion, cat.tab);
-                            setMenuAccesosAbierto(false);
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-xl p-2.5 text-left text-xs transition-all ${
-                            activa
-                              ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-900/20'
-                              : 'text-slate-300 hover:bg-slate-800/90 hover:text-white'
-                          }`}
-                        >
-                          <div className={`rounded-lg p-2 shrink-0 ${activa ? 'bg-white/20 text-white' : 'bg-slate-800/90 text-blue-400'}`}>
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-bold">{cat.label}</p>
-                            {cat.desc && (
-                              <p className={`truncate text-[11px] ${activa ? 'text-blue-100' : 'text-slate-500'}`}>
-                                {cat.desc}
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+          {/* Módulos y reportes del negocio: botones visibles y separados */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                Módulos y reportes del negocio
+              </span>
+              <span className="text-[10px] text-slate-500">
+                {CATEGORIAS_RAPIDAS_EMPRESA.length} opciones
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {CATEGORIAS_RAPIDAS_EMPRESA.map((cat) => {
+                const Icon = cat.icon;
+                const activa = isCatActiva(cat);
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => handleSelectSeccion(cat.seccion, cat.tab)}
+                    className={`group flex w-full items-center gap-3 rounded-xl border p-3 text-left text-xs shadow-md transition-all duration-150 ease-out active:translate-y-[1px] active:shadow-inner active:duration-75 ${
+                      activa
+                        ? 'border-emerald-500/40 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white font-bold shadow-emerald-900/30'
+                        : 'border-slate-700/80 bg-gradient-to-b from-slate-800 to-slate-900 text-slate-300 hover:border-slate-600 hover:from-slate-700 hover:to-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <div
+                      className={`rounded-lg p-2 shrink-0 shadow-sm transition-colors duration-150 ${
+                        activa ? 'bg-white/20 text-white' : 'bg-slate-900/80 text-emerald-400 group-hover:text-emerald-300'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold leading-tight">{cat.label}</p>
+                      {cat.desc && (
+                        <p className={`truncate text-[11px] ${activa ? 'text-emerald-100' : 'text-slate-500'}`}>
+                          {cat.desc}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1659,9 +1612,9 @@ const CompanyDetail = () => {
                           handleSelectSeccion(topico.seccion, topico.tab);
                           setBusquedaGlobal('');
                         }}
-                        className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/95 p-3 text-left transition-all hover:border-blue-500 hover:bg-slate-800"
+                        className="group flex items-center gap-3 rounded-xl border border-slate-700/80 bg-gradient-to-b from-slate-800 to-slate-900 p-3 text-left shadow-[0_3px_0_0_rgba(15,23,42,0.9),0_4px_8px_-2px_rgba(0,0,0,0.35)] transition-all duration-150 ease-out hover:border-emerald-500/60 hover:from-slate-700 hover:to-slate-800 active:translate-y-px active:scale-[0.98] active:shadow-[0_1px_0_0_rgba(15,23,42,0.9)] active:duration-75"
                       >
-                        <div className="rounded-lg bg-blue-500/10 p-2 text-blue-400 shrink-0">
+                        <div className="rounded-lg bg-slate-900/80 p-2 text-emerald-400 shrink-0 shadow-sm transition-colors duration-150 group-hover:text-emerald-300">
                           <Icon className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">
@@ -1681,26 +1634,17 @@ const CompanyDetail = () => {
           )}
 
           {/* Indicador de sección activa */}
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-400">
-                <SeccionIconActual className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Vista actual:</span>
-                  <span className="truncate text-sm font-black text-white">{seccionLabelActual}</span>
-                </div>
-                <p className="truncate text-xs text-slate-400">{seccionDescActual}</p>
-              </div>
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600/10 text-emerald-400">
+              <SeccionIconActual className="h-5 w-5" />
             </div>
-            <button
-              type="button"
-              onClick={() => setMenuAccesosAbierto((prev) => !prev)}
-              className="shrink-0 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-blue-400 transition-colors hover:bg-slate-700 hover:text-white"
-            >
-              Cambiar vista
-            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Vista actual:</span>
+                <span className="truncate text-sm font-black text-white">{seccionLabelActual}</span>
+              </div>
+              <p className="truncate text-xs text-slate-400">{seccionDescActual}</p>
+            </div>
           </div>
         </header>
 
