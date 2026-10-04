@@ -4,21 +4,30 @@ import api from '../services/api';
 import {
   ArrowLeft, FileText, UploadCloud,
   Loader2, BrainCircuit, ChevronUp, ChevronDown, Download, Calendar,
-  BookOpen, FileBarChart, Landmark, Settings2, Trash2,
-  Calculator, Search, Sparkles, TrendingUp, TrendingDown,
-  DollarSign, Receipt, Users, Scale, X,
+  BookOpen, Settings2, Trash2,
+  Search, Sparkles, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
 import ClassifyModal from '../components/ClassifyModal';
 import FacturaDetailModal from '../components/FacturaDetailModal';
 import ExportPreviewModal from '../components/ExportPreviewModal';
+import HubCard from '../components/HubCard';
+import ModulePageShell from '../components/ModulePageShell';
 import PolizasPanel from '../components/PolizasPanel';
 import ComisionesBancoPanel from '../components/ComisionesBancoPanel';
 import ConciliacionBancariaPanel from '../components/ConciliacionBancariaPanel';
 import InformesPanel from '../components/InformesPanel';
 import LocalConciliacionPanel from '../components/LocalConciliacionPanel';
 import FiscalConsolidadosPanel from '../components/FiscalConsolidadosPanel';
+import {
+  COMPANY_HUB_ITEMS,
+  HUB_SEARCH_TOPICS,
+  getHubItem,
+  hubHomePath,
+  hubPath,
+  legacyQueryToHubPath,
+} from '../navigation/companyHub';
 import { downloadCsv } from '../utils/csv';
 import { downloadBlob, filenameFromContentDisposition } from '../utils/download';
 import { deleteLocalInvoice, getLocalCompany, getLocalInvoices } from '../services/localBackup';
@@ -30,152 +39,6 @@ import {
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-];
-
-const SECCIONES = [
-  {
-    id: 'historial',
-    label: 'Documentos',
-    icon: FileText,
-    descripcion: 'Facturas, ingresos y gastos del periodo',
-  },
-  {
-    id: 'polizas',
-    label: 'Registro contable',
-    icon: BookOpen,
-    descripcion: 'Cómo se registraron tus movimientos',
-  },
-  {
-    id: 'informes',
-    label: 'Resumen del negocio',
-    icon: FileBarChart,
-    descripcion: 'Resultado, impuestos y proveedores',
-  },
-  {
-    id: 'conciliacion',
-    label: 'Revisión bancaria',
-    icon: Landmark,
-    descripcion: 'Compara banco contra tus registros',
-  },
-  {
-    id: 'fiscal',
-    label: 'Fiscal',
-    icon: Calculator,
-    descripcion: 'Régimen, obligaciones y retenciones',
-  },
-];
-
-const CATEGORIAS_RAPIDAS_EMPRESA = [
-  { id: 'documentos', label: 'Facturas de ingresos y gastos del periodo', desc: 'Documentos CFDI del periodo', seccion: 'historial', tab: null, icon: FileText },
-  { id: 'ingresos', label: 'Informes fiscales y contables', desc: 'Estado de resultados y detalle de ventas', seccion: 'informes', tab: 'estado', icon: TrendingUp },
-  { id: 'egresos', label: 'Gastos clasificados por proveedor', desc: 'Directorio de proveedores y gasto acumulado por RFC', seccion: 'informes', tab: 'padron', icon: TrendingDown },
-  { id: 'utilidades', label: 'Resumen financiero', desc: 'Resumen financiero, margen y balance', seccion: 'informes', tab: 'resumen', icon: DollarSign },
-  { id: 'impuestos', label: 'Pago de Impuestos', desc: 'IVA trasladado y desglose impositivo', seccion: 'informes', tab: 'trasladados', icon: Receipt },
-  { id: 'polizas', label: 'Registro Contable', desc: 'Pólizas de diario, ingresos y egresos', seccion: 'polizas', tab: null, icon: BookOpen },
-  { id: 'conciliacion', label: 'Conciliación Bancaria', desc: 'Cruce bancario con pólizas y comisiones', seccion: 'conciliacion', tab: null, icon: Landmark },
-  { id: 'fiscal', label: 'Motor Fiscal SAT', desc: 'Validaciones de régimen y obligaciones', seccion: 'fiscal', tab: null, icon: Scale },
-];
-
-const TOPICOS_BUSQUEDA = [
-  {
-    id: 'documentos',
-    label: 'Documentos y Facturas (CFDI)',
-    desc: 'Facturas de ingresos y gastos del periodo',
-    seccion: 'historial',
-    tab: null,
-    icon: FileText,
-    keywords: ['documentos', 'facturas', 'cfdi', 'xml', 'historial', 'ingreso', 'gasto', 'egreso'],
-  },
-  {
-    id: 'ingresos',
-    label: 'Ingresos & Ventas',
-    desc: 'Estado de resultados y detalle de ventas',
-    seccion: 'informes',
-    tab: 'estado',
-    icon: TrendingUp,
-    keywords: ['ingresos', 'ventas', 'clientes', 'facturas emitidas', 'ingreso', 'venta'],
-  },
-  {
-    id: 'egresos',
-    label: 'Gastos & Egresos',
-    desc: 'Gastos desglosados por cuenta contable y concepto',
-    seccion: 'informes',
-    tab: 'estado',
-    icon: TrendingDown,
-    keywords: ['gastos', 'egresos', 'compras', 'costos', 'gasto', 'egreso', 'compra', 'deducciones'],
-  },
-  {
-    id: 'utilidades',
-    label: 'Utilidades & Rentabilidad',
-    desc: 'Resumen financiero, margen y utilidad neta',
-    seccion: 'informes',
-    tab: 'resumen',
-    icon: DollarSign,
-    keywords: ['utilidad', 'utilidades', 'rentabilidad', 'ganancia', 'margen', 'kpi', 'resumen'],
-  },
-  {
-    id: 'trasladados',
-    label: 'IVA Trasladado & Impuestos Emitidos',
-    desc: 'Impuesto trasladado en facturas emitidas',
-    seccion: 'informes',
-    tab: 'trasladados',
-    icon: Receipt,
-    keywords: ['iva trasladado', 'impuestos', 'iva cobrado', 'impuesto', 'trasladado', 'pago de impuestos'],
-  },
-  {
-    id: 'acreditables',
-    label: 'IVA Acreditable & Compras',
-    desc: 'IVA acreditable en gastos y proveedores',
-    seccion: 'informes',
-    tab: 'acreditables',
-    icon: Receipt,
-    keywords: ['iva acreditable', 'iva deducible', 'iva compras', 'acreditable', 'deducible'],
-  },
-  {
-    id: 'retenidos',
-    label: 'Retenciones de Impuestos (ISR / IVA)',
-    desc: 'Retenciones del periodo por proveedores y clientes',
-    seccion: 'informes',
-    tab: 'retenidos',
-    icon: Receipt,
-    keywords: ['retenciones', 'isr retenido', 'iva retenido', 'retencion', 'impuestos retenidos'],
-  },
-  {
-    id: 'padron',
-    label: 'Padrón de Proveedores',
-    desc: 'Directorio de proveedores, RFCs y montos acumulados',
-    seccion: 'informes',
-    tab: 'padron',
-    icon: Users,
-    keywords: ['padron', 'proveedores', 'proveedor', 'suppliers', 'rfc proveedores', 'directorio'],
-  },
-  {
-    id: 'polizas',
-    label: 'Registro Contable & Pólizas',
-    desc: 'Pólizas automáticas de diario, ingresos y egresos',
-    seccion: 'polizas',
-    tab: null,
-    icon: BookOpen,
-    keywords: ['polizas', 'registro contable', 'asientos', 'cuentas contables', 'libro diario', 'contabilidad'],
-  },
-  {
-    id: 'conciliacion',
-    label: 'Conciliación Bancaria',
-    desc: 'Cruce de estado de cuenta bancario con registros y comisiones',
-    seccion: 'conciliacion',
-    tab: null,
-    icon: Landmark,
-    keywords: ['conciliacion', 'banco', 'estado de cuenta', 'movimientos bancarios', 'saldo', 'comisiones'],
-  },
-  {
-    id: 'fiscal',
-    label: 'Motor Fiscal & SAT',
-    desc: 'Validaciones de régimen fiscal, obligaciones y alertas SAT',
-    seccion: 'fiscal',
-    tab: null,
-    icon: Scale,
-    keywords: ['fiscal', 'sat', 'regimen', 'obligaciones', 'motor fiscal', 'cumplimiento', 'auditoria'],
-  },
 ];
 
 const getFechaFactura = (factura) => factura.fecha || factura.fecha_emision || '';
@@ -250,13 +113,20 @@ const PANELES_MOVIMIENTO = [
 ];
 
 const CompanyDetail = () => {
-  const { id } = useParams();
+  const { id, moduloId, reporteId } = useParams();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const hoy = useMemo(() => new Date(), []);
 
-  const seccion = searchParams.get('seccion') || 'historial';
-  const tabActual = searchParams.get('tab') || (seccion === 'informes' ? 'resumen' : null);
+  const hubKind = moduloId ? 'modulos' : reporteId ? 'reportes' : null;
+  const hubSlug = moduloId || reporteId || null;
+  const vistaActiva = useMemo(
+    () => (hubKind && hubSlug ? getHubItem(hubKind, hubSlug) : null),
+    [hubKind, hubSlug],
+  );
+  const esHub = !vistaActiva;
+  const seccion = vistaActiva?.seccion || 'historial';
+  const tabActual = vistaActiva?.tab || (seccion === 'informes' ? 'resumen' : null);
 
   const [busquedaGlobal, setBusquedaGlobal] = useState('');
   const [facturas, setFacturas] = useState([]);
@@ -281,49 +151,48 @@ const CompanyDetail = () => {
   const [previewContent, setPreviewContent] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const handleSelectSeccion = useCallback((nuevaSeccion, nuevoTab = null) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (!nuevaSeccion || nuevaSeccion === 'historial') {
-        next.delete('seccion');
-      } else {
-        next.set('seccion', nuevaSeccion);
-      }
-      if (nuevoTab) {
-        next.set('tab', nuevoTab);
-      } else if (nuevaSeccion !== 'informes') {
-        next.delete('tab');
-      }
-      return next;
-    });
-  }, [setSearchParams]);
+  // Compatibilidad con URLs antiguas ?seccion=&tab=
+  useEffect(() => {
+    if (moduloId || reporteId) return;
+    const legacySeccion = searchParams.get('seccion');
+    const legacyTab = searchParams.get('tab');
+    if (!legacySeccion && !legacyTab) return;
+    navigate(legacyQueryToHubPath(id, legacySeccion || 'historial', legacyTab), { replace: true });
+  }, [id, moduloId, reporteId, navigate, searchParams]);
 
-  const isCatActiva = useCallback((cat) => {
-    if (cat.seccion !== seccion) return false;
-    if (cat.tab) {
-      return tabActual === cat.tab;
+  // Ruta desconocida de módulo/reporte → hub
+  useEffect(() => {
+    if ((moduloId || reporteId) && !vistaActiva) {
+      navigate(hubHomePath(id), { replace: true });
     }
-    return !tabActual || seccion !== 'informes';
-  }, [seccion, tabActual]);
+  }, [id, moduloId, reporteId, vistaActiva, navigate]);
 
-  const categoriaActivaInfo = useMemo(() => {
-    return CATEGORIAS_RAPIDAS_EMPRESA.find((cat) => isCatActiva(cat));
-  }, [isCatActiva]);
+  const openHubItem = useCallback((item) => {
+    navigate(hubPath(id, item));
+  }, [id, navigate]);
 
-  const seccionActiva = SECCIONES.find((s) => s.id === seccion) || SECCIONES[0];
-  const seccionLabelActual = categoriaActivaInfo?.label || seccionActiva.label;
-  const seccionDescActual = categoriaActivaInfo?.desc || seccionActiva.descripcion;
-  const SeccionIconActual = categoriaActivaInfo?.icon || seccionActiva.icon;
+  const goHubHome = useCallback(() => {
+    navigate(hubHomePath(id));
+  }, [id, navigate]);
 
   const topicosFiltrados = useMemo(() => {
     const term = busquedaGlobal.trim().toLowerCase();
     if (!term) return [];
-    return TOPICOS_BUSQUEDA.filter((t) =>
+    return HUB_SEARCH_TOPICS.filter((t) =>
       t.label.toLowerCase().includes(term) ||
       t.desc.toLowerCase().includes(term) ||
       t.keywords.some((kw) => kw.toLowerCase().includes(term))
     );
   }, [busquedaGlobal]);
+
+  const hubModulos = useMemo(
+    () => COMPANY_HUB_ITEMS.filter((item) => item.kind === 'modulos'),
+    [],
+  );
+  const hubReportes = useMemo(
+    () => COMPANY_HUB_ITEMS.filter((item) => item.kind === 'reportes'),
+    [],
+  );
 
   const isLocalCompany = String(id).startsWith('local-');
 
@@ -1346,10 +1215,11 @@ const CompanyDetail = () => {
         if (isLocalCompany) return renderInformesLocal();
         return (
           <InformesPanel
+            key={`informes-${tabActual || 'resumen'}`}
             empresaId={id}
             mes={mesFiltro}
             anio={anioFiltro}
-            initialTab={searchParams.get('tab') || 'resumen'}
+            initialTab={tabActual || 'resumen'}
             onPeriodoChange={handlePeriodoChange}
             refreshToken={classificationRefresh}
             onClassifyProveedor={abrirClasificacionProveedor}
@@ -1517,78 +1387,34 @@ const CompanyDetail = () => {
             </div>
           </div>
 
-          {/* Buscador global dentro de la empresa */}
-          <div className="relative min-w-0">
-            <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
-            <input
-              type="text"
-              value={busquedaGlobal}
-              onChange={(e) => setBusquedaGlobal(e.target.value)}
-              placeholder="Buscar en este negocio (ingresos, gastos, utilidades, IVA, retenciones, proveedores, conciliación, SAT, pólizas)..."
-              className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 py-3 pl-10 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:bg-slate-900 focus:ring-1 focus:ring-blue-500"
-            />
-            {busquedaGlobal && (
-              <button
-                type="button"
-                onClick={() => setBusquedaGlobal('')}
-                className="absolute right-3.5 top-3 text-slate-400 hover:text-white"
-                title="Limpiar búsqueda"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            )}
-          </div>
-
-          {/* Módulos y reportes del negocio: botones visibles y separados */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between px-0.5">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                Módulos y reportes del negocio
-              </span>
-              <span className="text-[10px] text-slate-500">
-                {CATEGORIAS_RAPIDAS_EMPRESA.length} opciones
-              </span>
+          {/* Buscador global solo en la vista inicial del hub */}
+          {esHub && (
+            <div className="relative min-w-0">
+              <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
+              <input
+                type="text"
+                value={busquedaGlobal}
+                onChange={(e) => setBusquedaGlobal(e.target.value)}
+                placeholder="Buscar módulo o reporte (ingresos, gastos, IVA, proveedores, conciliación, SAT, pólizas)..."
+                className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 py-3 pl-10 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:bg-slate-900 focus:ring-1 focus:ring-blue-500"
+              />
+              {busquedaGlobal && (
+                <button
+                  type="button"
+                  onClick={() => setBusquedaGlobal('')}
+                  className="absolute right-3.5 top-3 text-slate-400 hover:text-white"
+                  title="Limpiar búsqueda"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {CATEGORIAS_RAPIDAS_EMPRESA.map((cat) => {
-                const Icon = cat.icon;
-                const activa = isCatActiva(cat);
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => handleSelectSeccion(cat.seccion, cat.tab)}
-                    className={`group flex w-full items-center gap-3 rounded-xl border p-3 text-left text-xs shadow-md transition-all duration-150 ease-out active:translate-y-[1px] active:shadow-inner active:duration-75 ${
-                      activa
-                        ? 'border-emerald-500/40 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white font-bold shadow-emerald-900/30'
-                        : 'border-slate-700/80 bg-gradient-to-b from-slate-800 to-slate-900 text-slate-300 hover:border-slate-600 hover:from-slate-700 hover:to-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <div
-                      className={`rounded-lg p-2 shrink-0 shadow-sm transition-colors duration-150 ${
-                        activa ? 'bg-white/20 text-white' : 'bg-slate-900/80 text-emerald-400 group-hover:text-emerald-300'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-bold leading-tight">{cat.label}</p>
-                      {cat.desc && (
-                        <p className={`truncate text-[11px] ${activa ? 'text-emerald-100' : 'text-slate-500'}`}>
-                          {cat.desc}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          )}
 
-          {/* Coincidencias del buscador dentro de la empresa */}
-          {busquedaGlobal.trim() && (
+          {/* Buscador solo en hub; en página dedicada se ocultan los atajos */}
+          {esHub && busquedaGlobal.trim() && (
             topicosFiltrados.length > 0 ? (
-              <div className="rounded-2xl border border-blue-500/30 bg-blue-950/20 p-4 shadow-lg">
+              <div className="rounded-2xl border border-blue-500/30 bg-blue-950/20 p-4 shadow-lg animate-page-in">
                 <div className="mb-3 flex items-center justify-between text-xs font-black uppercase tracking-wider text-blue-300">
                   <span className="flex items-center gap-1.5">
                     <Sparkles className="h-4 w-4 text-blue-400" /> Secciones y reportes encontrados
@@ -1596,32 +1422,28 @@ const CompanyDetail = () => {
                   <button
                     type="button"
                     onClick={() => setBusquedaGlobal('')}
-                    className="text-[11px] font-bold text-slate-400 hover:text-white"
+                    className="btn-press text-[11px] font-bold text-slate-400 hover:text-white"
                   >
                     Cerrar
                   </button>
                 </div>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                   {topicosFiltrados.map((topico) => {
-                    const Icon = topico.icon;
+                    const item = getHubItem(topico.kind, topico.slug);
+                    if (!item) return null;
                     return (
-                      <button
+                      <HubCard
                         key={topico.id}
-                        type="button"
+                        icon={topico.icon}
+                        label={topico.label}
+                        description={topico.desc}
+                        accent={item.accent}
+                        badge={item.kind === 'modulos' ? 'Módulo' : 'Reporte'}
                         onClick={() => {
-                          handleSelectSeccion(topico.seccion, topico.tab);
                           setBusquedaGlobal('');
+                          openHubItem(item);
                         }}
-                        className="group flex items-center gap-3 rounded-xl border border-slate-700/80 bg-gradient-to-b from-slate-800 to-slate-900 p-3 text-left shadow-[0_3px_0_0_rgba(15,23,42,0.9),0_4px_8px_-2px_rgba(0,0,0,0.35)] transition-all duration-150 ease-out hover:border-emerald-500/60 hover:from-slate-700 hover:to-slate-800 active:translate-y-px active:scale-[0.98] active:shadow-[0_1px_0_0_rgba(15,23,42,0.9)] active:duration-75"
-                      >
-                        <div className="rounded-lg bg-slate-900/80 p-2 text-emerald-400 shrink-0 shadow-sm transition-colors duration-150 group-hover:text-emerald-300">
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-bold text-white">{topico.label}</p>
-                          <p className="truncate text-[11px] text-slate-400">{topico.desc}</p>
-                        </div>
-                      </button>
+                      />
                     );
                   })}
                 </div>
@@ -1632,24 +1454,71 @@ const CompanyDetail = () => {
               </div>
             )
           )}
-
-          {/* Indicador de sección activa */}
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600/10 text-emerald-400">
-              <SeccionIconActual className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Vista actual:</span>
-                <span className="truncate text-sm font-black text-white">{seccionLabelActual}</span>
-              </div>
-              <p className="truncate text-xs text-slate-400">{seccionDescActual}</p>
-            </div>
-          </div>
         </header>
 
-        {/* Contenido de la sección */}
-        <main className="min-w-0">{renderSeccion()}</main>
+        {/* Hub inicial: todos los botones de módulos y reportes */}
+        {esHub ? (
+          <main className="min-w-0 space-y-8 animate-page-in">
+            <section className="space-y-3">
+              <div className="flex items-center justify-between px-0.5">
+                <div>
+                  <h2 className="text-sm font-black uppercase tracking-wider text-white">Módulos</h2>
+                  <p className="text-xs text-slate-500">Operación diaria del negocio</p>
+                </div>
+                <span className="text-[10px] font-bold text-slate-500">{hubModulos.length}</span>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {hubModulos.map((item) => (
+                  <HubCard
+                    key={item.id}
+                    icon={item.icon}
+                    label={item.label}
+                    description={item.desc}
+                    accent={item.accent}
+                    badge="Módulo"
+                    onClick={() => openHubItem(item)}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex items-center justify-between px-0.5">
+                <div>
+                  <h2 className="text-sm font-black uppercase tracking-wider text-white">Reportes</h2>
+                  <p className="text-xs text-slate-500">Análisis financiero y fiscal</p>
+                </div>
+                <span className="text-[10px] font-bold text-slate-500">{hubReportes.length}</span>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {hubReportes.map((item) => (
+                  <HubCard
+                    key={item.id}
+                    icon={item.icon}
+                    label={item.label}
+                    description={item.desc}
+                    accent={item.accent}
+                    badge="Reporte"
+                    onClick={() => openHubItem(item)}
+                  />
+                ))}
+              </div>
+            </section>
+          </main>
+        ) : (
+          <main className="min-w-0">
+            <ModulePageShell
+              title={vistaActiva.label}
+              description={vistaActiva.desc}
+              icon={vistaActiva.icon}
+              badge={vistaActiva.kind === 'modulos' ? 'Módulo' : 'Reporte'}
+              onBack={goHubHome}
+              backLabel="Volver al inicio"
+            >
+              {renderSeccion()}
+            </ModulePageShell>
+          </main>
+        )}
       </div>
 
       <FileUploadModal

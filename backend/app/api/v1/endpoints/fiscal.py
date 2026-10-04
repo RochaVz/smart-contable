@@ -28,6 +28,7 @@ from app.services.calculos_fiscales import (
     calcular_iva_provisional,
     listar_tarifas_ejercicio,
 )
+from app.services.resumen_fiscal_sat import construir_resumen_fiscal_sat
 from app.services.diot import construir_diot, exportar_diot
 from app.services.fiscal_diferencias import comparar_fuentes_fiscales
 from app.services.fiscal_indicadores import (
@@ -104,6 +105,23 @@ def obtener_iva_provisional(
     if anio < 2000 or anio > 2100:
         raise HTTPException(status_code=422, detail="anio fuera de rango")
     return calcular_iva_provisional(db, empresa_id, mes, anio)
+
+
+@router.get("/resumen-sat")
+def obtener_resumen_fiscal_sat(
+    empresa_id: int,
+    mes: int,
+    anio: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Resumen informativo de impuestos, declaraciones y sugerencias de pago."""
+    validar_empresa_pertenece_usuario(empresa_id, current_user.id, db)
+    if mes < 1 or mes > 12:
+        raise HTTPException(status_code=422, detail="mes debe estar entre 1 y 12")
+    if anio < 2000 or anio > 2100:
+        raise HTTPException(status_code=422, detail="anio fuera de rango")
+    return construir_resumen_fiscal_sat(db, empresa_id, mes, anio)
 
 
 @router.post("/periodos", response_model=PeriodoFiscalResponse, status_code=status.HTTP_201_CREATED)

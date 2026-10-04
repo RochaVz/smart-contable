@@ -24,6 +24,8 @@ function App() {
         <Route path="/login" element={!isAuthenticated ? <Login onLoginSuccess={() => setIsAuthenticated(true)} /> : <Navigate to="/dashboard" />} />
         <Route path="/dashboard" element={isAuthenticated ? <Dashboard onLogout={handleLogout} /> : <Navigate to="/login" />} />
         <Route path="/empresa/:id" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />
+        <Route path="/empresa/:id/modulos/:moduloId" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />
+        <Route path="/empresa/:id/reportes/:reporteId" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} />
       </Routes>
     </BrowserRouter>

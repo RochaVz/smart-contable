@@ -41,5 +41,18 @@ class MovimientoBanco(Base):
     saldo = Column(Numeric(15, 2), nullable=True)
     hash_movimiento = Column(String(64), nullable=False, index=True)
 
+    # Conciliación persistida: vínculo a póliza y origen (auto/manual)
+    poliza_id = Column(Integer, ForeignKey("polizas.id"), nullable=True, index=True)
+    modo_conciliacion = Column(String(20), nullable=True)  # automatico | manual
+    tipo_asignacion = Column(String(20), nullable=True)  # ingreso | egreso | diario
+    conciliado_en = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
     carga = relationship("EstadoCuentaCarga", back_populates="movimientos")
     empresa = relationship("Empresa", back_populates="movimientos_banco")
+    poliza = relationship("Poliza", foreign_keys=[poliza_id])

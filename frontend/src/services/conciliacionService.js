@@ -52,3 +52,24 @@ export const convertirPdfCsvAPI = async (file) => {
         throw error;
     }
 };
+/** Conciliación automática de movimientos sin póliza (ingreso/egreso/diario). */
+export const autoConciliarAPI = async (empresaId, mes, anio, bancoId = null) => {
+    const body = { empresa_id: empresaId, mes, anio };
+    if (bancoId != null) body.banco_id = bancoId;
+    const response = await api.post('/conciliacion/auto-conciliar', body);
+    return response.data;
+};
+
+/** Edición manual de la asignación de un movimiento bancario. */
+export const asignarConciliacionManualAPI = async (movimientoId, payload) => {
+    const response = await api.patch(`/conciliacion/movimientos/${movimientoId}`, payload);
+    return response.data;
+};
+
+/** Resumen informativo del motor fiscal SAT. */
+export const resumenFiscalSatAPI = async (empresaId, mes, anio) => {
+    const response = await api.get('/fiscal/resumen-sat', {
+        params: { empresa_id: empresaId, mes, anio },
+    });
+    return response.data;
+};

@@ -107,6 +107,14 @@ def crear_poliza_desde_movimiento_banco(
             datos.concepto,
             db,
         )
+        from app.services.conciliacion import vincular_movimiento_poliza
+
+        vincular_movimiento_poliza(
+            movimiento,
+            poliza,
+            modo="manual",
+            tipo_asignacion=poliza.tipo.value if hasattr(poliza.tipo, "value") else str(poliza.tipo),
+        )
         db.commit()
         db.refresh(poliza)
         empresa = db.query(Empresa).filter(Empresa.id == datos.empresa_id).first()

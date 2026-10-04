@@ -28,6 +28,7 @@ const MESES = [
 ];
 
 const TABS = [
+  { id: 'resumen', label: 'Resumen SAT', icon: Scale },
   { id: 'indicadores', label: 'Salud', icon: Activity },
   { id: 'isr', label: 'ISR', icon: Percent },
   { id: 'iva', label: 'IVA', icon: Calculator },
@@ -57,7 +58,7 @@ const badgeTone = (estado) => {
 
 const FiscalConsolidadosPanel = ({ empresa, onUpdated }) => {
   const now = useMemo(() => new Date(), []);
-  const [tab, setTab] = useState('indicadores');
+  const [tab, setTab] = useState('resumen');
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [anio, setAnio] = useState(now.getFullYear());
   const [proveedor, setProveedor] = useState('');
@@ -66,9 +67,12 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated }) => {
   const [iva, setIva] = useState(null);
   const [diferencias, setDiferencias] = useState(null);
   const [indicadores, setIndicadores] = useState(null);
+  const [resumenSat, setResumenSat] = useState(null);
   const [loadingCalc, setLoadingCalc] = useState(false);
   const [loadingIndicadores, setLoadingIndicadores] = useState(false);
+  const [loadingResumen, setLoadingResumen] = useState(false);
   const [savingRevision, setSavingRevision] = useState(null);
+  const [bloqueExpandido, setBloqueExpandido] = useState('impuestos');
 
   const cargarCalculos = useCallback(async () => {
     if (!empresa?.id) return;
@@ -108,6 +112,22 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated }) => {
     }
   }, [empresa?.id, mes, anio]);
 
+  const cargarResumenSat = useCallback(async () => {
+    if (!empresa?.id) return;
+    setLoadingResumen(true);
+    try {
+      const res = await api.get('/fiscal/resumen-sat', {
+        params: { empresa_id: empresa.id, mes, anio },
+      });
+      setResumenSat(res.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'No se pudo cargar el resumen fiscal SAT');
+      setResumenSat(null);
+    } finally {
+      setLoadingResumen(false);
+    }
+  }, [empresa?.id, mes, anio]);
+
   useEffect(() => {
     if (!empresa?.id) return;
     if (['isr', 'iva', 'diferencias'].includes(tab)) {
@@ -116,7 +136,10 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated }) => {
     if (tab === 'indicadores') {
       queueMicrotask(cargarIndicadores);
     }
-  }, [cargarCalculos, cargarIndicadores, empresa?.id, tab]);
+    if (tab === 'resumen') {
+      queueMicrotask(cargarResumenSat);
+    }
+  }, [cargarCalculos, cargarIndicadores, cargarResumenSat, empresa?.id, tab]);
 
   const aprobarModulo = async (moduloId) => {
     if (!empresa?.id) return;
@@ -152,6 +175,7 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated }) => {
 
   const refreshAll = () => {
     if (tab === 'indicadores') cargarIndicadores();
+    else if (tab === 'resumen') cargarResumenSat();
     else cargarCalculos();
   };
 
@@ -255,9 +279,9 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated }) => {
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`inline-flex min-h-10 items-center gap-2 border-b-2 px-3 py-2 text-xs font-black uppercase tracking-wide transition ${
+              className={`btn-press inline-flex min-h-10 items-center gap-2 border-b-2 px-3 py-2 text-xs font-black uppercase tracking-wide transition ${
                 active
-                  ? 'border-blue-500 text-white'
+                  ? 'border-blue-500 bg-blue-500/10 text-white'
                   : 'border-transparent text-slate-500 hover:text-slate-200'
               }`}
             >
@@ -268,6 +292,14 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated }) => {
         })}
       </div>
 
+      {tab === 'resumen' && (
+        <ResumenSatPanel
+          data={resumenSat}
+          loading={loadingResumen}
+          bloqueExpandido={bloqueExpandido}
+          onToggleBloque={setBloqueExpandido}
+        />
+      )}
       {tab === 'indicadores' && (
         <IndicadoresPanel
           data={indicadores}
@@ -725,6 +757,158 @@ const DiferenciasPanel = ({ data, loading }) => {
   );
 };
 
+const ExpandBlock = ({ id, title, subtitle, open, onToggle, children }) => (
+  <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-300">
+    <button
+      type="button"
+      onClick={() => onToggle(open ? null : id)}
+      className={`btn-press flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors ${
+        open ? 'bg-slate-800/80' : 'hover:bg-slate-800/40'
+      }`}
+    >
+      <div>
+        <p className="text-sm font-black text-white">{title}</p>
+        {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      </div>
+      <span className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▾</span>
+    </button>
+    <div
+      className={`grid transition-all duration-300 ease-out ${
+        open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+      }`}
+    >
+      <div className="overflow-hidden">
+        <div className="border-t border-slate-800 px-4 py-4">{children}</div>
+      </div>
+    </div>
+  </div>
+);
+
+const ResumenSatPanel = ({ data, loading, bloqueExpandido, onToggleBloque }) => {
+  if (loading && !data) {
+    return (
+      <div className="flex justify-center py-14">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+      </div>
+    );
+  }
+  if (!data) {
+    return <p className="py-10 text-center text-sm text-slate-500">Sin resumen fiscal para el periodo.</p>;
+  }
+
+  const impuestos = data.impuestos || {};
+  const declaraciones = data.declaraciones || [];
+  const sugerencias = data.sugerencias_pago || [];
+  const obligaciones = data.obligaciones_regimen || {};
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
+        {data.aviso}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label="ISR a cargo" value={money(impuestos.isr?.a_cargo)} tone="amber" />
+        <Metric label="IVA a cargo" value={money(impuestos.iva?.a_cargo)} tone="rose" />
+        <Metric label="IVA a favor" value={money(impuestos.iva?.a_favor)} tone="emerald" />
+        <Metric label="Retenciones" value={money(impuestos.retenciones?.total)} tone="sky" />
+      </div>
+
+      <ExpandBlock
+        id="impuestos"
+        title="Cómo se calculan los impuestos"
+        subtitle="ISR · IVA · retenciones (informativo)"
+        open={bloqueExpandido === 'impuestos'}
+        onToggle={onToggleBloque}
+      >
+        <div className="grid gap-3 lg:grid-cols-3">
+          <SourceCard
+            title="ISR provisional"
+            rows={[
+              ['Método', obligaciones.calculo_isr_tipo || '—'],
+              ['A cargo', money(impuestos.isr?.a_cargo)],
+              ['Resumen', impuestos.isr?.resumen || '—'],
+            ]}
+          />
+          <SourceCard
+            title="IVA del periodo"
+            rows={[
+              ['A cargo', money(impuestos.iva?.a_cargo)],
+              ['A favor', money(impuestos.iva?.a_favor)],
+              ['Resumen', impuestos.iva?.resumen || '—'],
+            ]}
+          />
+          <SourceCard
+            title="Retenciones"
+            rows={[
+              ['ISR retenido', money(impuestos.retenciones?.isr)],
+              ['IVA retenido', money(impuestos.retenciones?.iva)],
+              ['Total', money(impuestos.retenciones?.total)],
+            ]}
+          />
+        </div>
+      </ExpandBlock>
+
+      <ExpandBlock
+        id="declaraciones"
+        title="Declaraciones y periodicidad"
+        subtitle="Qué presentar y cuándo (mensual / bimestral / anual)"
+        open={bloqueExpandido === 'declaraciones'}
+        onToggle={onToggleBloque}
+      >
+        <div className="space-y-2">
+          {declaraciones.map((d) => (
+            <div
+              key={`${d.tipo}-${d.periodicidad}`}
+              className="flex flex-col gap-1 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <p className="text-sm font-bold text-white">{d.tipo}</p>
+                <p className="text-xs text-slate-400">{d.descripcion}</p>
+                <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-500">{d.base_legal}</p>
+              </div>
+              <div className="text-left sm:text-right">
+                <span className="inline-flex rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-cyan-200">
+                  {d.periodicidad}
+                </span>
+                <p className="mt-1 text-xs text-slate-300">{d.periodo_corresponde || '—'}</p>
+                <p className="text-xs font-bold text-amber-200">Vence: {d.proximo_vencimiento || '—'}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </ExpandBlock>
+
+      <ExpandBlock
+        id="pagos"
+        title="Sugerencias de pago"
+        subtitle="Estimaciones para planear enteros al SAT"
+        open={bloqueExpandido === 'pagos'}
+        onToggle={onToggleBloque}
+      >
+        {sugerencias.length === 0 ? (
+          <p className="text-sm text-slate-500">No hay montos a cargo estimados en este periodo.</p>
+        ) : (
+          <div className="space-y-2">
+            {sugerencias.map((s) => (
+              <div key={s.concepto} className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-bold text-white">{s.concepto}</p>
+                  <p className="text-sm font-black text-emerald-300">{money(s.monto_estimado)}</p>
+                </div>
+                <p className="mt-1 text-xs text-slate-400">{s.nota}</p>
+                {s.vencimiento && (
+                  <p className="mt-1 text-[11px] font-bold text-amber-200">Vencimiento estimado: {s.vencimiento}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </ExpandBlock>
+    </div>
+  );
+};
+
 const SourceCard = ({ title, rows }) => (
   <div className="border border-slate-800 bg-slate-900 p-4">
     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{title}</p>
@@ -732,7 +916,7 @@ const SourceCard = ({ title, rows }) => (
       {rows.map(([k, v]) => (
         <div key={k} className="flex items-center justify-between gap-3 text-xs">
           <dt className="text-slate-500">{k}</dt>
-          <dd className="font-mono text-slate-200">{v}</dd>
+          <dd className="max-w-[60%] text-right font-mono text-slate-200">{v}</dd>
         </div>
       ))}
     </dl>

@@ -83,12 +83,28 @@ const Dashboard = ({ onLogout }) => {
   }, [empresas, searchTerm]);
 
   const handleNavigateEmpresa = (empresaId, customSeccion, customTab) => {
-    const queryParams = new URLSearchParams();
-    if (customSeccion) queryParams.set('seccion', customSeccion);
-    if (customTab) queryParams.set('tab', customTab);
-
-    const qs = queryParams.toString();
-    navigate(`/empresa/${empresaId}${qs ? `?${qs}` : ''}`);
+    // Preferir rutas dedicadas; el CompanyDetail aún acepta ?seccion=&tab= y redirige.
+    if (!customSeccion) {
+      navigate(`/empresa/${empresaId}`);
+      return;
+    }
+    const map = {
+      historial: '/modulos/documentos',
+      polizas: '/modulos/polizas',
+      conciliacion: '/modulos/conciliacion',
+      fiscal: '/modulos/fiscal',
+      informes: customTab === 'estado'
+        ? '/reportes/ingresos'
+        : customTab === 'padron'
+          ? '/reportes/proveedores'
+          : customTab === 'trasladados'
+            ? '/reportes/impuestos'
+            : customTab === 'resumen'
+              ? '/reportes/utilidades'
+              : '/reportes/utilidades',
+    };
+    const suffix = map[customSeccion] || '';
+    navigate(`/empresa/${empresaId}${suffix}`);
   };
 
   const getDraftFromSearch = () => {

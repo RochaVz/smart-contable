@@ -604,8 +604,13 @@ def generar_poliza_movimiento_banco(
     nombre_contrapartida: str,
     concepto: str,
     db: Session,
+    tipo: TipoPoliza | None = None,
 ) -> Poliza:
-    """Crea una póliza conciliable a partir de un cargo o abono bancario."""
+    """Crea una póliza conciliable a partir de un cargo o abono bancario.
+
+    Si no se indica tipo, abonos → ingreso y cargos → egreso.
+    El tipo diario se usa para ajustes contables y reclasificaciones.
+    """
     fecha = movimiento.fecha.date() if hasattr(movimiento.fecha, "date") else movimiento.fecha
     monto = float(movimiento.monto or 0)
     if monto <= 0:
@@ -614,18 +619,32 @@ def generar_poliza_movimiento_banco(
         raise ValueError("La cuenta de contrapartida es requerida")
 
     es_abono = movimiento.tipo == "abono"
-    tipo = TipoPoliza.ingreso if es_abono else TipoPoliza.egreso
+    if tipo is None:
+        tipo = TipoPoliza.ingreso if es_abono else TipoPoliza.egreso
+    elif not isinstance(tipo, TipoPoliza):
+        tipo = TipoPoliza(str(tipo).lower())
+
     numero = _ultimo_numero_poliza(db, movimiento.empresa_id, tipo, fecha.month, fecha.year)
     concepto_final = concepto.strip() or movimiento.descripcion or "Movimiento bancario"
 
     if es_abono:
         movimientos = [
             {"cuenta": "102.01.01", "nombre_cuenta": "Bancos", "debe": monto, "haber": 0},
-            {"cuenta": cuenta_contrapartida.strip(), "nombre_cuenta": nombre_contrapartida.strip(), "debe": 0, "haber": monto},
+            {
+                "cuenta": cuenta_contrapartida.strip(),
+                "nombre_cuenta": nombre_contrapartida.strip(),
+                "debe": 0,
+                "haber": monto,
+            },
         ]
     else:
         movimientos = [
-            {"cuenta": cuenta_contrapartida.strip(), "nombre_cuenta": nombre_contrapartida.strip(), "debe": monto, "haber": 0},
+            {
+                "cuenta": cuenta_contrapartida.strip(),
+                "nombre_cuenta": nombre_contrapartida.strip(),
+                "debe": monto,
+                "haber": 0,
+            },
             {"cuenta": "102.01.01", "nombre_cuenta": "Bancos", "debe": 0, "haber": monto},
         ]
 

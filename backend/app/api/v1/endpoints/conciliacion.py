@@ -20,7 +20,11 @@ from app.models.usuario import Usuario
 from app.services.bank_parser.analyzer import DocumentAnalyzer, PDFExtractor
 from app.services.bank_parser.factory import BankParserFactory
 
+from pydantic import BaseModel, Field
+
 from app.services.conciliacion import (
+    asignar_conciliacion_manual,
+    auto_conciliar_sin_poliza,
     conciliar_periodo,
     hash_archivo,
     hash_movimiento,
@@ -96,6 +100,74 @@ def obtener_conciliacion(
     mes_f, anio_f = _periodo_default(mes, anio)
     _validar_periodo(mes_f, anio_f)
     return conciliar_periodo(db, empresa_id, mes_f, anio_f, tolerancia, banco_id)
+
+
+class AutoConciliarInput(BaseModel):
+    empresa_id: int
+    mes: int | None = Field(None, ge=1, le=12)
+    anio: int | None = Field(None, ge=2000, le=2100)
+    banco_id: int | None = None
+    tolerancia: float = Field(TOLERANCIA_CONCILIACION_CENTAVOS, ge=0, le=0.05)
+
+
+class AsignarConciliacionInput(BaseModel):
+    empresa_id: int
+    tipo_poliza: str = Field(..., description="ingreso | egreso | diario")
+    poliza_id: int | None = None
+    cuenta_contrapartida: str | None = None
+    nombre_contrapartida: str | None = None
+    concepto: str | None = None
+
+
+@router.post("/auto-conciliar")
+def auto_conciliar_movimientos(
+    datos: AutoConciliarInput,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Asigna automáticamente movimientos sin póliza a ingreso/egreso/diario."""
+    _validar_empresa(db, datos.empresa_id, current_user)
+    mes_f, anio_f = _periodo_default(datos.mes, datos.anio)
+    _validar_periodo(mes_f, anio_f)
+    try:
+        return auto_conciliar_sin_poliza(
+            db,
+            datos.empresa_id,
+            mes_f,
+            anio_f,
+            datos.tolerancia,
+            datos.banco_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Error en auto-conciliación")
+        raise HTTPException(status_code=500, detail=f"No se pudo auto-conciliar: {exc}") from exc
+
+
+@router.patch("/movimientos/{movimiento_id}")
+def editar_conciliacion_movimiento(
+    movimiento_id: int,
+    datos: AsignarConciliacionInput,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Edición manual: cambia la asignación de un movimiento a ingreso/egreso/diario."""
+    _validar_empresa(db, datos.empresa_id, current_user)
+    try:
+        return asignar_conciliacion_manual(
+            db=db,
+            empresa_id=datos.empresa_id,
+            movimiento_id=movimiento_id,
+            tipo_poliza=datos.tipo_poliza,
+            poliza_id=datos.poliza_id,
+            cuenta_contrapartida=datos.cuenta_contrapartida,
+            nombre_contrapartida=datos.nombre_contrapartida,
+            concepto=datos.concepto,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Error al editar conciliación manual")
+        raise HTTPException(status_code=500, detail="No se pudo actualizar la conciliación") from exc
 
 
 @router.post("/estado-cuenta", status_code=201)

@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState, useTransition } from 'react';
 import toast from 'react-hot-toast';
 import {
-  CheckCircle2, Landmark, Loader2,
+  CheckCircle2, ChevronDown, Landmark, Loader2, Sparkles, Wand2,
   Download, RefreshCw, Search, UploadCloud, X,
 } from 'lucide-react';
 import api from '../services/api';
@@ -13,7 +13,19 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
+const TIPOS_POLIZA = [
+  { key: 'ingreso', label: 'Ingresos' },
+  { key: 'egreso', label: 'Egresos' },
+  { key: 'diario', label: 'Diario' },
+];
+
 const fmt = (v) => `$${(Number(v) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+
+const etiquetaModo = (modo) => {
+  if (modo === 'manual') return 'Conciliado manual';
+  if (modo === 'automatico') return 'Conciliado automático';
+  return 'Conciliado';
+};
 
 // ─── Construye filas planas a partir de la respuesta de conciliación ───────────
 function buildFilas(data) {
@@ -22,14 +34,19 @@ function buildFilas(data) {
 
   for (const item of data.conciliados || []) {
     const m = item.movimiento_banco;
+    const modo = item.modo_conciliacion || m.modo_conciliacion || 'automatico';
     filas.push({
       id: m.id, fecha: m.fecha, descripcion: m.descripcion || '—',
       referencia: m.referencia || '',
       cargo: m.tipo === 'cargo' ? m.monto : null,
       abono: m.tipo === 'abono' ? m.monto : null,
-      tipo: m.tipo, estado: 'conciliado',
-      poliza_tipo: item.poliza.tipo, poliza_numero: item.poliza.numero,
-      poliza_concepto: item.poliza.concepto || '',
+      tipo: m.tipo,
+      estado: modo === 'manual' ? 'conciliado_manual' : 'conciliado_auto',
+      modo_conciliacion: modo,
+      poliza_id: item.poliza?.poliza_id || m.poliza_id || null,
+      poliza_tipo: item.poliza?.tipo || m.tipo_asignacion || null,
+      poliza_numero: item.poliza?.numero || null,
+      poliza_concepto: item.poliza?.concepto || '',
       diferencia_dias: item.diferencia_dias,
     });
   }
@@ -41,6 +58,8 @@ function buildFilas(data) {
       cargo: m.tipo === 'cargo' ? m.monto : null,
       abono: m.tipo === 'abono' ? m.monto : null,
       tipo: m.tipo, estado: 'sin_poliza',
+      modo_conciliacion: null,
+      poliza_id: null,
       poliza_tipo: null, poliza_numero: null, poliza_concepto: '', diferencia_dias: null,
     });
   }
@@ -52,6 +71,8 @@ function buildFilas(data) {
       cargo: m.tipo === 'cargo' ? m.monto : null,
       abono: m.tipo === 'abono' ? m.monto : null,
       tipo: m.tipo, estado: 'comision',
+      modo_conciliacion: 'automatico',
+      poliza_id: null,
       poliza_tipo: null, poliza_numero: null, poliza_concepto: '', diferencia_dias: null,
     });
   }
@@ -70,10 +91,13 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
   const [isPending, startTransition] = useTransition();
 
   // Filtros
-  const [filtroEstado, setFiltroEstado] = useState('todos');   // todos | conciliado | sin_poliza
-  const [filtroTipo, setFiltroTipo] = useState('todos');       // todos | cargo | abono
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
   const [movimientoParaPoliza, setMovimientoParaPoliza] = useState(null);
+  const [autoConciliando, setAutoConciliando] = useState(false);
+  const [filaExpandida, setFilaExpandida] = useState(null);
+  const [editandoId, setEditandoId] = useState(null);
 
   const cargarDatos = useCallback(async (targetMes, targetAnio) => {
     setLoading(true);
@@ -146,7 +170,15 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
 
   const filasFiltradas = useMemo(() => {
     let result = todasFilas;
-    if (filtroEstado !== 'todos') result = result.filter((f) => f.estado === filtroEstado);
+    if (filtroEstado === 'conciliado') {
+      result = result.filter((f) => f.estado === 'conciliado_auto' || f.estado === 'conciliado_manual');
+    } else if (filtroEstado === 'conciliado_auto') {
+      result = result.filter((f) => f.estado === 'conciliado_auto');
+    } else if (filtroEstado === 'conciliado_manual') {
+      result = result.filter((f) => f.estado === 'conciliado_manual');
+    } else if (filtroEstado !== 'todos') {
+      result = result.filter((f) => f.estado === filtroEstado);
+    }
     if (filtroTipo !== 'todos') result = result.filter((f) => f.tipo === filtroTipo);
     if (filtroBusqueda.trim()) {
       const q = filtroBusqueda.trim().toLowerCase();
@@ -164,7 +196,52 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
   const totalAbonos = useMemo(() => filasFiltradas.reduce((s, f) => s + (f.abono || 0), 0), [filasFiltradas]);
   const countSinPoliza = useMemo(() => todasFilas.filter((f) => f.estado === 'sin_poliza').length, [todasFilas]);
   const countComision  = useMemo(() => todasFilas.filter((f) => f.estado === 'comision').length, [todasFilas]);
-  const countConciliado = useMemo(() => todasFilas.filter((f) => f.estado === 'conciliado').length, [todasFilas]);
+  const countConciliado = useMemo(
+    () => todasFilas.filter((f) => f.estado === 'conciliado_auto' || f.estado === 'conciliado_manual').length,
+    [todasFilas],
+  );
+  const countAuto = useMemo(() => todasFilas.filter((f) => f.estado === 'conciliado_auto').length, [todasFilas]);
+  const countManual = useMemo(() => todasFilas.filter((f) => f.estado === 'conciliado_manual').length, [todasFilas]);
+
+  const handleAutoConciliar = async () => {
+    setAutoConciliando(true);
+    try {
+      const body = { empresa_id: empresaId, mes, anio };
+      if (bancoId) body.banco_id = Number(bancoId);
+      const res = await api.post('/conciliacion/auto-conciliar', body);
+      setData(res.data);
+      const creadas = res.data?.auto_conciliacion?.polizas_creadas ?? 0;
+      toast.success(
+        creadas > 0
+          ? `Conciliación automática lista · ${creadas} póliza(s) creada(s)`
+          : 'Conciliación automática aplicada (sin pólizas nuevas)',
+      );
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'No se pudo auto-conciliar');
+    } finally {
+      setAutoConciliando(false);
+    }
+  };
+
+  const handleAsignarManual = async (fila, tipoPoliza) => {
+    setEditandoId(fila.id);
+    try {
+      await api.patch(`/conciliacion/movimientos/${fila.id}`, {
+        empresa_id: empresaId,
+        tipo_poliza: tipoPoliza,
+        concepto: fila.descripcion,
+      });
+      toast.success(`Asignado manualmente a póliza de ${tipoPoliza}`);
+      setFilaExpandida(null);
+      await cargarDatos(mes, anio);
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'No se pudo actualizar la conciliación');
+    } finally {
+      setEditandoId(null);
+    }
+  };
 
   const handleDescargarResultados = () => {
     const rows = filasFiltradas.map((fila) => ({
@@ -174,7 +251,14 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
       Tipo: fila.tipo === 'abono' ? 'Abono' : 'Cargo',
       Cargo: fila.cargo ?? '',
       Abono: fila.abono ?? '',
-      Estado: fila.estado === 'conciliado' ? 'Conciliado' : fila.estado === 'comision' ? 'Comisión en póliza' : 'Sin póliza',
+      Estado:
+        fila.estado === 'conciliado_auto'
+          ? 'Conciliado automático'
+          : fila.estado === 'conciliado_manual'
+            ? 'Conciliado manual'
+            : fila.estado === 'comision'
+              ? 'Comisión en póliza'
+              : 'Sin póliza',
       TipoPoliza: fila.poliza_tipo || '',
       NumeroPoliza: fila.poliza_numero || '',
       ConceptoPoliza: fila.poliza_concepto || '',
@@ -220,7 +304,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
             type="button"
             onClick={() => cargarDatos(mes, anio)}
             disabled={estaCargando}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 disabled:opacity-50"
+            className="btn-press flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 disabled:opacity-50"
           >
             {estaCargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Actualizar
@@ -228,10 +312,21 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
 
           <button
             type="button"
+            onClick={handleAutoConciliar}
+            disabled={autoConciliando || estaCargando || countSinPoliza === 0}
+            title="Asigna depósitos a ingresos, pagos a egresos y ajustes a diario"
+            className="btn-press flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-violet-900/40 hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {autoConciliando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+            Auto-conciliar
+          </button>
+
+          <button
+            type="button"
             onClick={handleDescargarResultados}
             disabled={!filasFiltradas.length}
             title="Descargar los resultados visibles con los filtros aplicados"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-press flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
             Descargar CSV
@@ -316,6 +411,12 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
               <span className="text-xs text-emerald-400">
                 🟢 <span className="font-bold">{countConciliado}</span> con póliza
               </span>
+              <span className="text-xs text-cyan-300">
+                ⚡ <span className="font-bold">{countAuto}</span> auto
+              </span>
+              <span className="text-xs text-amber-300">
+                ✏️ <span className="font-bold">{countManual}</span> manual
+              </span>
               <span className="text-xs text-rose-400">
                 🔴 <span className="font-bold">{countSinPoliza}</span> sin póliza
               </span>
@@ -350,20 +451,23 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
                 )}
               </div>
 
-              {/* Filtro estado */}
+              {/* Filtro estado — selección exclusiva con efecto de presión */}
               <div className="flex overflow-x-auto rounded-xl border border-slate-800 text-xs font-bold">
                 {[
-                  { key: 'todos',      label: 'Todos' },
+                  { key: 'todos', label: 'Todos' },
                   { key: 'conciliado', label: '🟢 Con póliza' },
+                  { key: 'conciliado_auto', label: '⚡ Auto' },
+                  { key: 'conciliado_manual', label: '✏️ Manual' },
                   { key: 'sin_poliza', label: '🔴 Sin póliza' },
-                  { key: 'comision',   label: '🔵 Comisiones' },
+                  { key: 'comision', label: '🔵 Comisiones' },
                 ].map(({ key, label }) => (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => setFiltroEstado(key)}
-                    className={`min-h-10 shrink-0 px-3 py-2 transition-colors ${
+                    className={`btn-press min-h-10 shrink-0 px-3 py-2 transition-all duration-200 ${
                       filtroEstado === key
-                        ? 'bg-cyan-700 text-white'
+                        ? 'bg-cyan-600 text-white shadow-inner shadow-cyan-950/50 ring-1 ring-cyan-400/40'
                         : 'bg-slate-950 text-slate-400 hover:bg-slate-800'
                     }`}
                   >
@@ -381,10 +485,11 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
                 ].map(({ key, label }) => (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => setFiltroTipo(key)}
-                    className={`min-h-10 shrink-0 px-3 py-2 transition-colors ${
+                    className={`btn-press min-h-10 shrink-0 px-3 py-2 transition-all duration-200 ${
                       filtroTipo === key
-                        ? 'bg-cyan-700 text-white'
+                        ? 'bg-cyan-600 text-white shadow-inner shadow-cyan-950/50 ring-1 ring-cyan-400/40'
                         : 'bg-slate-950 text-slate-400 hover:bg-slate-800'
                     }`}
                   >
@@ -423,7 +528,15 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {filasFiltradas.map((fila) => (
-                      <FilaMovimiento key={fila.id} fila={fila} onCrearPoliza={setMovimientoParaPoliza} />
+                      <FilaMovimiento
+                        key={fila.id}
+                        fila={fila}
+                        expandida={filaExpandida === fila.id}
+                        editando={editandoId === fila.id}
+                        onToggle={() => setFilaExpandida((prev) => (prev === fila.id ? null : fila.id))}
+                        onCrearPoliza={setMovimientoParaPoliza}
+                        onAsignarManual={handleAsignarManual}
+                      />
                     ))}
                   </tbody>
                   {/* Totales de la vista filtrada */}
@@ -461,54 +574,121 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
 };
 
 // ─── Fila individual de la tabla ───────────────────────────────────────────────
-const FilaMovimiento = memo(({ fila, onCrearPoliza }) => {
-  const conciliado = fila.estado === 'conciliado';
-  const comision   = fila.estado === 'comision';
+const FilaMovimiento = memo(({ fila, expandida, editando, onToggle, onCrearPoliza, onAsignarManual }) => {
+  const conciliado = fila.estado === 'conciliado_auto' || fila.estado === 'conciliado_manual';
+  const comision = fila.estado === 'comision';
+  const esManual = fila.estado === 'conciliado_manual';
+
   return (
-    <tr className={`transition-colors hover:bg-slate-800/40 ${
-      conciliado ? '' : comision ? 'bg-blue-950/10' : 'bg-rose-950/10'
-    }`}>
-      <td className="px-4 py-3 text-slate-300 whitespace-nowrap font-mono">{fila.fecha}</td>
-      <td className="px-4 py-3 text-white max-w-xs">
-        <p className="truncate">{fila.descripcion}</p>
-      </td>
-      <td className="px-4 py-3 text-slate-400 whitespace-nowrap font-mono">{fila.referencia || '—'}</td>
-      <td className="px-4 py-3 text-right whitespace-nowrap">
-        {fila.cargo != null
-          ? <span className="text-rose-300 font-bold">{fmt(fila.cargo)}</span>
-          : <span className="text-slate-700">—</span>}
-      </td>
-      <td className="px-4 py-3 text-right whitespace-nowrap">
-        {fila.abono != null
-          ? <span className="text-emerald-300 font-bold">{fmt(fila.abono)}</span>
-          : <span className="text-slate-700">—</span>}
-      </td>
-      <td className="px-4 py-3 text-center whitespace-nowrap">
-        {conciliado && <span className="text-emerald-400 font-bold">🟢 OK</span>}
-        {comision   && <span className="text-blue-400 font-bold">🔵 En póliza</span>}
-        {!conciliado && !comision && <span className="text-rose-400 font-bold">🔴 Sin póliza</span>}
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        {conciliado ? (
-          <span className="inline-block bg-slate-800 text-slate-200 rounded-lg px-2 py-0.5 text-[10px] font-bold capitalize">
-            {fila.poliza_tipo} #{fila.poliza_numero}
-            {fila.diferencia_dias > 0 && (
-              <span className="ml-1 text-amber-400">·{fila.diferencia_dias}d</span>
+    <>
+      <tr
+        className={`cursor-pointer transition-colors hover:bg-slate-800/40 ${
+          conciliado ? (esManual ? 'bg-amber-950/10' : '') : comision ? 'bg-blue-950/10' : 'bg-rose-950/10'
+        }`}
+        onClick={onToggle}
+      >
+        <td className="px-4 py-3 text-slate-300 whitespace-nowrap font-mono">{fila.fecha}</td>
+        <td className="px-4 py-3 text-white max-w-xs">
+          <p className="truncate">{fila.descripcion}</p>
+        </td>
+        <td className="px-4 py-3 text-slate-400 whitespace-nowrap font-mono">{fila.referencia || '—'}</td>
+        <td className="px-4 py-3 text-right whitespace-nowrap">
+          {fila.cargo != null
+            ? <span className="text-rose-300 font-bold">{fmt(fila.cargo)}</span>
+            : <span className="text-slate-700">—</span>}
+        </td>
+        <td className="px-4 py-3 text-right whitespace-nowrap">
+          {fila.abono != null
+            ? <span className="text-emerald-300 font-bold">{fmt(fila.abono)}</span>
+            : <span className="text-slate-700">—</span>}
+        </td>
+        <td className="px-4 py-3 text-center whitespace-nowrap">
+          {fila.estado === 'conciliado_auto' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2 py-0.5 text-[10px] font-black text-cyan-300">
+              <Sparkles className="h-3 w-3" /> Auto
+            </span>
+          )}
+          {fila.estado === 'conciliado_manual' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-black text-amber-300">
+              Manual
+            </span>
+          )}
+          {comision && <span className="text-blue-400 font-bold">🔵 En póliza</span>}
+          {fila.estado === 'sin_poliza' && <span className="text-rose-400 font-bold">🔴 Sin póliza</span>}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          <div className="flex items-center gap-2">
+            {conciliado ? (
+              <span className="inline-block bg-slate-800 text-slate-200 rounded-lg px-2 py-0.5 text-[10px] font-bold capitalize">
+                {fila.poliza_tipo} #{fila.poliza_numero}
+                {fila.diferencia_dias > 0 && (
+                  <span className="ml-1 text-amber-400">·{fila.diferencia_dias}d</span>
+                )}
+              </span>
+            ) : comision ? (
+              <span className="text-blue-400 text-[10px]">Incluida en ingreso</span>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onCrearPoliza(fila); }}
+                className="btn-press inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2 py-1 text-[10px] font-black text-rose-300 transition-colors hover:bg-rose-500/20 hover:text-rose-200"
+              >
+                Crear póliza
+              </button>
             )}
-          </span>
-        ) : comision ? (
-          <span className="text-blue-400 text-[10px]">Incluida en ingreso</span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => onCrearPoliza(fila)}
-            className="inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2 py-1 text-[10px] font-black text-rose-300 transition-colors hover:bg-rose-500/20 hover:text-rose-200"
-          >
-            Crear póliza
-          </button>
-        )}
-      </td>
-    </tr>
+            <ChevronDown className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 ${expandida ? 'rotate-180' : ''}`} />
+          </div>
+        </td>
+      </tr>
+      {expandida && (
+        <tr className="bg-slate-950/80">
+          <td colSpan={7} className="px-4 py-4">
+            <div className="animate-in fade-in rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition-all duration-300">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Editar conciliación</p>
+                  <p className="mt-1 text-sm font-bold text-white">
+                    {conciliado ? etiquetaModo(fila.modo_conciliacion) : 'Sin póliza asignada'}
+                    {fila.poliza_concepto ? ` · ${fila.poliza_concepto}` : ''}
+                  </p>
+                </div>
+                <p className="text-xs text-slate-500">Selecciona el tipo de póliza (selección exclusiva)</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {TIPOS_POLIZA.map(({ key, label }) => {
+                  const activo = fila.poliza_tipo === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={editando}
+                      onClick={(e) => { e.stopPropagation(); onAsignarManual(fila, key); }}
+                      className={`btn-press min-h-11 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-all duration-200 disabled:opacity-50 ${
+                        activo
+                          ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-900/40 ring-2 ring-cyan-300/50'
+                          : 'border border-slate-700 bg-slate-950 text-slate-300 hover:border-cyan-600 hover:text-white'
+                      }`}
+                    >
+                      {editando && !activo ? <Loader2 className="inline h-3.5 w-3.5 animate-spin" /> : null}
+                      {label}
+                    </button>
+                  );
+                })}
+                {fila.estado === 'sin_poliza' && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onCrearPoliza(fila); }}
+                    className="btn-press min-h-11 rounded-xl border border-rose-700/50 bg-rose-950/40 px-4 py-2 text-xs font-black uppercase tracking-wide text-rose-200 hover:bg-rose-900/40"
+                  >
+                    Detalle de cuenta…
+                  </button>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 });
 FilaMovimiento.displayName = 'FilaMovimiento';
