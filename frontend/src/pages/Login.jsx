@@ -2,6 +2,7 @@ import { useState } from 'react';
 import api from '../services/api';
 import { Lock, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
 import SmartContableMark from '../components/SmartContableMark';
+import Button from '../components/ui/Button';
 
 const Login = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState('login');
@@ -174,13 +175,15 @@ const Login = ({ onLoginSuccess }) => {
           {error && <p className="text-red-400 text-sm bg-red-400/10 p-3 rounded-lg">{error}</p>}
           {message && <p className="text-emerald-400 text-sm bg-emerald-400/10 p-3 rounded-lg">{message}</p>}
 
-          <button 
+          <Button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : mode === 'register' ? 'Crear cuenta' : mode === 'recover' ? 'Actualizar contraseña' : 'Iniciar sesión'}
-          </button>
+                      variant="primary"
+                      size="lg"
+                      block
+                    >
+                      {loading ? <Loader2 className="animate-spin w-5 h-5" /> : mode === 'register' ? 'Crear cuenta' : mode === 'recover' ? 'Actualizar contraseña' : 'Iniciar sesión'}
+                    </Button>
         </form>
 
         <div className="mt-6 flex justify-between text-sm">

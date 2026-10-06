@@ -669,7 +669,7 @@ const BotonDescargarCsv = ({ onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="btn-action-csv inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600"
+    className="btn-ui btn-ui--success btn-ui--sm font-display"
   >
     <Download className="h-4 w-4" /> Descargar CSV
   </button>

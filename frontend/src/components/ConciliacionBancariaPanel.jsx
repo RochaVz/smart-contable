@@ -315,7 +315,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
             onClick={handleAutoConciliar}
             disabled={autoConciliando || estaCargando || countSinPoliza === 0}
             title="Asigna depósitos a ingresos, pagos a egresos y ajustes a diario"
-            className="btn-press flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-violet-900/40 hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-ui btn-ui--violet btn-ui--md font-display"
           >
             {autoConciliando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
             Auto-conciliar
@@ -326,7 +326,7 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
             onClick={handleDescargarResultados}
             disabled={!filasFiltradas.length}
             title="Descargar los resultados visibles con los filtros aplicados"
-            className="btn-press flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-ui btn-ui--success btn-ui--md font-display"
           >
             <Download className="w-4 h-4" />
             Descargar CSV
@@ -631,7 +631,7 @@ const FilaMovimiento = memo(({ fila, expandida, editando, onToggle, onCrearPoliz
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onCrearPoliza(fila); }}
-                className="btn-press inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2 py-1 text-[10px] font-black text-rose-300 transition-colors hover:bg-rose-500/20 hover:text-rose-200"
+                className="btn-ui btn-ui--danger btn-ui--sm font-display text-[10px]"
               >
                 Crear póliza
               </button>
@@ -696,12 +696,12 @@ FilaMovimiento.displayName = 'FilaMovimiento';
 // ─── Sub-componentes ───────────────────────────────────────────────────────────
 const UploadBtn = ({ label, accept, uploading, onChange, color }) => {
   const colors = {
-    cyan: 'bg-cyan-600 hover:bg-cyan-500',
-    amber: 'bg-amber-600 hover:bg-amber-500',
-    slate: 'bg-slate-700 hover:bg-slate-600',
+    cyan: 'btn-ui btn-ui--cyan btn-ui--sm',
+    amber: 'btn-ui btn-ui--warning btn-ui--sm',
+    slate: 'btn-ui btn-ui--secondary btn-ui--sm',
   };
   return (
-    <label className={`flex items-center gap-2 ${colors[color]} text-white text-sm font-bold px-4 py-2 rounded-xl cursor-pointer`}>
+    <label className={`font-display cursor-pointer ${colors[color] || colors.slate}`}>
       {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
       {label}
       <input type="file" accept={accept} onChange={onChange} className="hidden" />

@@ -864,7 +864,7 @@ const CompanyDetail = () => {
               type="button"
               onClick={handleExportCsv}
               disabled={loading || facturasVisibles.length === 0}
-              className="btn-action-csv flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
+              className="btn-ui btn-ui--success btn-ui--sm font-display"
             >
               <Download className="h-4 w-4" /> CSV
             </button>
@@ -944,7 +944,7 @@ const CompanyDetail = () => {
           <button
             type="button"
             onClick={() => setIsModalOpen(true)}
-            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-500"
+            className="btn-ui btn-ui--primary btn-ui--md mt-5 font-display"
           >
             <UploadCloud className="h-4 w-4" /> Cargar CFDI
           </button>
@@ -1364,7 +1364,7 @@ const CompanyDetail = () => {
                   onClick={downloadExport}
                   disabled={exportandoEmpresa || loading}
                   title="Descargar archivo CSV"
-                  className="flex items-center gap-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600 hover:text-white px-2.5 py-1.5 text-xs font-bold disabled:opacity-50 transition-colors"
+                  className="btn-ui btn-ui--success btn-ui--sm font-display"
                 >
                   {exportandoEmpresa ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1379,7 +1379,7 @@ const CompanyDetail = () => {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-900/20 hover:bg-blue-500 active:scale-[0.99] transition-all"
+                className="btn-ui btn-ui--primary btn-ui--sm font-display"
               >
                 <UploadCloud className="h-4 w-4" />
                 <span>Cargar CFDI</span>
@@ -1438,6 +1438,7 @@ const CompanyDetail = () => {
                         label={topico.label}
                         description={topico.desc}
                         accent={item.accent}
+                        emoji={item.emoji}
                         badge={item.kind === 'modulos' ? 'Módulo' : 'Reporte'}
                         onClick={() => {
                           setBusquedaGlobal('');
@@ -1462,7 +1463,7 @@ const CompanyDetail = () => {
             <section className="space-y-3">
               <div className="flex items-center justify-between px-0.5">
                 <div>
-                  <h2 className="text-sm font-black uppercase tracking-wider text-white">Módulos</h2>
+                  <h2 className="font-display text-sm font-black uppercase tracking-wider text-white">✨ Módulos</h2>
                   <p className="text-xs text-slate-500">Operación diaria del negocio</p>
                 </div>
                 <span className="text-[10px] font-bold text-slate-500">{hubModulos.length}</span>
@@ -1475,6 +1476,7 @@ const CompanyDetail = () => {
                     label={item.label}
                     description={item.desc}
                     accent={item.accent}
+                    emoji={item.emoji}
                     badge="Módulo"
                     onClick={() => openHubItem(item)}
                   />
@@ -1485,7 +1487,7 @@ const CompanyDetail = () => {
             <section className="space-y-3">
               <div className="flex items-center justify-between px-0.5">
                 <div>
-                  <h2 className="text-sm font-black uppercase tracking-wider text-white">Reportes</h2>
+                  <h2 className="font-display text-sm font-black uppercase tracking-wider text-white">📊 Reportes</h2>
                   <p className="text-xs text-slate-500">Análisis financiero y fiscal</p>
                 </div>
                 <span className="text-[10px] font-bold text-slate-500">{hubReportes.length}</span>
@@ -1498,6 +1500,7 @@ const CompanyDetail = () => {
                     label={item.label}
                     description={item.desc}
                     accent={item.accent}
+                    emoji={item.emoji}
                     badge="Reporte"
                     onClick={() => openHubItem(item)}
                   />
@@ -1511,6 +1514,8 @@ const CompanyDetail = () => {
               title={vistaActiva.label}
               description={vistaActiva.desc}
               icon={vistaActiva.icon}
+              accent={vistaActiva.accent}
+              emoji={vistaActiva.emoji}
               badge={vistaActiva.kind === 'modulos' ? 'Módulo' : 'Reporte'}
               onBack={goHubHome}
               backLabel="Volver al inicio"

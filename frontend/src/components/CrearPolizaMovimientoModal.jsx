@@ -129,7 +129,7 @@ const CrearPolizaMovimientoModal = ({ isOpen, onClose, empresaId, fila, onSucces
 
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
             <button type="button" onClick={onClose} className="rounded-xl border border-slate-700 px-4 py-3 text-sm font-bold text-slate-300 hover:bg-slate-800">Volver</button>
-            <button type="submit" disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-5 py-3 text-sm font-black text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="submit" disabled={loading} className="btn-ui btn-ui--cyan btn-ui--md font-display">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePenLine className="h-4 w-4" />}
               {loading ? 'Creando...' : 'Crear póliza'}
             </button>

@@ -95,7 +95,7 @@ const FiscalRegimenPanel = ({ empresa, onUpdated }) => {
             <Select label="Régimen fiscal" value={form.regimen_fiscal} onChange={(value) => setForm({ ...form, regimen_fiscal: value, opcion_deduccion: value === '606' ? form.opcion_deduccion : '' })} options={REGIMENES} />
             {form.regimen_fiscal === '606' && <Select label="Deducción ISR" value={form.opcion_deduccion} onChange={(value) => setForm({ ...form, opcion_deduccion: value })} options={[['CIEGA', 'Ciega (35% + predial)'], ['REAL', 'Gastos reales']]} required />}
           </div>
-          <button type="submit" disabled={saving} className="mt-5 flex min-h-11 items-center gap-2 bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-50">
+          <button type="submit" disabled={saving} className="btn-ui btn-ui--primary btn-ui--md mt-5 font-display">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar configuración
           </button>
         </form>

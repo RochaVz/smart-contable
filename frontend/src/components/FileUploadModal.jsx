@@ -233,7 +233,7 @@ const FileUploadModal = ({
           <button
             onClick={handleUpload}
             disabled={!file || uploading}
-            className="w-full mt-8 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2"
+            className="btn-ui btn-ui--primary btn-ui--lg btn-ui--block mt-8 font-display"
           >
             {uploading ? <Loader2 className="animate-spin" /> : 'Procesar ahora'}
           </button>

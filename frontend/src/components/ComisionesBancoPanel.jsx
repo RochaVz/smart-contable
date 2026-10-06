@@ -114,7 +114,7 @@ const ComisionesBancoPanel = ({ empresaId }) => {
         <button
           type="button"
           onClick={openNew}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-500 sm:w-auto"
+          className="btn-ui btn-ui--warning btn-ui--md font-display w-full sm:w-auto"
         >
           <Plus className="w-4 h-4" /> Agregar banco
         </button>
@@ -193,7 +193,7 @@ const ComisionesBancoPanel = ({ empresaId }) => {
             <button
               type="submit"
               disabled={saving}
-              className="min-h-11 rounded-xl bg-blue-600 px-6 py-2 font-bold text-white hover:bg-blue-500 disabled:opacity-50"
+              className="btn-ui btn-ui--primary btn-ui--md font-display"
             >
               {saving ? 'Guardando...' : editId ? 'Actualizar' : 'Guardar'}
             </button>

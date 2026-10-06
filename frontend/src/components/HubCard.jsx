@@ -1,46 +1,55 @@
 import { memo } from 'react';
 
-const ACCENT = {
+/**
+ * Paletas vivas reutilizables para módulos y reportes.
+ * Cada acento define gradiente base y emoji de apoyo.
+ */
+export const HUB_ACCENTS = {
   sky: {
-    icon: 'bg-sky-500/15 text-sky-300',
-    active: 'border-sky-400/50 from-sky-500 to-sky-600 shadow-sky-900/40',
+    surface: 'hub-accent-sky',
+    emoji: '🧾',
   },
   violet: {
-    icon: 'bg-violet-500/15 text-violet-300',
-    active: 'border-violet-400/50 from-violet-500 to-violet-600 shadow-violet-900/40',
+    surface: 'hub-accent-violet',
+    emoji: '📚',
   },
   cyan: {
-    icon: 'bg-cyan-500/15 text-cyan-300',
-    active: 'border-cyan-400/50 from-cyan-500 to-cyan-600 shadow-cyan-900/40',
+    surface: 'hub-accent-cyan',
+    emoji: '🏦',
   },
   amber: {
-    icon: 'bg-amber-500/15 text-amber-300',
-    active: 'border-amber-400/50 from-amber-500 to-amber-600 shadow-amber-900/40',
+    surface: 'hub-accent-amber',
+    emoji: '⚖️',
   },
   emerald: {
-    icon: 'bg-emerald-500/15 text-emerald-300',
-    active: 'border-emerald-400/50 from-emerald-500 to-emerald-600 shadow-emerald-900/40',
+    surface: 'hub-accent-emerald',
+    emoji: '📈',
   },
   rose: {
-    icon: 'bg-rose-500/15 text-rose-300',
-    active: 'border-rose-400/50 from-rose-500 to-rose-600 shadow-rose-900/40',
+    surface: 'hub-accent-rose',
+    emoji: '📉',
   },
   blue: {
-    icon: 'bg-blue-500/15 text-blue-300',
-    active: 'border-blue-400/50 from-blue-500 to-blue-600 shadow-blue-900/40',
+    surface: 'hub-accent-blue',
+    emoji: '📊',
   },
   orange: {
-    icon: 'bg-orange-500/15 text-orange-300',
-    active: 'border-orange-400/50 from-orange-500 to-orange-600 shadow-orange-900/40',
+    surface: 'hub-accent-orange',
+    emoji: '🧾',
   },
   indigo: {
-    icon: 'bg-indigo-500/15 text-indigo-300',
-    active: 'border-indigo-400/50 from-indigo-500 to-indigo-600 shadow-indigo-900/40',
+    surface: 'hub-accent-indigo',
+    emoji: '👥',
+  },
+  fuchsia: {
+    surface: 'hub-accent-fuchsia',
+    emoji: '🏢',
   },
 };
 
 /**
- * Botón flotante reutilizable del hub de módulos/reportes.
+ * Botón físico reutilizable del hub de módulos/reportes.
+ * Gradientes vivos + raised/pressed + icono Lucide y emoji de apoyo.
  */
 const HubCard = memo(function HubCard({
   icon: Icon,
@@ -48,44 +57,44 @@ const HubCard = memo(function HubCard({
   description,
   badge,
   accent = 'emerald',
+  emoji,
   active = false,
   onClick,
   className = '',
 }) {
-  const tones = ACCENT[accent] || ACCENT.emerald;
+  const tones = HUB_ACCENTS[accent] || HUB_ACCENTS.emerald;
+  const emojiMark = emoji || tones.emoji;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`hub-card btn-press group flex w-full items-start gap-3 rounded-2xl border p-4 text-left shadow-lg transition-all duration-200 ease-out ${
-        active
-          ? `bg-gradient-to-b text-white font-bold shadow-xl ${tones.active}`
-          : 'border-slate-700/80 bg-gradient-to-b from-slate-800/95 to-slate-900 text-slate-200 hover:border-slate-500 hover:from-slate-700 hover:to-slate-800 hover:text-white'
-      } ${className}`}
+      aria-pressed={active || undefined}
+      className={[
+        'hub-card btn-physical font-display group flex w-full items-start gap-3 rounded-2xl border p-4 text-left',
+        tones.surface,
+        active ? 'is-active' : '',
+        className,
+      ].filter(Boolean).join(' ')}
     >
-      <div
-        className={`rounded-xl p-2.5 shrink-0 shadow-sm transition-colors duration-150 ${
-          active ? 'bg-white/20 text-white' : tones.icon
-        }`}
-      >
-        {Icon ? <Icon className="h-5 w-5" /> : null}
+      <div className="hub-card__icon shrink-0">
+        <span className="hub-card__emoji" aria-hidden="true">{emojiMark}</span>
+        {Icon ? <Icon className="hub-card__glyph h-5 w-5" aria-hidden="true" /> : null}
       </div>
+
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-black leading-tight tracking-tight">{label}</p>
+          <p className="hub-card__title text-sm font-black leading-tight tracking-tight">
+            {label}
+          </p>
           {badge ? (
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
-                active ? 'bg-white/20 text-white' : 'bg-slate-950/80 text-slate-400'
-              }`}
-            >
+            <span className="hub-card__badge shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">
               {badge}
             </span>
           ) : null}
         </div>
         {description ? (
-          <p className={`mt-1 text-xs leading-5 ${active ? 'text-white/85' : 'text-slate-500'}`}>
+          <p className="hub-card__desc mt-1 text-xs leading-5">
             {description}
           </p>
         ) : null}

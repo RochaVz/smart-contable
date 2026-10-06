@@ -493,7 +493,7 @@ const IndicadoresPanel = ({ data, loading, mes, anio, savingRevision, onAprobar 
                   type="button"
                   disabled={!!savingRevision}
                   onClick={() => onAprobar(m.id)}
-                  className="inline-flex min-h-8 items-center gap-1 border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40"
+                  className="btn-ui btn-ui--success btn-ui--sm font-display uppercase tracking-wide text-[10px]"
                 >
                   {savingRevision === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
                   Aprobar

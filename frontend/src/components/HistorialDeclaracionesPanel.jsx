@@ -324,7 +324,7 @@ const HistorialDeclaracionesPanel = ({ empresa }) => {
               type="button"
               disabled={busy || Boolean(vigenteActual)}
               onClick={crear}
-              className="flex min-h-10 items-center gap-2 bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500 disabled:opacity-50"
+              className="btn-ui btn-ui--primary btn-ui--sm font-display"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FilePlus2 className="h-3.5 w-3.5" />}
               Crear v1
@@ -333,7 +333,7 @@ const HistorialDeclaracionesPanel = ({ empresa }) => {
               type="button"
               disabled={busy || !vigenteActual}
               onClick={presentar}
-              className="flex min-h-10 items-center gap-2 border border-emerald-700 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+              className="btn-ui btn-ui--success btn-ui--sm font-display"
             >
               <Send className="h-3.5 w-3.5" /> Presentar
             </button>
@@ -341,7 +341,7 @@ const HistorialDeclaracionesPanel = ({ empresa }) => {
               type="button"
               disabled={busy || !vigenteActual}
               onClick={modificar}
-              className="flex min-h-10 items-center gap-2 border border-violet-700 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-300 hover:bg-violet-500/20 disabled:opacity-50"
+              className="btn-ui btn-ui--violet btn-ui--sm font-display"
             >
               <GitBranch className="h-3.5 w-3.5" /> Nueva versión
             </button>
@@ -349,7 +349,7 @@ const HistorialDeclaracionesPanel = ({ empresa }) => {
               type="button"
               disabled={busy || !vigenteActual}
               onClick={cancelar}
-              className="flex min-h-10 items-center gap-2 border border-rose-700 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
+              className="btn-ui btn-ui--danger btn-ui--sm font-display"
             >
               <Ban className="h-3.5 w-3.5" /> Cancelar
             </button>

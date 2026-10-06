@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
+import { HUB_ACCENTS } from './HubCard';
 
 /**
  * Contenedor de página dedicada para un módulo o reporte.
@@ -9,11 +10,16 @@ export default function ModulePageShell({
   description,
   icon: Icon,
   badge,
+  accent = 'emerald',
+  emoji,
   onBack,
   backLabel = 'Módulos y reportes',
   actions = null,
   children,
 }) {
+  const tones = HUB_ACCENTS[accent] || HUB_ACCENTS.emerald;
+  const emojiMark = emoji || tones.emoji;
+
   return (
     <div className="module-page space-y-5 animate-page-in">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -21,23 +27,22 @@ export default function ModulePageShell({
           <button
             type="button"
             onClick={onBack}
-            className="btn-press inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm font-bold text-slate-300 hover:border-slate-600 hover:text-white"
+            className="btn-ui btn-ui--cyan btn-ui--md font-display"
           >
             <ArrowLeft className="h-4 w-4" />
             {backLabel}
           </button>
 
           <div className="flex items-start gap-3">
-            {Icon ? (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
-                <Icon className="h-6 w-6" />
-              </div>
-            ) : null}
+            <div className={`hub-card__icon flex h-12 w-12 shrink-0 items-center justify-center ${tones.surface} rounded-2xl border`}>
+              <span className="hub-card__emoji" aria-hidden="true">{emojiMark}</span>
+              {Icon ? <Icon className="hub-card__glyph h-6 w-6" /> : null}
+            </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-black text-white sm:text-2xl">{title}</h2>
+                <h2 className="font-display text-xl font-black text-white sm:text-2xl">{title}</h2>
                 {badge ? (
-                  <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <span className="hub-card__badge rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest">
                     {badge}
                   </span>
                 ) : null}

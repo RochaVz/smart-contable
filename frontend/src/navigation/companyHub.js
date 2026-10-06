@@ -40,7 +40,8 @@ export const COMPANY_HUB_ITEMS = [
     seccion: 'historial',
     tab: null,
     icon: FileText,
-    accent: 'sky',
+    accent: 'orange',
+    emoji: '🧾',
   },
   {
     id: 'polizas',
@@ -52,6 +53,7 @@ export const COMPANY_HUB_ITEMS = [
     tab: null,
     icon: BookOpen,
     accent: 'violet',
+    emoji: '📚',
   },
   {
     id: 'conciliacion',
@@ -63,6 +65,7 @@ export const COMPANY_HUB_ITEMS = [
     tab: null,
     icon: Landmark,
     accent: 'cyan',
+    emoji: '🏦',
   },
   {
     id: 'fiscal',
@@ -74,6 +77,7 @@ export const COMPANY_HUB_ITEMS = [
     tab: null,
     icon: Scale,
     accent: 'amber',
+    emoji: '⚖️',
   },
   {
     id: 'ingresos',
@@ -85,6 +89,7 @@ export const COMPANY_HUB_ITEMS = [
     tab: 'estado',
     icon: TrendingUp,
     accent: 'emerald',
+    emoji: '📈',
   },
   {
     id: 'egresos',
@@ -96,6 +101,7 @@ export const COMPANY_HUB_ITEMS = [
     tab: 'padron',
     icon: TrendingDown,
     accent: 'rose',
+    emoji: '📉',
   },
   {
     id: 'utilidades',
@@ -107,6 +113,7 @@ export const COMPANY_HUB_ITEMS = [
     tab: 'resumen',
     icon: DollarSign,
     accent: 'blue',
+    emoji: '📊',
   },
   {
     id: 'impuestos',
@@ -118,6 +125,7 @@ export const COMPANY_HUB_ITEMS = [
     tab: 'trasladados',
     icon: Receipt,
     accent: 'orange',
+    emoji: '💰',
   },
   {
     id: 'proveedores',
@@ -129,6 +137,7 @@ export const COMPANY_HUB_ITEMS = [
     tab: 'padron',
     icon: Users,
     accent: 'indigo',
+    emoji: '👥',
   },
 ];
 

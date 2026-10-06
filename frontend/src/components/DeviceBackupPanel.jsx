@@ -174,7 +174,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={working}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+            className="btn-ui btn-ui--primary btn-ui--md font-display"
           >
             <Upload className="h-4 w-4" /> Agregar respaldo
           </button>
@@ -196,7 +196,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
               type="button"
               onClick={handleExport}
               disabled={working}
-              className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
+              className="btn-ui btn-ui--success btn-ui--sm font-display"
             >
               {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               Descargar
@@ -213,7 +213,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
               type="button"
               onClick={handleClear}
               disabled={working || (company?.local_only ? false : stats.totalRecords === 0)}
-              className="flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-500/30 px-3 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+              className="btn-ui btn-ui--danger btn-ui--sm font-display"
             >
               <Trash2 className="h-4 w-4" /> Borrar
             </button>
@@ -269,7 +269,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
             type="button"
             onClick={handleExport}
             disabled={working}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
+            className="btn-ui btn-ui--success btn-ui--md font-display"
           >
             {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             Descargar
@@ -286,7 +286,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
             type="button"
             onClick={handleClear}
             disabled={working || stats.totalRecords === 0}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-500/30 px-4 py-2 text-sm font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+            className="btn-ui btn-ui--danger btn-ui--md font-display"
           >
             <Trash2 className="h-4 w-4" /> Borrar
           </button>

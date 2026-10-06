@@ -36,6 +36,16 @@ class S3FileStorage:
             raise FileStorageError("No se pudo almacenar el archivo original") from exc
         return key
 
+    def download(self, key: str) -> bytes:
+        try:
+            response = self.client.get_object(Bucket=self.bucket, Key=key)
+            body = response.get("Body")
+            if body is None:
+                raise FileStorageError("No se pudo leer el archivo original")
+            return body.read()
+        except (BotoCoreError, ClientError) as exc:
+            raise FileStorageError("No se pudo recuperar el archivo original") from exc
+
     def delete(self, key: str) -> None:
         try:
             self.client.delete_object(Bucket=self.bucket, Key=key)

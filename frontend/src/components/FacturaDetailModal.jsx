@@ -80,6 +80,10 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
   const conceptos = d.conceptos || d.conceptos_vendidos || [];
   const esIngreso = d.tipo_operacion === 'VENTA' || d.tipo_comprobante === 'I';
   const etiquetaConcepto = esIngreso ? 'Concepto de venta' : 'Concepto de compra';
+  const etiquetaContraparte = esIngreso ? 'Cliente' : 'Proveedor / Emisor';
+  const nombreContraparte = esIngreso
+    ? (d.nombre_cliente || d.nombre_receptor || d.receptor || d.emisor)
+    : (d.nombre_emisor || d.emisor || d.receptor);
   const conceptoResumen = d.concepto
     || conceptos.map((c) => c.descripcion).filter(Boolean).join(' · ')
     || 'Sin concepto registrado en el CFDI';
@@ -100,8 +104,19 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
           <>
             <div className="mb-6 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div>
-                <p className="text-[10px] font-black uppercase text-slate-500">Emisor / Cliente</p>
-                <p className="font-bold text-white">{d.emisor || d.receptor}</p>
+                <p className="text-[10px] font-black uppercase text-slate-500">{etiquetaContraparte}</p>
+                <p className="font-bold text-white">{nombreContraparte || '—'}</p>
+                {esIngreso && (d.nombre_emisor || d.rfc_emisor) && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Emisor: {d.nombre_emisor || d.emisor || '—'}
+                    {d.rfc_emisor ? ` (${d.rfc_emisor})` : ''}
+                  </p>
+                )}
+                {!esIngreso && (d.nombre_receptor || d.receptor) && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Receptor: {d.nombre_receptor || d.receptor}
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase text-slate-500">Forma de pago</p>
@@ -155,7 +170,7 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
                 type="button"
                 disabled={generating}
                 onClick={handleGenerar}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 rounded-2xl"
+                className="btn-ui btn-ui--primary btn-ui--md btn-ui--block font-display"
               >
                 {generating ? 'Generando...' : 'Generar póliza(s)'}
               </button>
@@ -168,7 +183,7 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
               type="button"
               disabled={deleting || generating}
               onClick={handleEliminar}
-              className="w-full mt-4 border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-50 font-bold py-3 rounded-2xl flex items-center justify-center gap-2"
+              className="btn-ui btn-ui--danger btn-ui--md btn-ui--block mt-4 font-display"
             >
               {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               Eliminar factura

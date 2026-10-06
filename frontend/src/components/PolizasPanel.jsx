@@ -203,7 +203,7 @@ const PolizasPanel = ({ empresaId, mes, anio, onPeriodoChange, onRefreshFacturas
           type="button"
           disabled={generating === item.factura_id}
           onClick={() => handleGenerar(item.factura_id)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-xl"
+          className="btn-ui btn-ui--primary btn-ui--sm font-display"
         >
           {generating === item.factura_id
             ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -351,7 +351,7 @@ const PolizasPanel = ({ empresaId, mes, anio, onPeriodoChange, onRefreshFacturas
               type="button"
               disabled={autoGenerando}
               onClick={handleGenerarAutomatico}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
+              className="btn-ui btn-ui--success btn-ui--sm font-display"
             >
               {autoGenerando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               Generar del mes

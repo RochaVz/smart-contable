@@ -263,9 +263,9 @@ const Dashboard = ({ onLogout }) => {
                 onClick={() => fileImportRef.current?.click()}
                 disabled={importingBackup}
                 title="Cargar y restaurar un archivo de respaldo (.json)"
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/90 px-4 py-3 font-bold text-slate-200 shadow-xl transition-all hover:border-slate-600 hover:bg-slate-800 hover:text-white active:scale-[0.99] disabled:opacity-50"
+                className="btn-ui btn-ui--success btn-ui--lg font-display"
               >
-                {importingBackup ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5 text-emerald-400" />}
+                {importingBackup ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
                 <span>Cargar respaldo</span>
               </button>
               <input 
@@ -276,8 +276,9 @@ const Dashboard = ({ onLogout }) => {
                 onChange={handleGlobalImportBackup} 
               />
               <button 
+                type="button"
                 onClick={() => openNewCompany(getDraftFromSearch())} 
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white shadow-xl shadow-blue-900/20 transition-all hover:bg-blue-500 active:scale-[0.99]"
+                className="btn-ui btn-ui--primary btn-ui--lg font-display"
               >
                 <PlusCircle className="w-5 h-5" /> Agregar negocio
               </button>
@@ -311,7 +312,7 @@ const Dashboard = ({ onLogout }) => {
                   <button
                     type="button"
                     onClick={() => openNewCompany(getDraftFromSearch())}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
+                    className="btn-ui btn-ui--primary btn-ui--md font-display"
                   >
                     Agregar este negocio <ArrowRight className="h-4 w-4" />
                   </button>
@@ -320,7 +321,7 @@ const Dashboard = ({ onLogout }) => {
                     <button
                       type="button"
                       onClick={() => openNewCompany()}
-                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500"
+                      className="btn-ui btn-ui--primary btn-ui--md font-display"
                     >
                       Agregar mi primer negocio <ArrowRight className="h-4 w-4" />
                     </button>
@@ -341,75 +342,76 @@ const Dashboard = ({ onLogout }) => {
               <div 
                 key={e.id} 
                 onClick={() => handleNavigateEmpresa(e.id)} 
-                className="group cursor-pointer rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl transition-all hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-900/10 active:scale-[0.99] sm:rounded-3xl sm:p-7 lg:hover:-translate-y-1.5"
+                className="btn-physical hub-accent-fuchsia font-display group cursor-pointer rounded-2xl border p-5 sm:rounded-3xl sm:p-7"
               >
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div className="bg-blue-500/10 w-12 h-12 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-                    <Building2 className="w-6 h-6" />
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="hub-card__icon flex h-12 w-12 items-center justify-center">
+                    <span className="hub-card__emoji" aria-hidden="true">🏢</span>
+                    <Building2 className="hub-card__glyph h-6 w-6" />
                   </div>
-                  <span className="flex items-center gap-1 text-xs font-bold text-blue-400 group-hover:text-blue-300">
+                  <span className="flex items-center gap-1 text-xs font-bold text-white/90">
                     Abrir <ChevronRight className="h-4 w-4" />
                   </span>
                 </div>
 
-                <h3 className="mb-1 break-words text-lg font-bold text-white transition-colors group-hover:text-blue-400 sm:text-xl">{e.razon_social}</h3>
-                <p className="text-slate-500 font-mono text-xs uppercase tracking-widest">{e.rfc}</p>
+                <h3 className="mb-1 break-words text-lg font-black text-white sm:text-xl">{e.razon_social}</h3>
+                <p className="font-mono text-xs uppercase tracking-widest text-white/75">{e.rfc}</p>
                 {e.local_only && (
-                  <span className="mt-3 inline-flex rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                  <span className="mt-3 inline-flex rounded-full border border-white/25 bg-white/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
                     Guardado en este dispositivo
                   </span>
                 )}
 
                 {/* ACCESOS DIRECTOS DE REPORTES DENTRO DE LA TARJETA */}
-                <div className="mt-5 border-t border-slate-800/80 pt-4" onClick={(ev) => ev.stopPropagation()}>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Reportes rápidos</p>
+                <div className="mt-5 border-t border-white/20 pt-4" onClick={(ev) => ev.stopPropagation()}>
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/70">Reportes rápidos</p>
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() => handleNavigateEmpresa(e.id, 'informes', 'estado')}
-                      className="rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-emerald-600 hover:text-white transition-colors"
+                      className="btn-physical hub-accent-emerald rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
                     >
-                      Ingresos / Gastos
+                      📈 Ingresos / Gastos
                     </button>
                     <button
                       type="button"
                       onClick={() => handleNavigateEmpresa(e.id, 'informes', 'resumen')}
-                      className="rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-blue-600 hover:text-white transition-colors"
+                      className="btn-physical hub-accent-blue rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
                     >
-                      Utilidad
+                      📊 Utilidad
                     </button>
                     <button
                       type="button"
                       onClick={() => handleNavigateEmpresa(e.id, 'informes', 'padron')}
-                      className="rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-violet-600 hover:text-white transition-colors"
+                      className="btn-physical hub-accent-indigo rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
                     >
-                      Proveedores
+                      👥 Proveedores
                     </button>
                     <button
                       type="button"
                       onClick={() => handleNavigateEmpresa(e.id, 'informes', 'trasladados')}
-                      className="rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-amber-600 hover:text-white transition-colors"
+                      className="btn-physical hub-accent-orange rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
                     >
-                      IVA / Impuestos
+                      💰 IVA / Impuestos
                     </button>
                     <button
                       type="button"
                       onClick={() => handleNavigateEmpresa(e.id, 'conciliacion')}
-                      className="rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-cyan-600 hover:text-white transition-colors"
+                      className="btn-physical hub-accent-cyan rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
                     >
-                      Conciliación
+                      🏦 Conciliación
                     </button>
                     <button
                       type="button"
                       onClick={() => handleNavigateEmpresa(e.id, 'fiscal')}
-                      className="rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-rose-600 hover:text-white transition-colors"
+                      className="btn-physical hub-accent-amber rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
                     >
-                      Motor SAT
+                      ⚖️ Motor SAT
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-4 border-t border-slate-800 pt-4">
+                <div className="mt-4 border-t border-white/20 pt-4">
                   <DeviceBackupPanel compact company={e} prepareCompanyBackup={prepareCompanyBackup} />
                 </div>
 
@@ -417,7 +419,7 @@ const Dashboard = ({ onLogout }) => {
                   type="button"
                   onClick={(event) => handleDeleteCompany(e, event)}
                   disabled={deletingCompanyId === e.id}
-                  className="mt-4 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 px-3 py-2 text-sm font-bold text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:cursor-wait disabled:opacity-60"
+                  className="btn-press mt-4 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/30 bg-black/20 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-red-500/30 disabled:cursor-wait disabled:opacity-60"
                   title={`Eliminar ${e.razon_social}`}
                 >
                   {deletingCompanyId === e.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

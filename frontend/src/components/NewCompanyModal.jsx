@@ -121,7 +121,7 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess, initialData = {} }) =
             </div>
           )}
           
-          <button className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white mt-4 transition-all active:scale-95 flex justify-center" disabled={loading}>
+          <button className="btn-ui btn-ui--primary btn-ui--lg btn-ui--block mt-4 font-display" disabled={loading}>
             {loading ? <Loader2 className="animate-spin" /> : "Guardar negocio"}
           </button>
         </form>

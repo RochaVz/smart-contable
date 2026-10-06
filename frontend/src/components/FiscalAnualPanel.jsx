@@ -162,7 +162,7 @@ const FiscalAnualPanel = ({ empresa, anio: anioProp, onAnioChange }) => {
               <input type="number" step="0.01" min={0} required value={pagoForm.monto} onChange={(e) => setPagoForm({ ...pagoForm, monto: e.target.value })} className="mt-1 w-full border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
             </label>
           </div>
-          <button type="submit" disabled={saving} className="mt-4 bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">
+          <button type="submit" disabled={saving} className="btn-ui btn-ui--primary btn-ui--sm mt-4 font-display">
             {saving ? 'Guardando…' : 'Registrar pago'}
           </button>
           <ul className="mt-4 space-y-2 text-xs text-slate-400">
@@ -190,7 +190,7 @@ const FiscalAnualPanel = ({ empresa, anio: anioProp, onAnioChange }) => {
               <input type="number" step="0.01" min={0.01} required value={perdidaForm.monto_original} onChange={(e) => setPerdidaForm({ ...perdidaForm, monto_original: e.target.value })} className="mt-1 w-full border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
             </label>
           </div>
-          <button type="submit" disabled={saving} className="mt-4 bg-amber-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">
+          <button type="submit" disabled={saving} className="btn-ui btn-ui--warning btn-ui--sm mt-4 font-display">
             {saving ? 'Guardando…' : 'Registrar pérdida'}
           </button>
           <ul className="mt-4 space-y-2 text-xs text-slate-400">

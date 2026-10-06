@@ -4,6 +4,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.factura import Factura
+from app.services.file_storage import FileStorageError, get_file_storage
 from app.services.sat_parser import parsear_xml_sat
 
 FORMA_PAGO_LABELS = {
@@ -43,11 +44,73 @@ def etiqueta_forma_pago(codigo: str | None) -> str:
 
 def extraer_datos_xml(xml_contenido: str | None) -> dict:
     if not xml_contenido:
-        return {"conceptos": [], "concepto_principal": ""}
+        return {"conceptos": [], "concepto_principal": "", "concepto_completo": ""}
     try:
         return parsear_xml_sat(xml_contenido)
     except (ValueError, TypeError):
-        return {"conceptos": [], "concepto_principal": ""}
+        return {"conceptos": [], "concepto_principal": "", "concepto_completo": ""}
+
+
+def obtener_xml_factura(factura, *, permitir_s3: bool = True) -> str | None:
+    """Obtiene el XML de la factura desde BD o, si aplica, desde S3."""
+    xml_contenido = getattr(factura, "xml_contenido", None)
+    if xml_contenido:
+        return xml_contenido
+
+    if not permitir_s3:
+        return None
+
+    archivo_s3_key = getattr(factura, "archivo_s3_key", None)
+    if not archivo_s3_key:
+        return None
+
+    storage = get_file_storage()
+    if storage is None:
+        return None
+
+    try:
+        raw = storage.download(archivo_s3_key)
+    except FileStorageError:
+        return None
+
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
+
+
+def resumen_concepto_desde_datos(datos_xml: dict | None, fallback: str | None = None) -> str:
+    """Construye un resumen legible de conceptos del CFDI."""
+    datos = datos_xml or {}
+    completo = str(datos.get("concepto_completo") or "").strip()
+    if completo:
+        return completo
+
+    conceptos = datos.get("conceptos") or []
+    descripciones = [
+        str(c.get("descripcion") or "").strip()
+        for c in conceptos
+        if str(c.get("descripcion") or "").strip()
+    ]
+    if not descripciones:
+        return str(fallback or "").strip()
+    if len(descripciones) == 1:
+        return descripciones[0]
+    return f"{descripciones[0]} (+{len(descripciones) - 1} más)"
+
+
+def serializar_conceptos(datos_xml: dict | None) -> list[dict]:
+    conceptos = (datos_xml or {}).get("conceptos") or []
+    return [
+        {
+            "descripcion": c.get("descripcion") or "",
+            "importe": float(c.get("importe") or 0),
+            "cantidad": float(c.get("cantidad") or 1),
+            "clave_prod_serv": c.get("clave_prod_serv"),
+            "unidad": c.get("unidad") or "",
+        }
+        for c in conceptos
+    ]
 
 
 def normalizar_rfc(rfc: str | None) -> str:

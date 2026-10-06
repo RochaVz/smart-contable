@@ -275,12 +275,12 @@ const LocalConciliacionPanel = ({ empresa, facturas, mes, anio }) => {
           </div>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-500">
+          <label className="btn-ui btn-ui--warning btn-ui--md font-display cursor-pointer">
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             PDF
             <input type="file" accept=".pdf,application/pdf" onChange={handleUpload} className="hidden" />
           </label>
-          <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-700 px-4 py-2 text-sm font-bold text-white hover:bg-slate-600">
+          <label className="btn-ui btn-ui--secondary btn-ui--md font-display cursor-pointer">
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
             CSV
             <input type="file" accept=".csv,text/csv" onChange={handleUpload} className="hidden" />
@@ -290,7 +290,7 @@ const LocalConciliacionPanel = ({ empresa, facturas, mes, anio }) => {
             onClick={handleDescargarResultados}
             disabled={filtered.length === 0}
             title="Descargar los resultados visibles"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-ui btn-ui--success btn-ui--md font-display"
           >
             <Download className="h-4 w-4" />
             Descargar CSV

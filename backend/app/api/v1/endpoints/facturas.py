@@ -25,6 +25,9 @@ from app.services.cfdi_helpers import (
     etiqueta_forma_pago,
     desglose_impuestos,
     extraer_datos_xml,
+    obtener_xml_factura,
+    resumen_concepto_desde_datos,
+    serializar_conceptos,
     validar_cfdi_empresa,
     validar_factura_no_duplicada,
     marcar_uuid_en_lote,
@@ -176,6 +179,7 @@ def procesar_xml_interno(
             uso_cfdi=datos['uso_cfdi'],
             metodo_pago=datos.get('metodo_pago'),
             forma_pago=datos.get('forma_pago'),
+            concepto=resumen_concepto_desde_datos(datos),
             subtotal=datos['subtotal'],
             descuento=datos['descuento'],
             iva_trasladado=datos['iva_trasladado'],
@@ -691,19 +695,13 @@ def listar_facturas(
                     cuenta_nombre = mov.nombre_cuenta
 
             tiene_poliza = bool(f.polizas)
-            datos_xml = extraer_datos_xml(f.xml_contenido)
-            conceptos = datos_xml.get("conceptos") or []
-            descripciones = [
-                str(c.get("descripcion") or "").strip()
-                for c in conceptos
-                if str(c.get("descripcion") or "").strip()
-            ]
-            if not descripciones:
-                concepto = ""
-            elif len(descripciones) == 1:
-                concepto = descripciones[0]
-            else:
-                concepto = f"{descripciones[0]} (+{len(descripciones) - 1} más)"
+            # Evitar descargas S3 masivas en listado; usar XML local o concepto persistido.
+            datos_xml = extraer_datos_xml(obtener_xml_factura(f, permitir_s3=False))
+            conceptos = serializar_conceptos(datos_xml)
+            concepto = resumen_concepto_desde_datos(
+                datos_xml,
+                fallback=getattr(f, "concepto", None),
+            )
 
             respuesta.append({
                 "id": f.id,
@@ -711,8 +709,12 @@ def listar_facturas(
                 "fecha": str(f.fecha_emision),
                 "tipo_operacion": tipo_operacion,
                 "emisor": entidad_nombre if venta else f.nombre_emisor,
+                "receptor": f.nombre_receptor,
                 "rfc_emisor": entidad_rfc if not venta else f.rfc_emisor,
+                "rfc_receptor": f.rfc_receptor,
                 "nombre_cliente": f.nombre_receptor if venta else None,
+                "nombre_emisor": f.nombre_emisor,
+                "nombre_receptor": f.nombre_receptor,
                 "forma_pago": f.forma_pago,
                 "forma_pago_label": etiqueta_forma_pago(f.forma_pago),
                 "metodo_pago": f.metodo_pago,
@@ -724,14 +726,7 @@ def listar_facturas(
                 "cuenta_contable": cuenta_nombre,
                 "tiene_poliza": tiene_poliza,
                 "concepto": concepto,
-                "conceptos": [
-                    {
-                        "descripcion": c.get("descripcion") or "",
-                        "importe": float(c.get("importe") or 0),
-                        "cantidad": float(c.get("cantidad") or 1),
-                    }
-                    for c in conceptos
-                ],
+                "conceptos": conceptos,
             })
             
         return respuesta
@@ -773,27 +768,39 @@ def detalle_factura(
 
     empresa = db.query(Empresa).filter(Empresa.id == factura.empresa_id).first()
     rfc = empresa.rfc if empresa else ""
-    datos_xml = extraer_datos_xml(factura.xml_contenido)
+    datos_xml = extraer_datos_xml(obtener_xml_factura(factura, permitir_s3=True))
     venta = es_venta(factura, rfc)
+    conceptos = serializar_conceptos(datos_xml)
+    concepto = resumen_concepto_desde_datos(
+        datos_xml,
+        fallback=getattr(factura, "concepto", None),
+    )
+    if concepto and concepto != getattr(factura, "concepto", None):
+        factura.concepto = concepto
+        db.add(factura)
+        db.commit()
 
+    contraparte = factura.nombre_receptor if venta else factura.nombre_emisor
     return {
         "id": factura.id,
         "uuid": factura.uuid,
         "fecha": str(factura.fecha_emision),
         "tipo_operacion": "VENTA" if venta else "GASTO",
-        "emisor": factura.nombre_emisor,
+        # Compat: "emisor" en listados/UI representa la contraparte visible.
+        "emisor": contraparte or factura.nombre_emisor,
         "receptor": factura.nombre_receptor,
+        "nombre_emisor": factura.nombre_emisor,
+        "nombre_receptor": factura.nombre_receptor,
+        "nombre_cliente": factura.nombre_receptor if venta else None,
+        "rfc_emisor": factura.rfc_emisor,
+        "rfc_receptor": factura.rfc_receptor,
         "forma_pago": {
             "codigo": factura.forma_pago,
             "etiqueta": etiqueta_forma_pago(factura.forma_pago),
             "metodo_pago": factura.metodo_pago,
         },
-        "conceptos": datos_xml.get("conceptos", []),
-        "concepto": (
-            (datos_xml.get("conceptos") or [{}])[0].get("descripcion")
-            if datos_xml.get("conceptos")
-            else ""
-        ) or "",
+        "conceptos": conceptos,
+        "concepto": concepto,
         "desglose_impuestos": desglose_impuestos(factura),
         "preview_poliza": preview_poliza_desde_factura(factura, rfc, db),
         "tiene_poliza": bool(factura.polizas),

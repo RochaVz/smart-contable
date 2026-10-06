@@ -274,7 +274,7 @@ const ExportPreviewModal = ({ isOpen, onClose, title, content, loading, onDownlo
             type="button"
             onClick={onDownload}
             disabled={loading || hasError || sections.length === 0}
-            className="btn-action-csv flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.75 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition-all hover:bg-emerald-500 hover:shadow-emerald-800/40 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="btn-ui btn-ui--success btn-ui--md font-display w-full sm:w-auto"
           >
             <Download className="h-4 w-4" />
             Descargar archivo CSV

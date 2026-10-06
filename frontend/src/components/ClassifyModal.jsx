@@ -73,7 +73,7 @@ const ClassifyModal = ({
           <button
             onClick={handleSave}
             disabled={loading || !nombreCuenta}
-            className="w-full mt-10 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2"
+            className="btn-ui btn-ui--primary btn-ui--lg btn-ui--block mt-10 font-display"
           >
             {loading ? "Guardando..." : <><Save className="w-5 h-5" /> Guardar clasificación</>}
           </button>

@@ -195,7 +195,7 @@ const GlobalFacturas = () => {
             type="button"
             onClick={handleExportCsv}
             disabled={loading || facturasFiltradas.length === 0}
-            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2 lg:col-span-1"
+            className="btn-ui btn-ui--success btn-ui--md font-display sm:col-span-2 lg:col-span-1"
           >
             <Download className="w-4 h-4" /> Exportar CSV
           </button>

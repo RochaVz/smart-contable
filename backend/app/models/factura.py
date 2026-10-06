@@ -52,6 +52,8 @@ class Factura(Base):
     uso_cfdi         = Column(String(10))
     metodo_pago      = Column(String(3))
     forma_pago       = Column(String(3))
+    # Concepto principal del CFDI (Descripcion del primer Concepto / resumen)
+    concepto         = Column(Text)
     # Importes
     subtotal         = Column(Numeric(15, 2), nullable=False)
     descuento        = Column(Numeric(15, 2), default=0)

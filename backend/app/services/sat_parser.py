@@ -45,6 +45,21 @@ def _local(tag: str | None) -> str:
     return tag
 
 
+def _attr(node, name: str) -> str | None:
+    """Lee atributo CFDI con fallback case-insensitive."""
+    if node is None:
+        return None
+    value = node.get(name)
+    if value is not None:
+        return value
+    target = name.lower()
+    for key, val in node.attrib.items():
+        local = key.rsplit("}", 1)[-1] if "}" in key else key
+        if local.lower() == target:
+            return val
+    return None
+
+
 def _find_by_local(parent, local_name: str):
     if parent is None:
         return None
@@ -107,18 +122,22 @@ def parsear_xml_sat(contenido_xml: str) -> dict:
     }
 
     emisor = root.find(f"{{{ns}}}Emisor")
+    if emisor is None:
+        emisor = _find_by_local(root, "Emisor")
     if emisor is not None:
-        datos["rfc_emisor"] = emisor.get("Rfc")
-        datos["nombre_emisor"] = emisor.get("Nombre")
-        datos["regimen_emisor"] = emisor.get("RegimenFiscal")
+        datos["rfc_emisor"] = _attr(emisor, "Rfc")
+        datos["nombre_emisor"] = _attr(emisor, "Nombre")
+        datos["regimen_emisor"] = _attr(emisor, "RegimenFiscal")
 
     receptor = root.find(f"{{{ns}}}Receptor")
+    if receptor is None:
+        receptor = _find_by_local(root, "Receptor")
     if receptor is not None:
-        datos["rfc_receptor"] = receptor.get("Rfc")
-        datos["nombre_receptor"] = receptor.get("Nombre")
-        datos["uso_cfdi"] = receptor.get("UsoCFDI")
-        datos["regimen_receptor"] = receptor.get("RegimenFiscalReceptor")
-        datos["domicilio_fiscal"] = receptor.get("DomicilioFiscalReceptor")
+        datos["rfc_receptor"] = _attr(receptor, "Rfc")
+        datos["nombre_receptor"] = _attr(receptor, "Nombre")
+        datos["uso_cfdi"] = _attr(receptor, "UsoCFDI")
+        datos["regimen_receptor"] = _attr(receptor, "RegimenFiscalReceptor")
+        datos["domicilio_fiscal"] = _attr(receptor, "DomicilioFiscalReceptor")
         datos["receptor"] = {
             "rfc": datos["rfc_receptor"],
             "nombre": datos["nombre_receptor"],
@@ -128,20 +147,25 @@ def parsear_xml_sat(contenido_xml: str) -> dict:
         }
 
     conceptos_node = root.find(f"{{{ns}}}Conceptos")
+    if conceptos_node is None:
+        conceptos_node = _find_by_local(root, "Conceptos")
     if conceptos_node is not None:
-        for concepto in conceptos_node.findall(f"{{{ns}}}Concepto"):
+        conceptos = conceptos_node.findall(f"{{{ns}}}Concepto")
+        if not conceptos:
+            conceptos = _findall_by_local(conceptos_node, "Concepto")
+        for concepto in conceptos:
             datos["conceptos"].append(
                 {
-                    "clave_prod_serv": concepto.get("ClaveProdServ"),
-                    "descripcion": concepto.get("Descripcion"),
-                    "clave_unidad": concepto.get("ClaveUnidad"),
-                    "no_identificacion": concepto.get("NoIdentificacion"),
-                    "objeto_imp": concepto.get("ObjetoImp"),
-                    "cantidad": float(concepto.get("Cantidad", 1)),
-                    "unidad": concepto.get("Unidad", ""),
-                    "valor_unitario": float(concepto.get("ValorUnitario", 0)),
-                    "importe": float(concepto.get("Importe", 0)),
-                    "descuento": float(concepto.get("Descuento", 0)),
+                    "clave_prod_serv": _attr(concepto, "ClaveProdServ"),
+                    "descripcion": _attr(concepto, "Descripcion"),
+                    "clave_unidad": _attr(concepto, "ClaveUnidad"),
+                    "no_identificacion": _attr(concepto, "NoIdentificacion"),
+                    "objeto_imp": _attr(concepto, "ObjetoImp"),
+                    "cantidad": float(_attr(concepto, "Cantidad") or 1),
+                    "unidad": _attr(concepto, "Unidad") or "",
+                    "valor_unitario": float(_attr(concepto, "ValorUnitario") or 0),
+                    "importe": float(_attr(concepto, "Importe") or 0),
+                    "descuento": float(_attr(concepto, "Descuento") or 0),
                 }
             )
 

@@ -31,3 +31,25 @@ def test_parsea_receptor_y_todos_los_datos_de_conceptos():
     assert datos["concepto_completo"] == "Consultoria contable | Servicio de hosting"
     assert datos["conceptos"][0]["clave_unidad"] == "E48"
     assert datos["conceptos"][1]["descripcion"] == "Servicio de hosting"
+
+
+CFDI_SIN_PREFIJO = """<?xml version="1.0" encoding="UTF-8"?>
+<Comprobante xmlns="http://www.sat.gob.mx/cfd/4" Version="4.0"
+    Fecha="2026-09-07T12:00:00" TipoDeComprobante="I" SubTotal="100" Total="116">
+  <Emisor Rfc="AAA010101AAA" Nombre="Emisor SA" RegimenFiscal="601" />
+  <Receptor Rfc="BBB010101BBB" Nombre="Cliente XYZ" UsoCFDI="G03"
+      RegimenFiscalReceptor="601" DomicilioFiscalReceptor="01000" />
+  <Conceptos>
+    <Concepto ClaveProdServ="10101500" Cantidad="1" ClaveUnidad="E48"
+        Descripcion="Producto de prueba" ValorUnitario="100" Importe="100" ObjetoImp="02" />
+  </Conceptos>
+</Comprobante>"""
+
+
+def test_parsea_conceptos_y_receptor_sin_prefijo_cfdi():
+    datos = parsear_xml_sat(CFDI_SIN_PREFIJO)
+    assert datos["nombre_emisor"] == "Emisor SA"
+    assert datos["nombre_receptor"] == "Cliente XYZ"
+    assert datos["receptor"]["nombre"] == "Cliente XYZ"
+    assert datos["concepto_principal"] == "Producto de prueba"
+    assert datos["conceptos"][0]["descripcion"] == "Producto de prueba"
