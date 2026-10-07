@@ -800,19 +800,55 @@ const ResumenSatPanel = ({ data, loading, bloqueExpandido, onToggleBloque }) => 
   const declaraciones = data.declaraciones || [];
   const sugerencias = data.sugerencias_pago || [];
   const obligaciones = data.obligaciones_regimen || {};
+    const noAplicables = data.impuestos_no_aplicables || [];
+    const aplicables = data.impuestos_aplicables || [];
+    const totales = data.totales || {};
+    const acciones = data.acciones || [];
+    const totalPagar = totales.total_a_pagar ?? sugerencias
+      .filter((s) => (s.accion || 'pagar') === 'pagar')
+      .reduce((acc, s) => acc + Number(s.monto ?? s.monto_estimado ?? 0), 0);
 
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
-        {data.aviso}
+    return (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
+          {data.aviso}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="ISR a cargo" value={money(impuestos.isr?.a_cargo)} tone="amber" />
-        <Metric label="IVA a cargo" value={money(impuestos.iva?.a_cargo)} tone="rose" />
-        <Metric label="IVA a favor" value={money(impuestos.iva?.a_favor)} tone="emerald" />
-        <Metric label="Retenciones" value={money(impuestos.retenciones?.total)} tone="sky" />
-      </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <Metric label="ISR a cargo" value={money(impuestos.isr?.a_cargo)} tone="amber" />
+          <Metric label="IVA a cargo" value={money(impuestos.iva?.a_cargo)} tone="rose" />
+          <Metric label="IVA a favor" value={money(impuestos.iva?.a_favor)} tone="emerald" />
+          <Metric label="Retenciones" value={money(impuestos.retenciones?.total)} tone="sky" />
+          <Metric label="Total a pagar" value={money(totalPagar)} tone="emerald" />
+        </div>
+
+        {(aplicables.length > 0 || noAplicables.length > 0) && (
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Obligaciones que aplican</p>
+              <ul className="mt-2 space-y-1 text-sm text-slate-200">
+                {(aplicables.length ? aplicables : [{ nombre: 'ISR' }, { nombre: 'IVA' }]).map((i) => (
+                  <li key={i.clave || i.nombre}>• {i.nombre}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No aplican en este régimen</p>
+              {noAplicables.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">Ninguno identificado.</p>
+              ) : (
+                <ul className="mt-2 space-y-2 text-sm text-slate-300">
+                  {noAplicables.map((i) => (
+                    <li key={i.clave}>
+                      <span className="font-bold text-slate-200">{i.nombre}</span>
+                      {i.motivo && <span className="block text-xs text-slate-500">{i.motivo}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
 
       <ExpandBlock
         id="impuestos"
@@ -882,7 +918,7 @@ const ResumenSatPanel = ({ data, loading, bloqueExpandido, onToggleBloque }) => 
       <ExpandBlock
         id="pagos"
         title="Sugerencias de pago"
-        subtitle="Estimaciones para planear enteros al SAT"
+              subtitle={`Total estimado a pagar: ${money(totalPagar)}`}
         open={bloqueExpandido === 'pagos'}
         onToggle={onToggleBloque}
       >
@@ -894,7 +930,7 @@ const ResumenSatPanel = ({ data, loading, bloqueExpandido, onToggleBloque }) => 
               <div key={s.concepto} className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-bold text-white">{s.concepto}</p>
-                  <p className="text-sm font-black text-emerald-300">{money(s.monto_estimado)}</p>
+                        <p className="text-sm font-black text-emerald-300">{money(s.monto ?? s.monto_estimado)}</p>
                 </div>
                 <p className="mt-1 text-xs text-slate-400">{s.nota}</p>
                 {s.vencimiento && (
@@ -902,12 +938,28 @@ const ResumenSatPanel = ({ data, loading, bloqueExpandido, onToggleBloque }) => 
                 )}
               </div>
             ))}
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 flex items-center justify-between">
+                    <p className="text-sm font-bold text-emerald-100">Total a pagar (estimado)</p>
+                    <p className="text-base font-black text-emerald-300">{money(totalPagar)}</p>
+                  </div>
+                </div>
+              )}
+              {acciones.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Acciones recomendadas</p>
+                  {acciones.map((a) => (
+                    <div key={a.tipo} className="rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-xs text-slate-300">
+                      <span className="font-bold text-white">{a.titulo}</span>
+                      {a.monto > 0 && <span className="ml-2 text-emerald-300">{money(a.monto)}</span>}
+                      {a.vencimiento && <span className="ml-2 text-amber-200">· vence {a.vencimiento}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ExpandBlock>
           </div>
-        )}
-      </ExpandBlock>
-    </div>
-  );
-};
+        );
+      };
 
 const SourceCard = ({ title, rows }) => (
   <div className="border border-slate-800 bg-slate-900 p-4">

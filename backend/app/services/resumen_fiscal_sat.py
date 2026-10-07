@@ -8,7 +8,11 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.core.sat_fiscal import SAT_REGIMEN_RULES, SatRegimenEnum
+from app.core.sat_fiscal import (
+    SAT_REGIMEN_RULES,
+    SatRegimenEnum,
+    impuestos_aplicables_regimen,
+)
 from app.models.empresa import Empresa
 from app.services.calculos_fiscales import calcular_isr_provisional, calcular_iva_provisional
 
@@ -32,10 +36,28 @@ def _periodo_siguiente(mes: int, anio: int) -> tuple[int, int]:
     return mes + 1, anio
 
 
-def _regimen_rules(empresa: Empresa | None) -> dict:
+def _regimen_clave(empresa: Empresa | None) -> str:
+    """Normaliza la clave SAT del regimen (soporta Enum ORM o string crudo)."""
     if not empresa or not empresa.regimen_fiscal:
+        return ""
+    raw = empresa.regimen_fiscal
+    if hasattr(raw, "value"):
+        return str(raw.value).strip()
+    text = str(raw).strip()
+    # str(Enum) a veces devuelve "SatRegimenEnum.nombre"
+    if "." in text and not text[0].isdigit():
+        name = text.split(".")[-1]
+        try:
+            return SatRegimenEnum[name].value
+        except KeyError:
+            pass
+    return text
+
+
+def _regimen_rules(empresa: Empresa | None) -> dict:
+    clave = _regimen_clave(empresa)
+    if not clave:
         return {}
-    clave = str(empresa.regimen_fiscal).strip()
     try:
         return SAT_REGIMEN_RULES.get(SatRegimenEnum(clave), {})
     except ValueError:
@@ -48,7 +70,7 @@ def _regimen_rules(empresa: Empresa | None) -> dict:
 
 
 def _periodicidad_declaraciones(empresa: Empresa | None, rules: dict) -> list[dict]:
-    regimen = str(getattr(empresa, "regimen_fiscal", "") or "")
+    regimen = _regimen_clave(empresa)
     items = [
         {
             "tipo": "IVA",
@@ -130,41 +152,106 @@ def construir_resumen_fiscal_sat(
         or 0
     )))
 
-    declaraciones = _periodicidad_declaraciones(empresa, rules)
-    sugerencias_pago: list[dict] = []
+    impuestos_reg = impuestos_aplicables_regimen(rules)
+    flags = impuestos_reg["flags"]
 
-    if isr_a_cargo > 0:
-        sugerencias_pago.append({
+    if not flags.get("isr", True):
+        isr_a_cargo = 0.0
+    if not flags.get("iva", True):
+        iva_a_cargo = 0.0
+        iva_a_favor = 0.0
+
+    declaraciones = _periodicidad_declaraciones(empresa, rules)
+    if not flags.get("iva", True):
+        declaraciones = [d for d in declaraciones if d.get("tipo") not in {"IVA", "ISR+IVA"}]
+    if not flags.get("isr", True):
+        declaraciones = [d for d in declaraciones if d.get("tipo") not in {"ISR", "ISR+IVA", "ISR anual"}]
+    if not flags.get("diot", False):
+        declaraciones = [d for d in declaraciones if d.get("tipo") != "DIOT"]
+
+    sugerencias_pago: list[dict] = []
+    acciones: list[dict] = []
+
+    if flags.get("isr", True) and isr_a_cargo > 0:
+        item = {
             "concepto": "ISR provisional",
+            "clave": "isr",
+            "monto": round(isr_a_cargo, 2),
             "monto_estimado": round(isr_a_cargo, 2),
             "vencimiento": vencimiento.isoformat(),
             "periodicidad": "mensual",
+            "accion": "pagar",
             "nota": "Estimación con base en CFDIs y parámetros del régimen. Verifica en el portal del SAT.",
+        }
+        sugerencias_pago.append(item)
+        acciones.append({
+            "tipo": "pago_provisional_isr",
+            "titulo": "Registrar / pagar ISR provisional",
+            "monto": item["monto"],
+            "vencimiento": item["vencimiento"],
         })
-    if iva_a_cargo > 0:
-        sugerencias_pago.append({
+    if flags.get("iva", True) and iva_a_cargo > 0:
+        item = {
             "concepto": "IVA a cargo",
+            "clave": "iva",
+            "monto": round(iva_a_cargo, 2),
             "monto_estimado": round(iva_a_cargo, 2),
             "vencimiento": vencimiento.isoformat(),
             "periodicidad": "mensual",
+            "accion": "pagar",
             "nota": "IVA trasladado menos acreditable del periodo (informativo).",
+        }
+        sugerencias_pago.append(item)
+        acciones.append({
+            "tipo": "pago_iva",
+            "titulo": "Pagar IVA a cargo",
+            "monto": item["monto"],
+            "vencimiento": item["vencimiento"],
         })
-    elif iva_a_favor > 0:
-        sugerencias_pago.append({
+    elif flags.get("iva", True) and iva_a_favor > 0:
+        item = {
             "concepto": "IVA a favor",
+            "clave": "iva_favor",
+            "monto": round(iva_a_favor, 2),
             "monto_estimado": round(iva_a_favor, 2),
             "vencimiento": None,
             "periodicidad": "mensual",
+            "accion": "acreditar",
             "nota": "Saldo a favor estimado; puedes acreditarlo en periodos siguientes o solicitar devolución.",
+        }
+        sugerencias_pago.append(item)
+        acciones.append({
+            "tipo": "iva_a_favor",
+            "titulo": "Revisar IVA a favor",
+            "monto": item["monto"],
+            "vencimiento": None,
         })
 
     if ret_isr > 0 or ret_iva > 0:
-        sugerencias_pago.append({
+        item = {
             "concepto": "Entero de retenciones",
+            "clave": "retenciones",
+            "monto": round(ret_isr + ret_iva, 2),
             "monto_estimado": round(ret_isr + ret_iva, 2),
             "vencimiento": vencimiento.isoformat(),
             "periodicidad": "mensual",
+            "accion": "pagar",
             "nota": f"ISR retenido ${ret_isr:,.2f} + IVA retenido ${ret_iva:,.2f} (informativo).",
+        }
+        sugerencias_pago.append(item)
+        acciones.append({
+            "tipo": "entero_retenciones",
+            "titulo": "Enterar retenciones",
+            "monto": item["monto"],
+            "vencimiento": item["vencimiento"],
+        })
+
+    if flags.get("aplica_diot") and any(d.get("tipo") == "DIOT" for d in declaraciones):
+        acciones.append({
+            "tipo": "presentar_diot",
+            "titulo": "Presentar DIOT del periodo",
+            "monto": 0,
+            "vencimiento": vencimiento.isoformat(),
         })
 
     for decl in declaraciones:
@@ -179,6 +266,15 @@ def construir_resumen_fiscal_sat(
             decl["proximo_vencimiento"] = decl.get("mes_presentacion")
             decl["periodo_corresponde"] = f"Ejercicio {anio}"
 
+    total_a_pagar = round(
+        sum(
+            float(s.get("monto") or 0)
+            for s in sugerencias_pago
+            if s.get("accion") == "pagar"
+        ),
+        2,
+    )
+
     return {
         "aviso": (
             "Este resumen es solo informativo y no sustituye el cálculo oficial del SAT. "
@@ -192,16 +288,25 @@ def construir_resumen_fiscal_sat(
             "regimen_fiscal": getattr(empresa, "regimen_fiscal", None),
         },
         "periodo": {"mes": mes, "anio": anio, "etiqueta": f"{MESES[mes]} {anio}"},
+        "totales": {
+            "isr_a_cargo": round(isr_a_cargo, 2),
+            "iva_a_cargo": round(iva_a_cargo, 2),
+            "iva_a_favor": round(iva_a_favor, 2),
+            "retenciones": round(ret_isr + ret_iva, 2),
+            "total_a_pagar": total_a_pagar,
+        },
         "impuestos": {
             "isr": {
                 "resumen": "Pago provisional estimado según régimen configurado.",
                 "a_cargo": round(isr_a_cargo, 2),
+                "aplica": flags.get("isr", True),
                 "detalle": isr,
             },
             "iva": {
                 "resumen": "IVA del periodo = trasladado − acreditable − retenciones (simplificado).",
                 "a_cargo": round(iva_a_cargo, 2),
                 "a_favor": round(iva_a_favor, 2),
+                "aplica": flags.get("iva", True),
                 "detalle": iva,
             },
             "retenciones": {
@@ -211,6 +316,9 @@ def construir_resumen_fiscal_sat(
                 "total": round(ret_isr + ret_iva, 2),
             },
         },
+        "impuestos_aplicables": impuestos_reg["aplicables"],
+        "impuestos_no_aplicables": impuestos_reg["no_aplicables"],
+        "acciones": acciones,
         "declaraciones": declaraciones,
         "sugerencias_pago": sugerencias_pago,
         "obligaciones_regimen": {
@@ -220,5 +328,10 @@ def construir_resumen_fiscal_sat(
             "exige_diot": bool(rules.get("exige_diot")),
             "exige_contabilidad_electronica": bool(rules.get("exige_contabilidad_electronica")),
             "permite_deducciones_isr": bool(rules.get("permite_deducciones_isr")),
+            "aplica_isr": flags.get("isr", True),
+            "aplica_iva": flags.get("iva", True),
+            "aplica_diot": flags.get("diot", False),
+            "aplica_ieps": flags.get("ieps", False),
+            "aplica_ish": flags.get("ish", False),
         },
     }

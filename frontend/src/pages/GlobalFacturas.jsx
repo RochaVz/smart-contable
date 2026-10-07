@@ -81,27 +81,39 @@ const GlobalFacturas = () => {
     return [...anios].sort((a, b) => b - a);
   }, [facturas, hoy]);
 
-  const proveedoresDisponibles = useMemo(() => [...new Set(
-    facturas
-      .map((factura) => factura.emisor || factura.nombre_emisor || '')
-      .filter(Boolean)
-  )].sort((a, b) => a.localeCompare(b, 'es')), [facturas]);
+  const contraparteFactura = (f) =>
+      f.cliente_o_proveedor
+      || f.contraparte
+      || (f.tipo_operacion === 'VENTA'
+        ? (f.nombre_receptor || f.receptor)
+        : (f.nombre_emisor || f.emisor))
+      || f.nombre_emisor
+      || f.emisor
+      || '';
 
-  const facturasFiltradas = useMemo(() => {
-    const term = searchTerm.toLowerCase();
-    return facturas.filter((f) => {
-      const periodo = getPeriodoFactura(f);
-      const emisor = f.emisor || f.nombre_emisor || '';
-      const tipo = f.tipo_operacion || f.tipo_comprobante || '';
-      return periodo?.mes === mesFiltro
-        && periodo?.anio === anioFiltro
-        && (!proveedorFiltro || emisor === proveedorFiltro)
-        && (tipoFiltro === 'todos' || tipo === tipoFiltro);
-    }).filter(f => 
-      (typeof f.empresa === 'string' ? f.empresa : f.empresa?.razon_social || '').toLowerCase().includes(term) ||
-      (f.emisor || f.nombre_emisor || '').toLowerCase().includes(term)
-    ).sort((a, b) => getFechaFactura(b).localeCompare(getFechaFactura(a)));
-  }, [facturas, searchTerm, mesFiltro, anioFiltro, proveedorFiltro, tipoFiltro]);
+    const proveedoresDisponibles = useMemo(() => [...new Set(
+      facturas
+        .map((factura) => contraparteFactura(factura) || factura.nombre_emisor || factura.emisor || '')
+        .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b, 'es')), [facturas]);
+
+    const facturasFiltradas = useMemo(() => {
+      const term = searchTerm.toLowerCase();
+      return facturas.filter((f) => {
+        const periodo = getPeriodoFactura(f);
+        const contraparte = contraparteFactura(f);
+        const tipo = f.tipo_operacion || f.tipo_comprobante || '';
+        return periodo?.mes === mesFiltro
+          && periodo?.anio === anioFiltro
+          && (!proveedorFiltro || contraparte === proveedorFiltro)
+          && (tipoFiltro === 'todos' || tipo === tipoFiltro);
+      }).filter(f => 
+        (typeof f.empresa === 'string' ? f.empresa : f.empresa?.razon_social || '').toLowerCase().includes(term) ||
+        (contraparteFactura(f) || '').toLowerCase().includes(term) ||
+        (f.nombre_emisor || f.emisor || '').toLowerCase().includes(term) ||
+        (f.nombre_receptor || f.receptor || '').toLowerCase().includes(term)
+      ).sort((a, b) => getFechaFactura(b).localeCompare(getFechaFactura(a)));
+    }, [facturas, searchTerm, mesFiltro, anioFiltro, proveedorFiltro, tipoFiltro]);
 
   const facturasPorFecha = useMemo(() => facturasFiltradas.reduce((acc, factura) => {
     const fecha = getFechaFactura(factura) || 'Sin fecha';
@@ -113,17 +125,19 @@ const GlobalFacturas = () => {
   const handleExportCsv = () => {
     const rows = facturasFiltradas.map((f) => ({
       Empresa: typeof f.empresa === 'string' ? f.empresa : f.empresa?.razon_social || '',
-      Emisor: f.emisor || f.nombre_emisor || '',
+          Emisor: f.nombre_emisor || f.emisor || '',
       RFCEmisor: f.rfc_emisor || '',
-      Receptor: f.nombre_receptor || '',
+          Receptor: f.nombre_receptor || f.receptor || '',
       RFCReceptor: f.rfc_receptor || '',
-      Tipo: f.tipo_operacion || f.tipo_comprobante || '',
-      Fecha: f.fecha || f.fecha_emision || '',
-      Subtotal: f.subtotal || '',
-      IVA: f.iva || f.iva_trasladado || '',
-      Total: f.total,
-      UUID: f.uuid,
-    }));
+          Contraparte: contraparteFactura(f),
+          Concepto: f.concepto || '',
+          Tipo: f.tipo_operacion || f.tipo_comprobante || '',
+          Fecha: f.fecha || f.fecha_emision || '',
+          Subtotal: f.subtotal || '',
+          IVA: f.iva || f.iva_trasladado || '',
+          Total: f.total,
+          UUID: f.uuid,
+        }));
 
     downloadCsv('facturas_globales.csv', rows);
   };
@@ -209,7 +223,7 @@ const GlobalFacturas = () => {
             <tr>
               <th className="p-6">Fecha</th>
               <th className="p-6">Empresa</th>
-              <th className="p-6">Emisor</th>
+              <th className="p-6">Emisor / Receptor</th>
               <th className="p-6 text-center">Tipo</th>
               <th className="p-6 text-right">Monto</th>
             </tr>
@@ -235,19 +249,30 @@ const GlobalFacturas = () => {
                     <tr key={f.id} className="hover:bg-slate-800/50 transition-colors">
                       <td className="p-6 text-sm text-slate-400">{getFechaFactura(f)}</td>
                       <td className="p-6 text-blue-400 font-bold">{typeof f.empresa === 'string' ? f.empresa : f.empresa?.razon_social}</td>
-                      <td className="p-6">{f.emisor || f.nombre_emisor}</td>
-                      <td className="p-6 text-center">
-                        <span className={`px-2 py-1 rounded text-[10px] font-black ${f.tipo_operacion === 'VENTA' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                          {f.tipo_operacion}
-                        </span>
-                      </td>
-                      <td className="p-6 text-right font-black">${f.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                    </tr>
-                  ))}
-                </Fragment>
-              ))
-            )}
-          </tbody>
+                                    <td className="p-6">
+                                      <p className="font-medium text-white">{contraparteFactura(f)}</p>
+                                      <p className="mt-1 text-[11px] text-slate-500">
+                                        Emisor: {f.nombre_emisor || f.emisor || '—'}
+                                      </p>
+                                      <p className="text-[11px] text-slate-500">
+                                        Receptor: {f.nombre_receptor || f.receptor || '—'}
+                                      </p>
+                                      {f.concepto && (
+                                        <p className="mt-1 line-clamp-2 text-xs font-bold text-slate-300">{f.concepto}</p>
+                                      )}
+                                    </td>
+                                    <td className="p-6 text-center">
+                                      <span className={`px-2 py-1 rounded text-[10px] font-black ${f.tipo_operacion === 'VENTA' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                                        {f.tipo_operacion}
+                                      </span>
+                                    </td>
+                                    <td className="p-6 text-right font-black">${f.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                  </tr>
+                                ))}
+                              </Fragment>
+                            ))
+                          )}
+                        </tbody>
         </table>
       </div>
     </div>

@@ -46,3 +46,35 @@ def test_construir_resumen_fiscal_sat_estructura(monkeypatch):
     assert any(s["concepto"] == "IVA a cargo" for s in resumen["sugerencias_pago"])
     # Vencimiento aproximado: día 17 del mes siguiente
     assert resumen["declaraciones"][0]["proximo_vencimiento"] == "2026-04-17"
+    assert resumen["totales"]["total_a_pagar"] == 2450.5  # 1500.5 + 800 + 150 retenciones
+    assert any(i["clave"] == "ish" for i in resumen["impuestos_no_aplicables"])
+    assert resumen["obligaciones_regimen"]["aplica_ish"] is False
+    assert any(a["tipo"] == "pago_provisional_isr" for a in resumen["acciones"])
+
+
+def test_resumen_sueldos_no_aplica_iva_ni_ish(monkeypatch):
+    empresa = SimpleNamespace(
+        id=2,
+        razon_social="Empleado",
+        rfc="XAXX010101000",
+        tipo_persona="fisica",
+        regimen_fiscal="605",
+        nombre="Empleado",
+    )
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = empresa
+    monkeypatch.setattr(
+        "app.services.resumen_fiscal_sat.calcular_isr_provisional",
+        lambda *_a, **_k: {"isr_a_cargo": 200, "isr_retenido": 0},
+    )
+    monkeypatch.setattr(
+        "app.services.resumen_fiscal_sat.calcular_iva_provisional",
+        lambda *_a, **_k: {"iva_a_cargo": 999, "iva_a_favor": 0, "iva_retenido": 0},
+    )
+
+    resumen = construir_resumen_fiscal_sat(db, empresa_id=2, mes=1, anio=2026)
+    assert resumen["impuestos"]["iva"]["aplica"] is False
+    assert resumen["impuestos"]["iva"]["a_cargo"] == 0
+    assert any(i["clave"] == "ish" for i in resumen["impuestos_no_aplicables"])
+    assert not any(d["tipo"] == "IVA" for d in resumen["declaraciones"])
+    assert not any(s["concepto"] == "IVA a cargo" for s in resumen["sugerencias_pago"])

@@ -99,6 +99,28 @@ const getConceptoFactura = (factura) => {
   return `${descripciones[0]} (+${descripciones.length - 1} más)`;
 };
 
+/** Contraparte visible: cliente en ventas, proveedor en compras. */
+const getContraparteFactura = (factura) => {
+  if (esIngreso(factura)) {
+    return (
+      factura.cliente_o_proveedor
+      || factura.contraparte
+      || factura.nombre_cliente
+      || factura.nombre_receptor
+      || factura.receptor
+      || '—'
+    );
+  }
+  return (
+    factura.cliente_o_proveedor
+    || factura.contraparte
+    || factura.nombre_proveedor
+    || factura.nombre_emisor
+    || factura.emisor
+    || '—'
+  );
+};
+
 const agruparPorFecha = (lista) => lista.reduce((acc, factura) => {
   const fecha = getFechaFactura(factura) || 'Sin fecha';
   if (!acc[fecha]) acc[fecha] = [];
@@ -361,10 +383,12 @@ const CompanyDetail = () => {
   const facturasProcesadas = useMemo(() => {
     const term = searchTerm.toLowerCase();
     return [...facturasPeriodo].filter((f) =>
-      (f.emisor || '').toLowerCase().includes(term)
-      || (f.uuid || '').toLowerCase().includes(term)
-      || getConceptoFactura(f).toLowerCase().includes(term)
-    ).sort((a, b) => {
+          (getContraparteFactura(f) || '').toLowerCase().includes(term)
+          || (f.nombre_emisor || f.emisor || '').toLowerCase().includes(term)
+          || (f.nombre_receptor || f.receptor || '').toLowerCase().includes(term)
+          || (f.uuid || '').toLowerCase().includes(term)
+          || getConceptoFactura(f).toLowerCase().includes(term)
+        ).sort((a, b) => {
       if (sortConfig.key === 'fecha') {
         const dateA = parseFechaFactura(a)?.getTime() || 0;
         const dateB = parseFechaFactura(b)?.getTime() || 0;
@@ -434,23 +458,53 @@ const CompanyDetail = () => {
     const rows = facturasVisibles.map((f) => ({
       Fecha: f.fecha,
       Tipo: esIngreso(f) ? 'Ingreso' : 'Egreso',
-      Emisor: f.emisor,
-      Concepto: getConceptoFactura(f),
-      RFC: f.rfc_emisor,
-      Cliente: f.nombre_cliente || '',
-      FormaPago: f.forma_pago_label || f.forma_pago || '',
-      MetodoPago: f.metodo_pago || '',
-      Subtotal: f.subtotal,
-      IVA: f.iva,
-      IVARetenido: f.iva_retenido,
-      ISRRetenido: f.isr_retenido,
-      Total: f.total,
-      CuentaContable: f.cuenta_contable,
-      TienePoliza: f.tiene_poliza ? 'Si' : 'No',
-      UUID: f.uuid,
-    }));
-    downloadCsv(`facturas_empresa_${id}.csv`, rows);
-  };
+          Emisor: f.nombre_emisor || f.emisor,
+          Receptor: f.nombre_receptor || f.receptor,
+          Contraparte: getContraparteFactura(f),
+          Concepto: getConceptoFactura(f),
+          RFC: f.rfc_emisor,
+          Cliente: f.nombre_cliente || f.nombre_receptor || '',
+          FormaPago: f.forma_pago_label || f.forma_pago || '',
+          MetodoPago: f.metodo_pago || '',
+          Subtotal: f.subtotal,
+          IVA: f.iva,
+          IVARetenido: f.iva_retenido,
+          ISRRetenido: f.isr_retenido,
+          Total: f.total,
+          CuentaContable: f.cuenta_contable,
+          TienePoliza: f.tiene_poliza ? 'Si' : 'No',
+          UUID: f.uuid,
+        }));
+        downloadCsv(`facturas_empresa_${id}.csv`, rows);
+      };
+
+      const handlePurgarPeriodo = async () => {
+        if (!id || String(id).startsWith('local-')) {
+          toast.error('La purga de periodo solo está disponible en el servidor');
+          return;
+        }
+        const ok = window.confirm(
+          `¿Eliminar todos los datos de ${String(mesFiltro).padStart(2, '0')}/${anioFiltro}?\n\n`
+          + 'Se borrarán facturas, pólizas y movimientos bancarios del mes para poder volver a cargar XMLs o PDFs.',
+        );
+        if (!ok) return;
+        try {
+          const res = await api.delete(
+            `/empresas/${id}/periodo?mes=${mesFiltro}&anio=${anioFiltro}`,
+          );
+          toast.success(res.data?.mensaje || 'Periodo limpiado');
+          await handleRefresh?.();
+          // recargar datos del negocio
+          const [facturasRes, empresaRes] = await Promise.all([
+            api.get(`/facturas/?empresa_id=${id}`),
+            api.get(`/empresas/${id}`),
+          ]);
+          setFacturas(facturasRes.data || []);
+          setEmpresa(empresaRes.data);
+        } catch (err) {
+          toast.error(err.response?.data?.detail || 'No se pudo limpiar el periodo');
+        }
+      };
 
   const statsIva = useMemo(() => facturasPeriodo.reduce((acc, f) => {
     const total = toNumber(f.total);
@@ -510,11 +564,16 @@ const CompanyDetail = () => {
         </span>
       </td>
       <td className="p-4">
-        <p className="font-medium text-white">{f.emisor}</p>
-        <p className="cfdi-concepto mt-1 line-clamp-2 text-sm font-bold text-slate-300">
-          {getConceptoFactura(f)}
-        </p>
-      </td>
+              <p className="font-medium text-white">{getContraparteFactura(f)}</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                {esIngreso(f)
+                  ? `Emisor: ${f.nombre_emisor || f.emisor || '—'} · Receptor: ${f.nombre_receptor || f.receptor || '—'}`
+                  : `Emisor: ${f.nombre_emisor || f.emisor || '—'} · Receptor: ${f.nombre_receptor || f.receptor || '—'}`}
+              </p>
+              <p className="cfdi-concepto mt-1 line-clamp-2 text-sm font-bold text-slate-300">
+                {getConceptoFactura(f)}
+              </p>
+            </td>
       <td className={`p-4 text-right font-black ${esIngreso(f) ? 'text-emerald-400' : 'text-rose-400'}`}>
         {esIngreso(f) ? '+' : '−'}${f.total.toLocaleString()}
       </td>
@@ -562,10 +621,13 @@ const CompanyDetail = () => {
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-bold text-slate-500">{formatFecha(getFechaFactura(f))}</p>
-          <h4 className="mt-1 line-clamp-2 break-words text-sm font-black text-white">{f.emisor}</h4>
-          <p className="cfdi-concepto mt-1 line-clamp-2 text-sm font-bold text-slate-300">
-            {getConceptoFactura(f)}
+          <h4 className="mt-1 line-clamp-2 break-words text-sm font-black text-white">{getContraparteFactura(f)}</h4>
+                    <p className="mt-0.5 text-[10px] text-slate-500">
+                      Emisor: {f.nombre_emisor || f.emisor || '—'} · Receptor: {f.nombre_receptor || f.receptor || '—'}
           </p>
+                    <p className="cfdi-concepto mt-1 line-clamp-2 text-sm font-bold text-slate-300">
+                      {getConceptoFactura(f)}
+                    </p>
         </div>
         <span
           className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-black uppercase ${
@@ -1044,7 +1106,7 @@ const CompanyDetail = () => {
         if (!acc[rfc]) {
           acc[rfc] = {
             rfc,
-            nombre: factura.emisor || 'Proveedor sin nombre',
+            nombre: getContraparteFactura(factura) || factura.nombre_emisor || factura.emisor || 'Proveedor sin nombre',
             facturas: 0,
             subtotal: 0,
             iva: 0,
@@ -1061,7 +1123,7 @@ const CompanyDetail = () => {
     const clientes = facturasPeriodo
       .filter(esIngreso)
       .reduce((acc, factura) => {
-        const nombre = factura.nombre_cliente || factura.emisor || 'Cliente sin nombre';
+        const nombre = getContraparteFactura(factura) || factura.nombre_cliente || factura.nombre_receptor || 'Cliente sin nombre';
         if (!acc[nombre]) acc[nombre] = { nombre, facturas: 0, total: 0 };
         acc[nombre].facturas += 1;
         acc[nombre].total += toNumber(factura.total);
@@ -1320,17 +1382,27 @@ const CompanyDetail = () => {
                 </div>
               </div>
 
-              {/* Grupo de Exportación Integrado */}
-              <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/90 p-1">
-                <div className="relative flex items-center pl-2 pr-1">
-                  <Download className="h-3.5 w-3.5 text-emerald-400 shrink-0 mr-1.5" />
-                  <select
-                    id="export-type"
-                    aria-label="Tipo de datos a exportar"
-                    value={tipoExportacion}
-                    onChange={(e) => setTipoExportacion(e.target.value)}
-                    className="appearance-none bg-transparent pr-4 text-xs font-bold text-white outline-none cursor-pointer hover:text-emerald-400 transition-colors"
-                  >
+                              <button
+                                type="button"
+                                onClick={handlePurgarPeriodo}
+                                title="Eliminar datos del mes para reimportar XMLs/PDFs"
+                                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-200 hover:bg-rose-500/20"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Limpiar mes
+                              </button>
+
+                              {/* Grupo de Exportación Integrado */}
+                              <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/90 p-1">
+                                <div className="relative flex items-center pl-2 pr-1">
+                                  <Download className="h-3.5 w-3.5 text-emerald-400 shrink-0 mr-1.5" />
+                                  <select
+                                    id="export-type"
+                                    aria-label="Tipo de datos a exportar"
+                                    value={tipoExportacion}
+                                    onChange={(e) => setTipoExportacion(e.target.value)}
+                                    className="appearance-none bg-transparent pr-4 text-xs font-bold text-white outline-none cursor-pointer hover:text-emerald-400 transition-colors"
+                                  >
                     <option value="todo" className="bg-slate-900 text-white">Todo el negocio</option>
                     <option value="resumen" className="bg-slate-900 text-white">Resumen</option>
                     <option value="empresa" className="bg-slate-900 text-white">Datos del negocio</option>

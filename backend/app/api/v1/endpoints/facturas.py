@@ -702,17 +702,33 @@ def listar_facturas(
                 datos_xml,
                 fallback=getattr(f, "concepto", None),
             )
+            if not concepto:
+                # Mensaje claro: el listado no baja S3; el detalle si puede completar.
+                concepto = (
+                    "Sin concepto en catalogo local — abre el detalle para leer el XML completo"
+                    if getattr(f, "archivo_s3_key", None)
+                    else "Sin concepto registrado"
+                )
+
+            # Emisor y receptor siempre con los datos fiscales reales del CFDI.
+            # "contraparte" / "cliente_o_proveedor" facilitan la UI de ingresos/egresos.
+            contraparte = f.nombre_receptor if venta else f.nombre_emisor
+            contraparte_rfc = f.rfc_receptor if venta else f.rfc_emisor
 
             respuesta.append({
                 "id": f.id,
                 "uuid": f.uuid,
                 "fecha": str(f.fecha_emision),
                 "tipo_operacion": tipo_operacion,
-                "emisor": entidad_nombre if venta else f.nombre_emisor,
+                "emisor": f.nombre_emisor,
                 "receptor": f.nombre_receptor,
-                "rfc_emisor": entidad_rfc if not venta else f.rfc_emisor,
+                "rfc_emisor": f.rfc_emisor,
                 "rfc_receptor": f.rfc_receptor,
+                "contraparte": contraparte or entidad_nombre,
+                "contraparte_rfc": contraparte_rfc or entidad_rfc,
+                "cliente_o_proveedor": contraparte or entidad_nombre,
                 "nombre_cliente": f.nombre_receptor if venta else None,
+                "nombre_proveedor": f.nombre_emisor if not venta else None,
                 "nombre_emisor": f.nombre_emisor,
                 "nombre_receptor": f.nombre_receptor,
                 "forma_pago": f.forma_pago,
@@ -781,17 +797,22 @@ def detalle_factura(
         db.commit()
 
     contraparte = factura.nombre_receptor if venta else factura.nombre_emisor
+    if not concepto:
+        concepto = "Sin concepto registrado en el XML"
     return {
         "id": factura.id,
         "uuid": factura.uuid,
         "fecha": str(factura.fecha_emision),
         "tipo_operacion": "VENTA" if venta else "GASTO",
-        # Compat: "emisor" en listados/UI representa la contraparte visible.
-        "emisor": contraparte or factura.nombre_emisor,
+        # Emisor/receptor reales del CFDI (no se sustituyen por la contraparte).
+        "emisor": factura.nombre_emisor,
         "receptor": factura.nombre_receptor,
+        "contraparte": contraparte or factura.nombre_emisor,
+        "cliente_o_proveedor": contraparte or factura.nombre_emisor,
         "nombre_emisor": factura.nombre_emisor,
         "nombre_receptor": factura.nombre_receptor,
         "nombre_cliente": factura.nombre_receptor if venta else None,
+        "nombre_proveedor": factura.nombre_emisor if not venta else None,
         "rfc_emisor": factura.rfc_emisor,
         "rfc_receptor": factura.rfc_receptor,
         "forma_pago": {

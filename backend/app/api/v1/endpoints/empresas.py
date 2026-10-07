@@ -31,6 +31,7 @@ from app.services.exportacion_empresa import (  # noqa: F401
     generar_zip_exportacion_empresa,
     generar_csv_consolidado_exportacion,
 )
+from app.services.purga_datos import purgar_datos_operativos_empresa, purgar_periodo_empresa
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -75,9 +76,9 @@ def crear_empresa(
         ).first()
 
         if existe and not existe.activo:
-            # La eliminación de empresas es lógica para conservar el historial
-            # contable. Si el propietario vuelve a registrarla, se restaura el
-            # mismo registro en vez de intentar insertar otro registro.
+            # Reactivacion limpia: se reutiliza el registro pero se elimina el
+            # historial operativo previo para no conservar datos de la baja.
+            purga = purgar_datos_operativos_empresa(db, existe.id)
             existe.razon_social = datos.razon_social
             existe.regimen_fiscal = datos.regimen_fiscal
             existe.tipo_persona = datos.tipo_persona
@@ -89,11 +90,12 @@ def crear_empresa(
             db.refresh(existe)
 
             logger.info(
-                "Empresa reactivada exitosamente",
+                "Empresa reactivada con purga de datos operativos",
                 extra={
                     "empresa_id": existe.id,
                     "rfc": rfc,
                     "user_id": current_user.id,
+                    "purga": purga,
                 },
             )
             return existe
@@ -506,3 +508,46 @@ def desactivar_empresa(
         db.rollback()
         logger.error("Error inesperado al desactivar empresa", exc_info=True)
         raise DatabaseException("Error inesperado al desactivar empresa") from e
+
+# ─────────────────────────────────────────
+# PURGAR PERIODO (mes) PARA REIMPORTAR
+# ─────────────────────────────────────────
+@router.delete(
+    "/{empresa_id}/periodo",
+    summary="Purgar datos de un mes",
+    description=(
+        "Elimina facturas, polizas y movimientos bancarios de un mes/ano "
+        "para permitir volver a parsear XMLs o PDFs."
+    ),
+)
+def purgar_periodo(
+    empresa_id: int,
+    mes: int = Query(..., ge=1, le=12),
+    anio: int = Query(..., ge=2000, le=2100),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    try:
+        validar_empresa_pertenece_usuario(empresa_id, current_user.id, db)
+        resumen = purgar_periodo_empresa(db, empresa_id, mes, anio)
+        db.commit()
+        logger.info(
+            "Periodo purgado",
+            extra={"empresa_id": empresa_id, "mes": mes, "anio": anio, "user_id": current_user.id},
+        )
+        return {
+            "mensaje": f"Datos de {mes:02d}/{anio} eliminados. Puedes volver a cargar XMLs o PDFs.",
+            **resumen,
+        }
+    except ValueError as e:
+        raise DatabaseException(str(e)) from e
+    except (ResourceNotFoundException, DuplicateResourceException):
+        raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error("Error al purgar periodo", exc_info=True)
+        raise DatabaseException("Error al purgar el periodo") from e
+    except Exception as e:
+        db.rollback()
+        logger.error("Error inesperado al purgar periodo", exc_info=True)
+        raise DatabaseException("Error inesperado al purgar el periodo") from e

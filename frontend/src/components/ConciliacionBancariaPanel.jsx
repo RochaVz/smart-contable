@@ -84,11 +84,15 @@ function buildFilas(data) {
 // ─── Componente principal ──────────────────────────────────────────────────────
 const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) => {
   const [bancoId, setBancoId] = useState('');
-  const [bancos, setBancos] = useState([]);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [isPending, startTransition] = useTransition();
+    const [bancoNombre, setBancoNombre] = useState('');
+    const [bancos, setBancos] = useState([]);
+    const [catalogoBancos, setCatalogoBancos] = useState([]);
+    const [cargas, setCargas] = useState([]);
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [eliminandoCargaId, setEliminandoCargaId] = useState(null);
+    const [isPending, startTransition] = useTransition();
 
   // Filtros
   const [filtroEstado, setFiltroEstado] = useState('todos');
@@ -102,28 +106,38 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
   const cargarDatos = useCallback(async (targetMes, targetAnio) => {
     setLoading(true);
     try {
-      const [resBancos, resConciliacion] = await Promise.all([
+        const [resBancos, resCatalogo, resConciliacion, resCargas] = await Promise.all([
         api.get(`/configuracion/comisiones-banco/${empresaId}`).catch(() => ({ data: [] })),
-        api.get(`/conciliacion/resumen?empresa_id=${empresaId}&mes=${targetMes}&anio=${targetAnio}`),
-      ]);
-      const listaBancos = resBancos.data || [];
-      setBancos(listaBancos);
-      setBancoId((prev) => {
-        if (!prev && listaBancos.length > 0) {
-          const def = listaBancos.find((b) => b.es_default) || listaBancos[0];
-          return String(def.id);
-        }
-        return prev;
-      });
-      setData(resConciliacion.data);
-    } catch (err) {
-      const detail = err.response?.data?.detail;
-      toast.error(typeof detail === 'string' ? detail : 'No se pudieron sincronizar los datos');
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [empresaId]);
+          api.get('/conciliacion/bancos-catalogo').catch(() => ({ data: [] })),
+          api.get(`/conciliacion/resumen?empresa_id=${empresaId}&mes=${targetMes}&anio=${targetAnio}`),
+          api.get(`/conciliacion/estados-cuenta?empresa_id=${empresaId}&mes=${targetMes}&anio=${targetAnio}`).catch(() => ({ data: [] })),
+        ]);
+        const listaBancos = resBancos.data || [];
+        const catalogo = resCatalogo.data || [];
+        setBancos(listaBancos);
+        setCatalogoBancos(catalogo);
+        setCargas(Array.isArray(resCargas.data) ? resCargas.data : []);
+        setBancoId((prev) => {
+          if (!prev && listaBancos.length > 0) {
+            const def = listaBancos.find((b) => b.es_default) || listaBancos[0];
+            return String(def.id);
+          }
+          return prev;
+        });
+        setBancoNombre((prev) => {
+          if (prev) return prev;
+          if (catalogo.length > 0) return catalogo[0].nombre;
+          return '';
+        });
+        setData(resConciliacion.data);
+      } catch (err) {
+        const detail = err.response?.data?.detail;
+        toast.error(typeof detail === 'string' ? detail : 'No se pudieron sincronizar los datos');
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    }, [empresaId]);
 
   const [inicializado, setInicializado] = useState(false);
   if (!inicializado && !loading) {
@@ -148,19 +162,40 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
     try {
       const params = new URLSearchParams({ empresa_id: String(empresaId), mes: String(mes), anio: String(anio) });
       if (bancoId) params.set('banco_id', bancoId);
-      const res = await api.post(`/conciliacion/estado-cuenta?${params}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      toast.success(`${res.data.movimientos_nuevos} movimiento(s) cargado(s)`);
-      await cargarDatos(mes, anio);
-    } catch (err) {
-      const detail = err.response?.data?.detail;
-      toast.error(typeof detail === 'string' ? detail : 'No se pudo cargar el estado de cuenta');
-    } finally {
-      setUploading(false);
-      event.target.value = '';
-    }
-  };
+        if (bancoNombre) params.set('banco_nombre', bancoNombre);
+        const res = await api.post(`/conciliacion/estado-cuenta?${params}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const nuevos = res.data.movimientos_nuevos ?? 0;
+        const dups = res.data.duplicados ?? 0;
+        toast.success(`${nuevos} movimiento(s) nuevo(s)${dups ? ` · ${dups} duplicado(s) omitido(s)` : ''}`);
+        await cargarDatos(mes, anio);
+      } catch (err) {
+        const detail = err.response?.data?.detail;
+        toast.error(typeof detail === 'string' ? detail : 'No se pudo cargar el estado de cuenta');
+      } finally {
+        setUploading(false);
+        event.target.value = '';
+      }
+    };
+
+    const handleEliminarCarga = async (cargaId) => {
+      if (!cargaId) return;
+      if (!window.confirm('¿Eliminar este estado de cuenta y sus movimientos? Esta acción no se puede deshacer.')) {
+        return;
+      }
+      setEliminandoCargaId(cargaId);
+      try {
+        await api.delete(`/conciliacion/estados-cuenta/${cargaId}?empresa_id=${empresaId}`);
+        toast.success('Estado de cuenta eliminado');
+        await cargarDatos(mes, anio);
+      } catch (err) {
+        const detail = err.response?.data?.detail;
+        toast.error(typeof detail === 'string' ? detail : 'No se pudo eliminar el estado de cuenta');
+      } finally {
+        setEliminandoCargaId(null);
+      }
+    };
 
   const resumen = data?.resumen || {};
   const estaCargando = loading || isPending;
@@ -332,21 +367,72 @@ const ConciliacionBancariaPanel = ({ empresaId, mes, anio, onPeriodoChange }) =>
             Descargar CSV
           </button>
 
-          {bancos.length > 0 && (
-            <select
-              value={bancoId}
-              onChange={(e) => setBancoId(e.target.value)}
-              className="min-h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
-            >
-              {bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre_banco}</option>)}
-            </select>
-          )}
+          <select
+                      value={bancoNombre || bancoId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const esCatalogo = catalogoBancos.some((b) => b.nombre === val || b.clave === val);
+                        if (esCatalogo) {
+                          setBancoNombre(val);
+                          const match = bancos.find((b) => (b.nombre_banco || '').toLowerCase() === val.toLowerCase());
+                          setBancoId(match ? String(match.id) : '');
+                        } else {
+                          setBancoId(val);
+                          const b = bancos.find((x) => String(x.id) === String(val));
+                          setBancoNombre(b?.nombre_banco || '');
+                        }
+                      }}
+                      className="min-h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
+                      title="Banco del estado de cuenta"
+                    >
+                      <option value="">Seleccionar banco…</option>
+                      {catalogoBancos.map((b) => (
+                        <option key={b.clave} value={b.nombre}>{b.nombre}</option>
+                      ))}
+                      {bancos
+                        .filter((b) => !catalogoBancos.some((c) => c.nombre === b.nombre_banco))
+                        .map((b) => (
+                          <option key={`cfg-${b.id}`} value={String(b.id)}>{b.nombre_banco}</option>
+                        ))}
+                    </select>
 
-          <UploadBtn label="XML" accept=".xml,text/xml" uploading={uploading} onChange={handleUpload} color="cyan" />
-          <UploadBtn label="PDF" accept=".pdf,application/pdf" uploading={uploading} onChange={handleUpload} color="amber" />
-          <UploadBtn label="CSV" accept=".csv,text/csv" uploading={uploading} onChange={handleUpload} color="slate" />
-        </div>
-      </div>
+                    <UploadBtn label="XML" accept=".xml,text/xml" uploading={uploading} onChange={handleUpload} color="cyan" />
+                    <UploadBtn label="PDF" accept=".pdf,application/pdf" uploading={uploading} onChange={handleUpload} color="amber" />
+                    <UploadBtn label="CSV" accept=".csv,text/csv" uploading={uploading} onChange={handleUpload} color="slate" />
+                  </div>
+                </div>
+
+                {cargas.length > 0 && (
+                  <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Estados de cuenta cargados
+                    </p>
+                    <ul className="space-y-2">
+                      {cargas.map((c) => (
+                        <li
+                          key={c.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-xs text-slate-300"
+                        >
+                          <div>
+                            <p className="font-bold text-white">{c.nombre_archivo || `Carga #${c.id}`}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {c.movimientos_count ?? 0} mov. · {c.creado_en || '—'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleEliminarCarga(c.id)}
+                            disabled={eliminandoCargaId === c.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] font-bold text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
+                          >
+                            {eliminandoCargaId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                            Eliminar
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
       {estaCargando && !data ? (
         <div className="py-16 flex justify-center text-slate-500">

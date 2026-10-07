@@ -106,24 +106,25 @@ const FacturaDetailModal = ({ isOpen, onClose, factura, onPolizaGenerada, onElim
               <div>
                 <p className="text-[10px] font-black uppercase text-slate-500">{etiquetaContraparte}</p>
                 <p className="font-bold text-white">{nombreContraparte || '—'}</p>
-                {esIngreso && (d.nombre_emisor || d.rfc_emisor) && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Emisor: {d.nombre_emisor || d.emisor || '—'}
-                    {d.rfc_emisor ? ` (${d.rfc_emisor})` : ''}
-                  </p>
-                )}
-                {!esIngreso && (d.nombre_receptor || d.receptor) && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Receptor: {d.nombre_receptor || d.receptor}
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase text-slate-500">Forma de pago</p>
-                <p className="text-white">{d.forma_pago?.etiqueta || d.forma_pago_label || '—'}</p>
-                <p className="text-xs text-slate-500">{d.forma_pago?.metodo_pago || d.metodo_pago}</p>
-              </div>
-            </div>
+                            <div className="mt-2 space-y-1 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-400">
+                              <p>
+                                <span className="font-bold text-slate-300">Emisor:</span>{' '}
+                                {d.nombre_emisor || d.emisor || '—'}
+                                {d.rfc_emisor ? ` (${d.rfc_emisor})` : ''}
+                              </p>
+                              <p>
+                                <span className="font-bold text-slate-300">Receptor:</span>{' '}
+                                {d.nombre_receptor || d.receptor || '—'}
+                                {d.rfc_receptor ? ` (${d.rfc_receptor})` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase text-slate-500">Forma de pago</p>
+                            <p className="text-white">{d.forma_pago?.etiqueta || d.forma_pago_label || '—'}</p>
+                            <p className="text-xs text-slate-500">{d.forma_pago?.metodo_pago || d.metodo_pago}</p>
+                          </div>
+                        </div>
 
             <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
               <p className={`mb-2 text-[10px] font-black uppercase ${esIngreso ? 'text-emerald-400' : 'text-rose-400'}`}>

@@ -106,3 +106,58 @@ def asegurar_banco_default(db: Session, empresa_id: int) -> None:
     )
     if primero:
         primero.es_default = True
+
+
+def obtener_o_crear_banco(
+    db: Session,
+    empresa_id: int,
+    *,
+    banco_id: int | None = None,
+    banco_nombre: str | None = None,
+) -> ComisionBanco | None:
+    """Resuelve un banco de comisiones por id o nombre; crea uno del catálogo si hace falta."""
+    from app.core.bancos import normalizar_nombre_banco, resolver_banco_catalogo
+    from app.models.comision_banco import ComisionBanco
+
+    if banco_id is not None:
+        banco = (
+            db.query(ComisionBanco)
+            .filter(ComisionBanco.id == banco_id, ComisionBanco.empresa_id == empresa_id)
+            .first()
+        )
+        if banco:
+            return banco
+
+    nombre = normalizar_nombre_banco(banco_nombre)
+    if not nombre:
+        return None
+
+    catalogo = resolver_banco_catalogo(nombre)
+    nombre_final = catalogo["nombre"] if catalogo else nombre
+
+    existente = (
+        db.query(ComisionBanco)
+        .filter(
+            ComisionBanco.empresa_id == empresa_id,
+            ComisionBanco.nombre_banco == nombre_final,
+        )
+        .first()
+    )
+    if existente:
+        return existente
+
+    es_primero = (
+        db.query(ComisionBanco).filter(ComisionBanco.empresa_id == empresa_id).count() == 0
+    )
+    banco = ComisionBanco(
+        empresa_id=empresa_id,
+        nombre_banco=nombre_final,
+        porcentaje_credito=3.5,
+        porcentaje_debito=1.8,
+        porcentaje_servicios=2.0,
+        comision_fija=0,
+        es_default=es_primero,
+    )
+    db.add(banco)
+    db.flush()
+    return banco

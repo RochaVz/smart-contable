@@ -22,6 +22,15 @@ from app.services.bank_parser.factory import BankParserFactory
 
 from pydantic import BaseModel, Field
 
+from app.core.bancos import listar_bancos_catalogo
+from app.services.comisiones import obtener_o_crear_banco
+from app.services.estados_cuenta_validacion import (
+    buscar_carga_duplicada,
+    extraer_rfcs_de_bytes,
+    extraer_rfcs_de_texto,
+    validar_rfc_estado_cuenta,
+)
+from app.services.purga_datos import eliminar_carga_estado_cuenta
 from app.services.conciliacion import (
     asignar_conciliacion_manual,
     auto_conciliar_sin_poliza,
@@ -170,17 +179,91 @@ def editar_conciliacion_movimiento(
         raise HTTPException(status_code=500, detail="No se pudo actualizar la conciliación") from exc
 
 
+@router.get("/bancos-catalogo")
+def obtener_catalogo_bancos(
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Catálogo fijo de bancos mexicanos para el selector de conciliación."""
+    _ = current_user
+    return listar_bancos_catalogo()
+
+
+@router.get("/estados-cuenta")
+def listar_estados_cuenta(
+    empresa_id: int = Query(...),
+    mes: int | None = Query(None, ge=1, le=12),
+    anio: int | None = Query(None, ge=2000, le=2100),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Lista cargas de estados de cuenta de la empresa (para eliminar duplicados/errores)."""
+    _validar_empresa(db, empresa_id, current_user)
+    query = db.query(EstadoCuentaCarga).filter(EstadoCuentaCarga.empresa_id == empresa_id)
+    cargas = query.order_by(EstadoCuentaCarga.creado_en.desc()).all()
+
+    resultado = []
+    for carga in cargas:
+        movs = list(carga.movimientos or [])
+        if mes is not None and anio is not None:
+            movs_periodo = [
+                m for m in movs
+                if m.fecha and getattr(m.fecha, "month", None) == mes
+                and getattr(m.fecha, "year", None) == anio
+            ]
+            if not movs_periodo and movs:
+                # Si la carga no toca el periodo, omitirla del filtro
+                continue
+            movs_count = len(movs_periodo) if movs else carga.movimientos_count
+        else:
+            movs_count = carga.movimientos_count or len(movs)
+
+        resultado.append({
+            "id": carga.id,
+            "nombre_archivo": carga.nombre_archivo,
+            "banco_id": carga.banco_id,
+            "hash_archivo": carga.hash_archivo,
+            "movimientos_count": movs_count,
+            "creado_en": str(carga.creado_en) if carga.creado_en else None,
+        })
+    return resultado
+
+
+@router.delete("/estados-cuenta/{carga_id}", status_code=200)
+def eliminar_estado_cuenta(
+    carga_id: int,
+    empresa_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Elimina un estado de cuenta cargado por error y sus movimientos."""
+    _validar_empresa(db, empresa_id, current_user)
+    try:
+        resultado = eliminar_carga_estado_cuenta(db, empresa_id, carga_id)
+        db.commit()
+        return {
+            "mensaje": "Estado de cuenta eliminado correctamente",
+            **resultado,
+        }
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.exception("Error al eliminar estado de cuenta")
+        raise HTTPException(status_code=500, detail="No se pudo eliminar el estado de cuenta") from exc
+
+
 @router.post("/estado-cuenta", status_code=201)
 async def cargar_estado_cuenta(
     empresa_id: int,
     archivo: UploadFile = File(...),
     banco_id: int | None = None,
+    banco_nombre: str | None = Query(None, description="Nombre del banco del catálogo"),
     mes: int | None = Query(None, ge=1, le=12, description="Periodo contable de referencia"),
     anio: int | None = Query(None, ge=2000, le=2100),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    _validar_empresa(db, empresa_id, current_user)
+    empresa = _validar_empresa(db, empresa_id, current_user)
     mes_f, anio_f = _periodo_default(mes, anio)
     _validar_periodo(mes_f, anio_f)
 
@@ -188,7 +271,9 @@ async def cargar_estado_cuenta(
         raise HTTPException(status_code=400, detail="Archivo sin nombre")
 
     fname = archivo.filename.lower()
-    
+    raw_text = ""
+    archivo_bytes = b""
+
     try:
         if fname.endswith('.xml'):
             archivo_bytes = await archivo.read()
@@ -202,12 +287,14 @@ async def cargar_estado_cuenta(
                     detail="Este XML parece ser un CFDI de factura. Carga el estado de cuenta del banco, no facturas.",
                 )
             movimientos = parsear_estado_cuenta_xml(archivo_bytes)
+            raw_text = archivo_bytes.decode("utf-8", errors="ignore")
 
         elif fname.endswith('.csv'):
             archivo_bytes = await archivo.read()
             if not archivo_bytes.strip():
                 raise HTTPException(status_code=400, detail="El archivo CSV está vacío")
             movimientos = parsear_estado_cuenta_csv(archivo_bytes)
+            raw_text = archivo_bytes.decode("utf-8", errors="ignore")
 
         elif fname.endswith('.pdf'):
             _validar_tamano_pdf_upload(archivo)
@@ -215,7 +302,7 @@ async def cargar_estado_cuenta(
             _validar_tamano_pdf(archivo_bytes)
             if not archivo_bytes.strip():
                 raise HTTPException(status_code=400, detail="El archivo PDF está vacío")
-            
+
             raw_text = PDFExtractor.extract_text(archivo_bytes)
             parser = BankParserFactory().get_parser(raw_text)
             statement_data = parser.parse(raw_text, pdf_bytes=archivo_bytes)
@@ -232,7 +319,7 @@ async def cargar_estado_cuenta(
                             self.fecha = datetime.strptime(m.fecha, "%Y-%m-%d").date()
                         except ValueError:
                             self.fecha = date.today()
-                            
+
                     self.descripcion = m.descripcion
                     self.referencia = m.referencia
                     # Si tiene cargo es egreso/cargo, si tiene abono es ingreso/abono
@@ -261,6 +348,26 @@ async def cargar_estado_cuenta(
             detail=f"No se pudo procesar el archivo del estado de cuenta: {exc}",
         ) from exc
 
+    # Duplicado del archivo completo (PDF/XML/CSV ya cargado)
+    archivo_hash = hash_archivo(archivo_bytes)
+    duplicado = buscar_carga_duplicada(db, empresa_id, archivo_hash)
+    if duplicado:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Este estado de cuenta ya fue cargado anteriormente "
+                f"(archivo: {duplicado.nombre_archivo}, carga_id: {duplicado.id}). "
+                f"Elimínalo primero si deseas volver a importarlo."
+            ),
+        )
+
+    # Validación RFC empresa vs documento
+    rfcs = extraer_rfcs_de_texto(raw_text) or extraer_rfcs_de_bytes(archivo_bytes, archivo.filename)
+    try:
+        validacion_rfc = validar_rfc_estado_cuenta(empresa, rfcs)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     if not movimientos:
         raise HTTPException(
             status_code=400,
@@ -270,11 +377,19 @@ async def cargar_estado_cuenta(
             ),
         )
 
+    banco = obtener_o_crear_banco(
+        db,
+        empresa_id,
+        banco_id=banco_id,
+        banco_nombre=banco_nombre,
+    )
+    banco_resuelto_id = banco.id if banco else banco_id
+
     carga = EstadoCuentaCarga(
         empresa_id=empresa_id,
-        banco_id=banco_id,
+        banco_id=banco_resuelto_id,
         nombre_archivo=archivo.filename,
-        hash_archivo=hash_archivo(archivo_bytes),
+        hash_archivo=archivo_hash,
         movimientos_count=0,
     )
     db.add(carga)
@@ -307,7 +422,7 @@ async def cargar_estado_cuenta(
             MovimientoBanco(
                 empresa_id=empresa_id,
                 carga_id=carga.id,
-                banco_id=banco_id,
+                banco_id=banco_resuelto_id,
                 fecha=mov.fecha,
                 tipo=mov.tipo,
                 descripcion=mov.descripcion,
@@ -324,7 +439,7 @@ async def cargar_estado_cuenta(
         db.commit()
     except IntegrityError:
         db.rollback()
-        if archivo_s3_key:
+        if archivo_s3_key and storage:
             storage.delete(archivo_s3_key)
         raise HTTPException(
             status_code=409,
@@ -335,10 +450,12 @@ async def cargar_estado_cuenta(
         "mensaje": "Estado de cuenta cargado con éxito",
         "carga_id": carga.id,
         "archivo": archivo.filename,
+        "banco_id": banco_resuelto_id,
         "periodo_referencia": {"mes": mes_f, "anio": anio_f},
         "movimientos_detectados": len(movimientos),
         "movimientos_nuevos": nuevos,
         "duplicados": duplicados,
+        "validacion_rfc": validacion_rfc,
     }
 
 

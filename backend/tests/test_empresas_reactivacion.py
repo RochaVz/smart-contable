@@ -10,7 +10,7 @@ from app.core.exceptions import DuplicateResourceException
 from app.models.empresa import Empresa
 
 
-def test_crear_empresa_reactiva_empresa_inactiva_del_mismo_usuario():
+def test_crear_empresa_reactiva_empresa_inactiva_del_mismo_usuario(monkeypatch):
     empresa_inactiva = SimpleNamespace(
         id=14,
         usuario_id=7,
@@ -25,6 +25,12 @@ def test_crear_empresa_reactiva_empresa_inactiva_del_mismo_usuario():
     resultado_consulta.first.return_value = empresa_inactiva
     db = Mock()
     db.query.return_value.filter.return_value = resultado_consulta
+
+    purga_mock = Mock(return_value={"facturas": 3, "polizas": 1})
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.empresas.purgar_datos_operativos_empresa",
+        purga_mock,
+    )
 
     datos = EmpresaCreate(
         rfc="ABC010203AB1",
@@ -43,6 +49,7 @@ def test_crear_empresa_reactiva_empresa_inactiva_del_mismo_usuario():
     assert empresa_inactiva.regimen_fiscal == "612"
     assert empresa_inactiva.tipo_persona == "fisica"
     assert empresa_inactiva.codigo_postal == "64000"
+    purga_mock.assert_called_once_with(db, 14)
     db.add.assert_not_called()
     db.commit.assert_called_once()
     db.refresh.assert_called_once_with(empresa_inactiva)
