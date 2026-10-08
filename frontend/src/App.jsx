@@ -26,6 +26,11 @@ function App() {
         <Route path="/empresa/:id" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />
         <Route path="/empresa/:id/modulos/:moduloId" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />
         <Route path="/empresa/:id/reportes/:reporteId" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />
+        <Route path="/empresa/:id/inteligencia" element={isAuthenticated ? <CompanyDetail vista="inteligencia" /> : <Navigate to="/login" />} />
+        <Route path="/empresa/:id/inteligencia/:categoria" element={isAuthenticated ? <CompanyDetail vista="inteligencia" /> : <Navigate to="/login" />} />
+        <Route path="/empresa/:id/informes" element={isAuthenticated ? <CompanyDetail vista="informes" /> : <Navigate to="/login" />} />
+        <Route path="/empresa/:id/informes/:informe" element={isAuthenticated ? <CompanyDetail vista="informes" /> : <Navigate to="/login" />} />
+        <Route path="/empresa/:id/configuracion" element={isAuthenticated ? <CompanyDetail vista="configuracion" /> : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} />
       </Routes>
     </BrowserRouter>

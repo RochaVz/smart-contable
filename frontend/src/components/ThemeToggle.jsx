@@ -6,7 +6,7 @@ const STORAGE_KEY = 'smartcontable-theme';
 const getInitialTheme = () => {
   const savedTheme = localStorage.getItem(STORAGE_KEY);
   if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  return 'light';
 };
 
 const ThemeToggle = () => {
@@ -22,6 +22,7 @@ const ThemeToggle = () => {
   return (
     <button
       type="button"
+      data-sc-theme-toggle
       onClick={() => setTheme(isLight ? 'dark' : 'light')}
       aria-label={isLight ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
       title={isLight ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}

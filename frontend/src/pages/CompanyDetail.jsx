@@ -2,32 +2,38 @@ import { Fragment, useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import {
-  ArrowLeft, FileText, UploadCloud,
+  FileText, UploadCloud,
   Loader2, BrainCircuit, ChevronUp, ChevronDown, Download, Calendar,
-  BookOpen, Settings2, Trash2,
-  Search, Sparkles, X,
+  BookOpen, Settings2, Trash2, MoreHorizontal, FileBarChart,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
 import ClassifyModal from '../components/ClassifyModal';
 import FacturaDetailModal from '../components/FacturaDetailModal';
 import ExportPreviewModal from '../components/ExportPreviewModal';
-import HubCard from '../components/HubCard';
-import ModulePageShell from '../components/ModulePageShell';
+import CompanyShell from '../components/executive/CompanyShell';
+import ExecutiveDashboard from '../components/executive/ExecutiveDashboard';
+import InteligenciaView from '../components/executive/InteligenciaView';
+import InformesView from '../components/executive/InformesView';
+import ConfiguracionView from '../components/executive/ConfiguracionView';
+import BalancePanel from '../components/executive/BalancePanel';
+import useExecutiveSnapshot from '../hooks/useExecutiveSnapshot';
 import PolizasPanel from '../components/PolizasPanel';
 import ComisionesBancoPanel from '../components/ComisionesBancoPanel';
 import ConciliacionBancariaPanel from '../components/ConciliacionBancariaPanel';
 import InformesPanel from '../components/InformesPanel';
 import LocalConciliacionPanel from '../components/LocalConciliacionPanel';
 import FiscalConsolidadosPanel from '../components/FiscalConsolidadosPanel';
+import { getHubItem, hubHomePath, legacyQueryToHubPath } from '../navigation/companyHub';
+import { INTELIGENCIA_CATEGORIAS } from '../navigation/executive';
 import {
-  COMPANY_HUB_ITEMS,
-  HUB_SEARCH_TOPICS,
-  getHubItem,
-  hubHomePath,
-  hubPath,
-  legacyQueryToHubPath,
-} from '../navigation/companyHub';
+  esIngreso,
+  getContraparteFactura,
+  getFechaFactura,
+  getPeriodoFactura,
+  parseFechaFactura,
+  toNumber,
+} from '../utils/facturas';
 import { downloadCsv } from '../utils/csv';
 import { downloadBlob, filenameFromContentDisposition } from '../utils/download';
 import { deleteLocalInvoice, getLocalCompany, getLocalInvoices } from '../services/localBackup';
@@ -40,32 +46,6 @@ const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
-
-const getFechaFactura = (factura) => factura.fecha || factura.fecha_emision || '';
-
-const parseFechaFactura = (factura) => {
-  const fecha = String(getFechaFactura(factura) || '');
-  if (!fecha) return null;
-
-  const match = fecha.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) {
-    const [, anio, mes, dia] = match;
-    return new Date(Number(anio), Number(mes) - 1, Number(dia));
-  }
-
-  const date = new Date(fecha);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const getPeriodoFactura = (factura) => {
-  const date = parseFechaFactura(factura);
-  if (!date) return null;
-  return {
-    mes: date.getMonth() + 1,
-    anio: date.getFullYear(),
-    fecha: date,
-  };
-};
 
 const formatFecha = (fecha) => {
   if (!fecha) return 'Sin fecha';
@@ -81,10 +61,6 @@ const formatFecha = (fecha) => {
   });
 };
 
-const toNumber = (value) => Number.parseFloat(value) || 0;
-
-const esIngreso = (factura) => factura.tipo_operacion === 'VENTA';
-
 const formatMoney = (value) =>
   `$${toNumber(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
 
@@ -97,28 +73,6 @@ const getConceptoFactura = (factura) => {
   if (descripciones.length === 0) return 'Sin concepto';
   if (descripciones.length === 1) return descripciones[0];
   return `${descripciones[0]} (+${descripciones.length - 1} más)`;
-};
-
-/** Contraparte visible: cliente en ventas, proveedor en compras. */
-const getContraparteFactura = (factura) => {
-  if (esIngreso(factura)) {
-    return (
-      factura.cliente_o_proveedor
-      || factura.contraparte
-      || factura.nombre_cliente
-      || factura.nombre_receptor
-      || factura.receptor
-      || '—'
-    );
-  }
-  return (
-    factura.cliente_o_proveedor
-    || factura.contraparte
-    || factura.nombre_proveedor
-    || factura.nombre_emisor
-    || factura.emisor
-    || '—'
-  );
 };
 
 const agruparPorFecha = (lista) => lista.reduce((acc, factura) => {
@@ -134,8 +88,8 @@ const PANELES_MOVIMIENTO = [
   { id: 'iva', label: 'IVA del periodo', descripcion: 'Causado y acreditable' },
 ];
 
-const CompanyDetail = () => {
-  const { id, moduloId, reporteId } = useParams();
+const CompanyDetail = ({ vista = null }) => {
+  const { id, moduloId, reporteId, categoria, informe } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const hoy = useMemo(() => new Date(), []);
@@ -146,11 +100,11 @@ const CompanyDetail = () => {
     () => (hubKind && hubSlug ? getHubItem(hubKind, hubSlug) : null),
     [hubKind, hubSlug],
   );
-  const esHub = !vistaActiva;
+  const vistaActual = vistaActiva ? 'modulo' : (vista || 'dashboard');
   const seccion = vistaActiva?.seccion || 'historial';
   const tabActual = vistaActiva?.tab || (seccion === 'informes' ? 'resumen' : null);
 
-  const [busquedaGlobal, setBusquedaGlobal] = useState('');
+  const [refreshTick, setRefreshTick] = useState(0);
   const [facturas, setFacturas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -189,33 +143,11 @@ const CompanyDetail = () => {
     }
   }, [id, moduloId, reporteId, vistaActiva, navigate]);
 
-  const openHubItem = useCallback((item) => {
-    navigate(hubPath(id, item));
+  const irADestino = useCallback((destino) => {
+    if (destino === 'bancos') navigate(`/empresa/${id}/modulos/conciliacion`);
+    else if (destino === 'sat') navigate(`/empresa/${id}/modulos/fiscal`);
+    else navigate(`/empresa/${id}/inteligencia/${destino}`);
   }, [id, navigate]);
-
-  const goHubHome = useCallback(() => {
-    navigate(hubHomePath(id));
-  }, [id, navigate]);
-
-  const topicosFiltrados = useMemo(() => {
-    const term = busquedaGlobal.trim().toLowerCase();
-    if (!term) return [];
-    return HUB_SEARCH_TOPICS.filter((t) =>
-      t.label.toLowerCase().includes(term) ||
-      t.desc.toLowerCase().includes(term) ||
-      t.keywords.some((kw) => kw.toLowerCase().includes(term))
-    );
-  }, [busquedaGlobal]);
-
-  const hubModulos = useMemo(
-    () => COMPANY_HUB_ITEMS.filter((item) => item.kind === 'modulos'),
-    [],
-  );
-  const hubReportes = useMemo(
-    () => COMPANY_HUB_ITEMS.filter((item) => item.kind === 'reportes'),
-    [],
-  );
-
   const isLocalCompany = String(id).startsWith('local-');
 
   const abrirClasificacionProveedor = (proveedor) => {
@@ -265,8 +197,19 @@ const CompanyDetail = () => {
 
   const handleRefresh = useCallback(() => {
     setLoading(true);
+    setRefreshTick((value) => value + 1);
     fetchDatos();
   }, [fetchDatos]);
+
+  const lectura = useExecutiveSnapshot({
+    empresaId: id,
+    esLocal: isLocalCompany,
+    facturas,
+    mes: mesFiltro,
+    anio: anioFiltro,
+    refreshToken: refreshTick,
+    enabled: ['dashboard', 'inteligencia', 'informes'].includes(vistaActual),
+  });
 
   const downloadExport = async () => {
     if (isLocalCompany) {
@@ -1251,8 +1194,8 @@ const CompanyDetail = () => {
     );
   };
 
-  const renderSeccion = () => {
-    switch (seccion) {
+  const renderSeccion = (seccionActual = seccion, tabSolicitado = tabActual) => {
+    switch (seccionActual) {
       case 'polizas':
         if (isLocalCompany) {
           return renderRegistroLocal();
@@ -1277,11 +1220,11 @@ const CompanyDetail = () => {
         if (isLocalCompany) return renderInformesLocal();
         return (
           <InformesPanel
-            key={`informes-${tabActual || 'resumen'}`}
+            key={`informes-${tabSolicitado || 'resumen'}`}
             empresaId={id}
             mes={mesFiltro}
             anio={anioFiltro}
-            initialTab={tabActual || 'resumen'}
+            initialTab={tabSolicitado || 'resumen'}
             onPeriodoChange={handlePeriodoChange}
             refreshToken={classificationRefresh}
             onClassifyProveedor={abrirClasificacionProveedor}
@@ -1310,294 +1253,203 @@ const CompanyDetail = () => {
         if (isLocalCompany) {
           return <p className="py-12 text-center text-sm text-slate-500">Configura un negocio sincronizado para usar el motor fiscal.</p>;
         }
-        return <FiscalConsolidadosPanel empresa={empresa} onUpdated={handleRefresh} />;
+        return (
+          <FiscalConsolidadosPanel
+            key={`fiscal-${tabSolicitado || 'resumen'}`}
+            empresa={empresa}
+            onUpdated={handleRefresh}
+            initialTab={tabSolicitado || 'resumen'}
+          />
+        );
       default:
         return renderHistorial();
     }
   };
 
-  return (
-    <div className="app-page min-h-screen bg-slate-950 text-slate-200">
-      <div className="app-container max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8">
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard')}
-          className="mb-5 flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm text-slate-500 hover:text-blue-400 sm:mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" /> Mis empresas
-        </button>
-
-        {/* Cabecera Principal */}
-        <header className="mb-6 space-y-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="break-words text-2xl font-black text-white sm:text-3xl">
-                {empresa?.razon_social || `Negocio #${id}`}
-              </h1>
-              <p className="mt-1 text-sm text-slate-400">
-                Revisa la información de tu negocio y detecta diferencias a tiempo.
-                {empresa?.rfc && (
-                  <span className="mt-1 block font-mono text-xs text-slate-500 sm:ml-2 sm:inline">
-                    {empresa.rfc}
-                  </span>
-                )}
-              </p>
-            </div>
-
-            {/* Barra de Acciones y Controles Superiores */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Selector de periodo minimalista */}
-              <div className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs">
-                <Calendar className="h-4 w-4 text-blue-400 shrink-0" />
-                <div className="relative">
-                  <select
-                    aria-label="Mes a revisar"
-                    value={mesFiltro}
-                    onChange={(e) => setMesFiltro(Number(e.target.value))}
-                    className="appearance-none bg-transparent pr-4 font-bold text-white outline-none cursor-pointer hover:text-blue-400 transition-colors"
-                  >
-                    {MESES.map((nombre, i) => (
-                      <option key={nombre} value={i + 1} className="bg-slate-900 text-white">
-                        {nombre}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
-                </div>
-                <span className="text-slate-700">/</span>
-                <div className="relative">
-                  <select
-                    aria-label="Año a revisar"
-                    value={anioFiltro}
-                    onChange={(e) => setAnioFiltro(Number(e.target.value))}
-                    className="appearance-none bg-transparent pr-4 font-bold text-white outline-none cursor-pointer hover:text-blue-400 transition-colors"
-                  >
-                    {aniosDisponibles.map((anio) => (
-                      <option key={anio} value={anio} className="bg-slate-900 text-white">
-                        {anio}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
-                </div>
-              </div>
-
-                              <button
-                                type="button"
-                                onClick={handlePurgarPeriodo}
-                                title="Eliminar datos del mes para reimportar XMLs/PDFs"
-                                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-200 hover:bg-rose-500/20"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Limpiar mes
-                              </button>
-
-                              {/* Grupo de Exportación Integrado */}
-                              <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/90 p-1">
-                                <div className="relative flex items-center pl-2 pr-1">
-                                  <Download className="h-3.5 w-3.5 text-emerald-400 shrink-0 mr-1.5" />
-                                  <select
-                                    id="export-type"
-                                    aria-label="Tipo de datos a exportar"
-                                    value={tipoExportacion}
-                                    onChange={(e) => setTipoExportacion(e.target.value)}
-                                    className="appearance-none bg-transparent pr-4 text-xs font-bold text-white outline-none cursor-pointer hover:text-emerald-400 transition-colors"
-                                  >
-                    <option value="todo" className="bg-slate-900 text-white">Todo el negocio</option>
-                    <option value="resumen" className="bg-slate-900 text-white">Resumen</option>
-                    <option value="empresa" className="bg-slate-900 text-white">Datos del negocio</option>
-                    <option value="facturas" className="bg-slate-900 text-white">Facturas</option>
-                    <option value="ingresos" className="bg-slate-900 text-white">Ingresos</option>
-                    <option value="egresos" className="bg-slate-900 text-white">Gastos</option>
-                    <option value="polizas" className="bg-slate-900 text-white">Registro contable</option>
-                    <option value="movimientos" className="bg-slate-900 text-white">Movimientos</option>
-                    <option value="mapeos" className="bg-slate-900 text-white">Clasificaciones</option>
-                    <option value="comisiones" className="bg-slate-900 text-white">Comisiones</option>
-                    <option value="contable" className="bg-slate-900 text-white">Formato contable</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
-                </div>
-
-                <div className="h-4 w-px bg-slate-800" />
-
-                <button
-                  type="button"
-                  onClick={handlePreviewExport}
-                  disabled={exportandoEmpresa || loading}
-                  title="Ver vista previa en pantalla"
-                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-50 transition-colors"
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  <span>Ver</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={downloadExport}
-                  disabled={exportandoEmpresa || loading}
-                  title="Descargar archivo CSV"
-                  className="btn-ui btn-ui--success btn-ui--sm font-display"
-                >
-                  {exportandoEmpresa ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
-                  <span>CSV</span>
-                </button>
-              </div>
-
-              {/* Botón Cargar CFDI */}
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(true)}
-                className="btn-ui btn-ui--primary btn-ui--sm font-display"
-              >
-                <UploadCloud className="h-4 w-4" />
-                <span>Cargar CFDI</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Buscador global solo en la vista inicial del hub */}
-          {esHub && (
-            <div className="relative min-w-0">
-              <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
-              <input
-                type="text"
-                value={busquedaGlobal}
-                onChange={(e) => setBusquedaGlobal(e.target.value)}
-                placeholder="Buscar módulo o reporte (ingresos, gastos, IVA, proveedores, conciliación, SAT, pólizas)..."
-                className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 py-3 pl-10 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:bg-slate-900 focus:ring-1 focus:ring-blue-500"
-              />
-              {busquedaGlobal && (
-                <button
-                  type="button"
-                  onClick={() => setBusquedaGlobal('')}
-                  className="absolute right-3.5 top-3 text-slate-400 hover:text-white"
-                  title="Limpiar búsqueda"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Buscador solo en hub; en página dedicada se ocultan los atajos */}
-          {esHub && busquedaGlobal.trim() && (
-            topicosFiltrados.length > 0 ? (
-              <div className="rounded-2xl border border-blue-500/30 bg-blue-950/20 p-4 shadow-lg animate-page-in">
-                <div className="mb-3 flex items-center justify-between text-xs font-black uppercase tracking-wider text-blue-300">
-                  <span className="flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-blue-400" /> Secciones y reportes encontrados
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setBusquedaGlobal('')}
-                    className="btn-press text-[11px] font-bold text-slate-400 hover:text-white"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                  {topicosFiltrados.map((topico) => {
-                    const item = getHubItem(topico.kind, topico.slug);
-                    if (!item) return null;
-                    return (
-                      <HubCard
-                        key={topico.id}
-                        icon={topico.icon}
-                        label={topico.label}
-                        description={topico.desc}
-                        accent={item.accent}
-                        emoji={item.emoji}
-                        badge={item.kind === 'modulos' ? 'Módulo' : 'Reporte'}
-                        onClick={() => {
-                          setBusquedaGlobal('');
-                          openHubItem(item);
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center text-xs text-slate-400">
-                No se encontraron secciones para “{busquedaGlobal}”. Prueba con “ingresos”, “gastos”, “iva”, “proveedores”, “polizas”, “banco” o “sat”.
-              </div>
-            )
-          )}
-        </header>
-
-        {/* Hub inicial: todos los botones de módulos y reportes */}
-        {esHub ? (
-          <main className="min-w-0 space-y-8 animate-page-in">
-            <section className="space-y-3">
-              <div className="flex items-center justify-between px-0.5">
-                <div>
-                  <h2 className="font-display text-sm font-black uppercase tracking-wider text-white">✨ Módulos</h2>
-                  <p className="text-xs text-slate-500">Operación diaria del negocio</p>
-                </div>
-                <span className="text-[10px] font-bold text-slate-500">{hubModulos.length}</span>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {hubModulos.map((item) => (
-                  <HubCard
-                    key={item.id}
-                    icon={item.icon}
-                    label={item.label}
-                    description={item.desc}
-                    accent={item.accent}
-                    emoji={item.emoji}
-                    badge="Módulo"
-                    onClick={() => openHubItem(item)}
-                  />
-                ))}
-              </div>
-            </section>
-
-            <section className="space-y-3">
-              <div className="flex items-center justify-between px-0.5">
-                <div>
-                  <h2 className="font-display text-sm font-black uppercase tracking-wider text-white">📊 Reportes</h2>
-                  <p className="text-xs text-slate-500">Análisis financiero y fiscal</p>
-                </div>
-                <span className="text-[10px] font-bold text-slate-500">{hubReportes.length}</span>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {hubReportes.map((item) => (
-                  <HubCard
-                    key={item.id}
-                    icon={item.icon}
-                    label={item.label}
-                    description={item.desc}
-                    accent={item.accent}
-                    emoji={item.emoji}
-                    badge="Reporte"
-                    onClick={() => openHubItem(item)}
-                  />
-                ))}
-              </div>
-            </section>
-          </main>
+  /** Resuelve el panel existente que alimenta una vista de Inteligencia, Informes o Configuración. */
+  const renderFuente = (fuente) => {
+    switch (fuente.tipo) {
+      case 'informes':
+        return renderSeccion('informes', fuente.tab);
+      case 'fiscal':
+        return renderSeccion('fiscal', fuente.tab);
+      case 'bancos':
+        return renderSeccion('conciliacion');
+      case 'polizas':
+        return renderSeccion('polizas');
+      case 'balance':
+        return isLocalCompany ? (
+          <p className="sc-muted py-12 text-center text-sm font-semibold">
+            Este informe requiere un negocio sincronizado con el servidor.
+          </p>
         ) : (
-          <main className="min-w-0">
-            <ModulePageShell
-              title={vistaActiva.label}
-              description={vistaActiva.desc}
-              icon={vistaActiva.icon}
-              accent={vistaActiva.accent}
-              emoji={vistaActiva.emoji}
-              badge={vistaActiva.kind === 'modulos' ? 'Módulo' : 'Reporte'}
-              onBack={goHubHome}
-              backLabel="Volver al inicio"
-            >
-              {renderSeccion()}
-            </ModulePageShell>
-          </main>
-        )}
+          <BalancePanel empresaId={id} mes={mesFiltro} anio={anioFiltro} modo={fuente.modo} />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const titulosVista = {
+    dashboard: ['Dashboard', 'El estado de tu negocio en menos de 30 segundos'],
+    inteligencia: ['Inteligencia Financiera', 'Indicadores, tendencias y alertas de tu negocio'],
+    informes: ['Informes Fiscales y Contables', 'Estados financieros, impuestos y cumplimiento'],
+    configuracion: ['Configuración', 'Datos del negocio, régimen fiscal y bancos'],
+    modulo: [vistaActiva?.label, vistaActiva?.desc],
+  };
+  const [tituloVista, subtituloVista] = titulosVista[vistaActual];
+
+  const accionesTopbar = (
+    <>
+      <div className="sc-field flex items-center gap-1.5 !py-1.5">
+        <Calendar className="sc-primary h-4 w-4 shrink-0" />
+        <select
+          aria-label="Mes a revisar"
+          value={mesFiltro}
+          onChange={(e) => setMesFiltro(Number(e.target.value))}
+          className="cursor-pointer bg-transparent outline-none"
+        >
+          {MESES.map((nombre, i) => (
+            <option key={nombre} value={i + 1}>{nombre}</option>
+          ))}
+        </select>
+        <span className="sc-muted">/</span>
+        <select
+          aria-label="Año a revisar"
+          value={anioFiltro}
+          onChange={(e) => setAnioFiltro(Number(e.target.value))}
+          className="cursor-pointer bg-transparent outline-none"
+        >
+          {aniosDisponibles.map((anio) => (
+            <option key={anio} value={anio}>{anio}</option>
+          ))}
+        </select>
       </div>
 
+      <details className="relative">
+        <summary
+          className="sc-field flex cursor-pointer list-none items-center gap-1.5 !py-2"
+          aria-label="Más acciones"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+          <span className="hidden sm:inline">Más</span>
+        </summary>
+        <div className="sc-card absolute right-0 z-30 mt-2 flex w-72 flex-col gap-3 p-3">
+          <label className="flex flex-col gap-1 text-xs font-bold sc-muted">
+            Exportar
+            <select
+              id="export-type"
+              aria-label="Tipo de datos a exportar"
+              value={tipoExportacion}
+              onChange={(e) => setTipoExportacion(e.target.value)}
+              className="sc-field"
+            >
+              <option value="todo">Todo el negocio</option>
+              <option value="resumen">Resumen</option>
+              <option value="empresa">Datos del negocio</option>
+              <option value="facturas">Facturas</option>
+              <option value="ingresos">Ingresos</option>
+              <option value="egresos">Gastos</option>
+              <option value="polizas">Registro contable</option>
+              <option value="movimientos">Movimientos</option>
+              <option value="mapeos">Clasificaciones</option>
+              <option value="comisiones">Comisiones</option>
+              <option value="contable">Formato contable</option>
+            </select>
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handlePreviewExport}
+              disabled={exportandoEmpresa || loading}
+              title="Ver vista previa en pantalla"
+              className="btn-ui btn-ui--secondary btn-ui--sm flex-1"
+            >
+              <FileText className="h-3.5 w-3.5" /> Ver
+            </button>
+            <button
+              type="button"
+              onClick={downloadExport}
+              disabled={exportandoEmpresa || loading}
+              title="Descargar archivo CSV"
+              className="btn-ui btn-ui--success btn-ui--sm flex-1"
+            >
+              {exportandoEmpresa ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              CSV
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={handlePurgarPeriodo}
+            title="Eliminar datos del mes para reimportar XMLs/PDFs"
+            className="btn-ui btn-ui--danger btn-ui--sm"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Limpiar mes
+          </button>
+        </div>
+      </details>
+
+      <button
+        type="button"
+        onClick={() => setIsModalOpen(true)}
+        className="btn-ui btn-ui--primary btn-ui--sm font-display"
+      >
+        <UploadCloud className="h-4 w-4" />
+        <span>Cargar CFDI</span>
+      </button>
+    </>
+  );
+
+  const renderVista = () => {
+    switch (vistaActual) {
+      case 'inteligencia':
+        return (
+          <InteligenciaView
+            lectura={lectura}
+            categoriaId={INTELIGENCIA_CATEGORIAS.some((c) => c.id === categoria) ? categoria : null}
+            onSelect={(destino) => navigate(`/empresa/${id}/inteligencia${destino ? `/${destino}` : ''}`)}
+            onNavigate={irADestino}
+            renderFuente={renderFuente}
+          />
+        );
+      case 'informes':
+        return (
+          <InformesView
+            lectura={lectura}
+            informeId={informe || null}
+            onSelect={(destino) => navigate(`/empresa/${id}/informes${destino ? `/${destino}` : ''}`)}
+            renderFuente={renderFuente}
+            mes={mesFiltro}
+            anio={anioFiltro}
+          />
+        );
+      case 'configuracion':
+        return (
+          <ConfiguracionView
+            empresa={empresa}
+            empresaId={id}
+            esLocal={isLocalCompany}
+            renderFuente={renderFuente}
+          />
+        );
+      case 'modulo':
+        return <div className="sc-card min-w-0 p-4 sm:p-6">{renderSeccion()}</div>;
+      default:
+        return <ExecutiveDashboard lectura={lectura} mes={mesFiltro} anio={anioFiltro} onNavigate={irADestino} />;
+    }
+  };
+
+  return (
+    <>
+      <CompanyShell
+        empresaId={id}
+        empresa={empresa}
+        titulo={tituloVista}
+        subtitulo={vistaActual === 'dashboard' ? (empresa?.razon_social ? `${empresa.razon_social}${empresa.rfc ? ` · ${empresa.rfc}` : ''}` : subtituloVista) : subtituloVista}
+        actions={accionesTopbar}
+      >
+        {renderVista()}
+      </CompanyShell>
       <FileUploadModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -1631,7 +1483,7 @@ const CompanyDetail = () => {
         loading={previewLoading}
         onDownload={downloadExport}
       />
-    </div>
+    </>
   );
 };
 

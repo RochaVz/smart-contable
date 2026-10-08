@@ -56,9 +56,9 @@ const badgeTone = (estado) => {
   return 'bg-slate-800 text-slate-300 border-slate-700';
 };
 
-const FiscalConsolidadosPanel = ({ empresa, onUpdated }) => {
+const FiscalConsolidadosPanel = ({ empresa, onUpdated, initialTab = 'resumen' }) => {
   const now = useMemo(() => new Date(), []);
-  const [tab, setTab] = useState('resumen');
+  const [tab, setTab] = useState(initialTab);
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [anio, setAnio] = useState(now.getFullYear());
   const [proveedor, setProveedor] = useState('');
