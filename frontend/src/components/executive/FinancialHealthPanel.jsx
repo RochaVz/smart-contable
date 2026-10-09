@@ -1,18 +1,21 @@
-import { CheckCircle2, Lightbulb, Target } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle2, ChevronDown, Lightbulb, Target } from 'lucide-react';
 import ScoreGauge from './ScoreGauge';
 import { toneColor, toneFromScore } from './format';
 
-/** Salud Financiera: score 0-100, componentes, fortalezas, oportunidades y recomendaciones. */
+/** Salud Financiera transparente: score, fórmulas y recomendaciones cuantificadas. */
 export default function FinancialHealthPanel({ score, recomendaciones, loading }) {
   const tone = score.nivel.tone;
+  const [abierto, setAbierto] = useState(score.componentes.find((c) => c.detail)?.id || null);
 
   return (
-    <section className="sc-card flex flex-col gap-5 p-5">
+    <section className="sc-card flex flex-col gap-5 p-5 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="sc-text text-base font-black">Salud Financiera</h3>
-          <p className="sc-muted text-xs font-semibold">
-            Basada en {score.cobertura} de {score.componentes.length} indicadores con datos disponibles
+          <p className="sc-label">Diagnóstico</p>
+          <h3 className="sc-heading mt-0.5">Salud financiera</h3>
+          <p className="sc-muted mt-1 text-xs leading-relaxed">
+            Basada en {score.cobertura} de {score.componentes.length} indicadores con datos · cada score muestra su fórmula
           </p>
         </div>
         <span
@@ -25,26 +28,72 @@ export default function FinancialHealthPanel({ score, recomendaciones, loading }
 
       <div className="grid gap-6 md:grid-cols-[auto_1fr]">
         <div className="flex justify-center md:items-center">
-          {loading ? <div className="sc-skeleton h-36 w-36 rounded-full" /> : <ScoreGauge score={score.score} label="de 100" />}
+          {loading ? (
+            <div className="sc-skeleton h-36 w-36 rounded-full" />
+          ) : (
+            <ScoreGauge score={score.score} label="de 100" />
+          )}
         </div>
 
-        <ul className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-          {score.componentes.map((componente) => (
-            <li key={componente.id} className="min-w-0">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="sc-text">{componente.label}</span>
-                <span className="sc-muted tabular-nums">{componente.score ?? 'Sin datos'}</span>
-              </div>
-              <div className="sc-progress mt-1">
-                <span
-                  style={{
-                    width: `${componente.score ?? 0}%`,
-                    background: toneColor(toneFromScore(componente.score)),
-                  }}
-                />
-              </div>
-            </li>
-          ))}
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {score.componentes.map((componente) => {
+            const isOpen = abierto === componente.id;
+            const hasDetail = Boolean(componente.detail);
+            return (
+              <li key={componente.id} className="min-w-0">
+                <button
+                  type="button"
+                  disabled={!hasDetail}
+                  onClick={() => setAbierto(isOpen ? null : componente.id)}
+                  className={`w-full rounded-xl border border-[color:var(--sc-border)]/40 p-3 text-left transition ${hasDetail ? 'hover:border-[color:var(--sc-primary)]/30 hover:bg-[color:var(--sc-bg)]' : ''}`}
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+                    <span className="sc-text flex items-center gap-1">
+                      {componente.label}
+                      {hasDetail ? (
+                        <ChevronDown className={`h-3.5 w-3.5 sc-muted transition ${isOpen ? 'rotate-180' : ''}`} />
+                      ) : null}
+                    </span>
+                    <span className="sc-muted tabular-nums">
+                      {componente.score == null ? 'Sin datos' : `${componente.score}/100`}
+                    </span>
+                  </div>
+                  <div className="sc-progress mt-2">
+                    <span
+                      style={{
+                        width: `${componente.score ?? 0}%`,
+                        background: toneColor(toneFromScore(componente.score)),
+                      }}
+                    />
+                  </div>
+                </button>
+
+                {isOpen && componente.detail ? (
+                  <div className="mt-2 rounded-xl border border-[color:var(--sc-border)]/50 bg-[color:var(--sc-bg)] p-3">
+                    <p className="sc-muted text-[11px] font-semibold uppercase tracking-wide">Fórmula</p>
+                    <p className="sc-text mt-1 text-xs leading-relaxed">{componente.detail.formula}</p>
+                    <dl className="mt-3 space-y-1.5">
+                      {componente.detail.variables.map((v) => (
+                        <div key={v.label} className="flex items-start justify-between gap-3 text-xs">
+                          <dt className="sc-muted font-medium">{v.label}</dt>
+                          <dd className="sc-text shrink-0 font-semibold tabular-nums">{v.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <div className="mt-3 flex flex-wrap gap-3 border-t border-[color:var(--sc-divider)] pt-2 text-xs">
+                      <span className="sc-text font-semibold">
+                        Ratio: <span className="tabular-nums">{componente.detail.ratio}</span>
+                      </span>
+                      <span className="sc-text font-semibold">
+                        Score: <span className="tabular-nums">{componente.detail.score}/100</span>
+                      </span>
+                      <span className="sc-muted font-semibold">Estado: {componente.detail.interpretacion}</span>
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </div>
 
@@ -54,40 +103,59 @@ export default function FinancialHealthPanel({ score, recomendaciones, loading }
           icono={CheckCircle2}
           color="var(--sc-success)"
           vacio="Aún sin fortalezas destacadas."
-          items={score.fortalezas.map((c) => `${c.label} (${c.score})`)}
+          items={score.fortalezas.map((c) => ({ id: c.id, texto: `${c.label} (${c.score})` }))}
         />
         <ListaInsight
           titulo="Oportunidades"
           icono={Target}
           color="var(--sc-warning)"
           vacio="Sin áreas débiles detectadas."
-          items={score.oportunidades.map((c) => `${c.label} (${c.score})`)}
+          items={score.oportunidades.map((c) => ({ id: c.id, texto: `${c.label} (${c.score})` }))}
         />
         <ListaInsight
           titulo="Recomendaciones"
           icono={Lightbulb}
           color="var(--sc-primary)"
-          vacio="Carga CFDI para recibir recomendaciones."
-          items={recomendaciones}
+          vacio="Carga CFDI para recibir recomendaciones cuantificadas."
+          items={normalizarRecs(recomendaciones)}
+          destacadas
         />
       </div>
     </section>
   );
 }
 
-function ListaInsight({ titulo, icono: Icon, color, items, vacio }) {
+function normalizarRecs(recomendaciones = []) {
+  return recomendaciones.map((r, i) => {
+    if (typeof r === 'string') return { id: `rec-${i}`, texto: r };
+    return {
+      id: r.id || `rec-${i}`,
+      texto: r.texto,
+      impacto: r.impacto || null,
+    };
+  });
+}
+
+function ListaInsight({ titulo, icono: Icon, color, items, vacio, destacadas = false }) {
   return (
-    <div className="rounded-xl p-3" style={{ background: 'var(--sc-bg)' }}>
-      <h4 className="sc-text mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wide">
+    <div className="rounded-xl border border-[color:var(--sc-border)]/40 bg-[color:var(--sc-bg)] p-3.5">
+      <h4 className="sc-label mb-2 flex items-center gap-2 normal-case tracking-normal">
         <Icon className="h-4 w-4" style={{ color }} />
-        {titulo}
+        <span className="sc-text text-xs font-bold uppercase tracking-wide">{titulo}</span>
       </h4>
       {items.length === 0 ? (
-        <p className="sc-muted text-xs font-semibold">{vacio}</p>
+        <p className="sc-muted text-xs leading-relaxed">{vacio}</p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {items.map((item) => (
-            <li key={item} className="sc-text text-xs font-semibold leading-5">• {item}</li>
+            <li key={item.id} className="sc-text text-xs leading-5">
+              <span className="font-medium">{item.texto}</span>
+              {destacadas && item.impacto ? (
+                <span className="sc-primary mt-0.5 block text-[11px] font-bold tabular-nums">
+                  Impacto estimado: {item.impacto}
+                </span>
+              ) : null}
+            </li>
           ))}
         </ul>
       )}

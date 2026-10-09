@@ -290,7 +290,8 @@ test('alertas: se ordenan de más a menos grave', () => {
 test('recomendaciones: mensaje por defecto con score y vacío sin datos', () => {
   const conScore = generarRecomendaciones({ score: 80 }, []);
   assert.equal(conScore.length, 1);
-  assert.match(conScore[0], /Mantén el ritmo/);
+  assert.equal(conScore[0].id, 'mantener');
+  assert.match(conScore[0].texto, /Indicadores estables|Mantén/i);
   assert.deepEqual(generarRecomendaciones({ score: null }, []), []);
 });
 
@@ -302,7 +303,12 @@ test('recomendaciones: una por cada tipo de alerta relevante, sin duplicar pagos
     { id: 'saldo-bajo' },
     { id: 'alertas-sat' },
   ];
-  const recs = generarRecomendaciones({ score: 50 }, alertas);
-  assert.equal(recs.filter((r) => /impuestos/.test(r)).length, 1);
+  const recs = generarRecomendaciones({ score: 50 }, alertas, snapshot({
+    impuestosPendientes: 1000,
+    impuestosDetalle: { totalPagar: 1000 },
+    alertasSat: [{}, {}],
+  }));
+  assert.equal(recs.filter((r) => r.id === 'pagar-impuestos').length, 1);
   assert.equal(recs.length, 3);
+  assert.ok(recs.every((r) => r.id && r.texto));
 });

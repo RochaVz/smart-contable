@@ -36,7 +36,7 @@ export default function useExecutiveSnapshot({
       snapshot,
       score,
       alertas,
-      recomendaciones: generarRecomendaciones(score, alertas),
+          recomendaciones: generarRecomendaciones(score, alertas, snapshot),
     };
   }, [datos, facturas, mes, anio]);
 

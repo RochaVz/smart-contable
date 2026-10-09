@@ -125,6 +125,59 @@ test('alerta de saldo bajo cuando no cubre obligaciones', () => {
 test('recomendaciones reflejan alertas', () => {
   const s = buildExecutiveSnapshot({ facturas, mes: 9, anio: 2026 });
   const alertas = detectarAlertas(s, new Date(2026, 9, 7));
-  const recs = generarRecomendaciones(calcularScoreFinanciero(s), alertas);
+  const recs = generarRecomendaciones(calcularScoreFinanciero(s), alertas, s);
   assert.ok(recs.length > 0);
+  assert.ok(recs.every((r) => typeof r === 'object' && r.texto));
+});
+
+test('impuestos detalle expone IVA/ISR con vencimiento', () => {
+  const s = buildExecutiveSnapshot({
+    facturas,
+    mes: 9,
+    anio: 2026,
+    resumenSat: {
+      totales: { total_a_pagar: 20450 },
+      impuestos: {
+        iva_por_pagar: 12000,
+        iva_acreditable: 3000,
+        isr_provisional: 8450,
+        retenciones: 500,
+      },
+      sugerencias_pago: [
+        { clave: 'iva', concepto: 'IVA a cargo', monto: 12000, accion: 'pagar', vencimiento: '2026-10-17' },
+        { clave: 'isr', concepto: 'ISR provisional', monto: 8450, accion: 'pagar', vencimiento: '2026-10-17' },
+        { clave: 'iva_acreditable', concepto: 'IVA acreditable', monto: 3000, accion: 'acreditar' },
+      ],
+    },
+  });
+  assert.equal(s.impuestosDetalle.totalPagar, 20450);
+  assert.ok(s.impuestosDetalle.items.some((i) => i.id.includes('iva') && i.accion === 'pagar'));
+  assert.ok(s.impuestosDetalle.items.some((i) => i.id.includes('isr') && i.accion === 'pagar'));
+  assert.ok(s.accionesFiscales.length > 0);
+  assert.ok(s.kpiAhorro.cfdiAnalizados >= 3);
+});
+
+test('agrupa conceptos CFDI del periodo', async () => {
+  const { agruparConceptosPeriodo, normalizarConcepto } = await import('./financialHealth.js');
+  assert.equal(normalizarConcepto('Hospedaje Hab. 101'), normalizarConcepto('hospedaje hab 202'));
+  const grupo = agruparConceptosPeriodo([
+    {
+      tipo_operacion: 'VENTA',
+      fecha: '2026-09-10',
+      subtotal: 1000,
+      total: 1160,
+      conceptos: [
+        { descripcion: 'Hospedaje doble', importe: 700 },
+        { descripcion: 'Restaurante', importe: 300 },
+      ],
+    },
+    {
+      tipo_operacion: 'COMPRA',
+      fecha: '2026-09-11',
+      total: 500,
+      conceptos: [{ descripcion: 'Nómina quincena', importe: 500 }],
+    },
+  ], 9, 2026);
+  assert.ok(grupo.ingresos.items.length >= 2);
+  assert.ok(grupo.egresos.items.some((i) => /nomina/i.test(i.label) || /n[oó]mina/i.test(i.label)));
 });

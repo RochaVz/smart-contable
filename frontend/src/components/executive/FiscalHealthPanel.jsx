@@ -1,92 +1,137 @@
-import { CalendarClock, ShieldCheck } from 'lucide-react';
-import ScoreGauge from './ScoreGauge';
-import { formatMoney, formatPct } from './format';
+import { CheckCircle2, Circle, Clock3, ShieldAlert } from 'lucide-react';
+import { formatMoney } from './format';
 import { diasHasta } from '../../utils/financialHealth';
 
 const TONO_RIESGO = {
-  Bajo: 'sc-badge--success',
-  Moderado: 'sc-badge--info',
-  Alto: 'sc-badge--warning',
-  'Crítico': 'sc-badge--danger',
+  Bajo: { badge: 'sc-badge--success', label: 'Bajo' },
+  Moderado: { badge: 'sc-badge--info', label: 'Medio' },
+  Alto: { badge: 'sc-badge--warning', label: 'Alto' },
+  Crítico: { badge: 'sc-badge--danger', label: 'Crítico' },
+};
+
+const ESTADO_ICON = {
+  hecho: CheckCircle2,
+  urgente: ShieldAlert,
+  pendiente: Circle,
+  info: Clock3,
 };
 
 const formatFecha = (iso) => {
   const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return iso || '—';
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-    .toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+    .toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
 };
 
-/** Salud Fiscal: score, cumplimiento, pendientes y próximos vencimientos. */
-export default function FiscalHealthPanel({ snapshot, loading, disponible, onOpenSat }) {
-  const vencimientos = [
-    ...snapshot.sugerenciasPago
-      .filter((p) => p.accion === 'pagar' && p.vencimiento)
-      .map((p) => ({ id: `pago-${p.clave}`, titulo: p.concepto, fecha: p.vencimiento, monto: p.monto })),
-    ...snapshot.declaraciones
-      .filter((d) => d.proximo_vencimiento)
-      .map((d, i) => ({ id: `decl-${i}`, titulo: `Declaración ${d.tipo}`, fecha: d.proximo_vencimiento, monto: null })),
-  ]
-    .filter((v) => diasHasta(v.fecha) != null)
-    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
-    .slice(0, 4);
-
-  const pendientes = snapshot.declaraciones.length;
+/**
+ * Motor fiscal accionable: riesgo + checklist + próximos vencimientos.
+ * Sin ruido; solo lo que el usuario debe hacer.
+ */
+export default function FiscalHealthPanel({ snapshot, loading, disponible, onOpenSat, onNavigate }) {
+  const riesgo = snapshot.riesgoFiscal || null;
+  const tono = TONO_RIESGO[riesgo] || { badge: 'sc-badge--neutral', label: riesgo || 'Sin datos' };
+  const acciones = snapshot.accionesFiscales || [];
+  const vencimientos = snapshot.vencimientosFiscales || [];
 
   return (
-    <section className="sc-card flex flex-col gap-5 p-5">
-      <header className="flex items-center justify-between gap-2">
+    <section className="sc-card flex h-full flex-col gap-5 p-5 sm:p-6">
+      <header className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="sc-text text-base font-black">Salud Fiscal</h3>
-          <p className="sc-muted text-xs font-semibold">Cumplimiento y obligaciones del periodo</p>
+          <p className="sc-label">Motor fiscal SAT</p>
+          <h3 className="sc-heading mt-0.5">Acciones prioritarias</h3>
         </div>
-        {snapshot.riesgoFiscal ? (
-          <span className={`sc-badge ${TONO_RIESGO[snapshot.riesgoFiscal] || 'sc-badge--neutral'}`}>
-            Riesgo {snapshot.riesgoFiscal.toLowerCase()}
-          </span>
-        ) : null}
       </header>
 
       {!disponible ? (
-        <div className="flex flex-col items-center gap-2 py-8 text-center">
-          <ShieldCheck className="sc-muted h-8 w-8" />
-          <p className="sc-muted max-w-xs text-sm font-semibold">
-            La salud fiscal requiere un negocio sincronizado con el motor fiscal SAT.
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
+          <ShieldAlert className="sc-muted h-8 w-8" />
+          <p className="sc-muted max-w-xs text-sm leading-relaxed">
+            Sincroniza el negocio con el motor fiscal SAT para ver riesgo y obligaciones.
           </p>
+        </div>
+      ) : loading ? (
+        <div className="space-y-3">
+          <div className="sc-skeleton h-20 w-full rounded-xl" />
+          <div className="sc-skeleton h-28 w-full rounded-xl" />
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-5">
-            {loading ? (
-              <div className="sc-skeleton h-28 w-28 rounded-full" />
-            ) : (
-              <ScoreGauge score={snapshot.scoreFiscal} label="fiscal" size={116} />
-            )}
-            <dl className="grid flex-1 grid-cols-2 gap-3 text-xs font-bold">
-              <Dato label="Cumplimiento" value={formatPct(snapshot.cumplimientoFiscal, 0)} />
-              <Dato label="Declaraciones del periodo" value={pendientes} />
-              <Dato label="Impuestos pendientes" value={snapshot.impuestosPendientes == null ? '—' : formatMoney(snapshot.impuestosPendientes, { compact: true })} />
-              <Dato label="Alertas SAT" value={snapshot.alertasSat.length} tone={snapshot.alertasSat.length ? 'warning' : null} />
-            </dl>
+          <div className="rounded-xl border border-[color:var(--sc-border)]/50 bg-[color:var(--sc-bg)] p-4">
+            <p className="sc-label">Riesgo fiscal</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <span className={`sc-badge text-sm ${tono.badge}`}>{tono.label}</span>
+              {snapshot.scoreFiscal != null ? (
+                <span className="sc-metric text-2xl tabular-nums">
+                  {snapshot.scoreFiscal}
+                  <span className="sc-muted text-sm font-semibold">/100</span>
+                </span>
+              ) : (
+                <span className="sc-muted text-sm">Sin score</span>
+              )}
+              {snapshot.cumplimientoFiscal != null ? (
+                <span className="sc-muted text-xs font-semibold">Cumplimiento {snapshot.cumplimientoFiscal}%</span>
+              ) : null}
+            </div>
           </div>
 
           <div>
-            <h4 className="sc-text mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wide">
-              <CalendarClock className="sc-primary h-4 w-4" /> Próximos vencimientos
-            </h4>
-            {vencimientos.length === 0 ? (
-              <p className="sc-muted text-xs font-semibold">Sin vencimientos próximos registrados.</p>
+            <h4 className="sc-label mb-2">Checklist del periodo</h4>
+            {acciones.length === 0 ? (
+              <p className="sc-muted text-xs">Sin acciones detectadas. Carga CFDI o sincroniza el motor.</p>
             ) : (
-              <ul className="divide-y" style={{ borderColor: 'var(--sc-divider)' }}>
+              <ul className="space-y-2">
+                {acciones.map((accion) => {
+                  const Icon = ESTADO_ICON[accion.estado] || Circle;
+                  const done = accion.estado === 'hecho';
+                  const urgent = accion.estado === 'urgente';
+                  return (
+                    <li key={accion.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (accion.destino && onNavigate) onNavigate(accion.destino);
+                          else if (onOpenSat) onOpenSat();
+                        }}
+                        className="flex w-full items-start gap-3 rounded-xl border border-[color:var(--sc-border)]/40 px-3 py-2.5 text-left transition hover:border-[color:var(--sc-primary)]/40 hover:bg-[color:var(--sc-soft)]"
+                      >
+                        <Icon
+                          className={`mt-0.5 h-4 w-4 shrink-0 ${done ? 'sc-success' : urgent ? 'sc-danger' : 'sc-muted'}`}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className={`block text-sm font-semibold tracking-tight ${done ? 'sc-muted line-through' : 'sc-text'}`}>
+                            {accion.titulo}
+                          </span>
+                          <span className="sc-muted mt-0.5 block text-xs leading-snug">{accion.detalle}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <h4 className="sc-label mb-2">Próximos vencimientos</h4>
+            {vencimientos.length === 0 ? (
+              <p className="sc-muted text-xs">Sin vencimientos próximos registrados.</p>
+            ) : (
+              <ul className="space-y-2">
                 {vencimientos.map((v) => {
                   const dias = diasHasta(v.fecha);
-                  const urgente = dias <= 3;
+                  const urgente = dias != null && dias <= 5;
                   return (
-                    <li key={v.id} className="flex items-center justify-between gap-3 py-2 text-xs font-semibold" style={{ borderColor: 'var(--sc-divider)' }}>
-                      <span className="sc-text truncate">{v.titulo}</span>
+                    <li key={v.id} className="flex items-center justify-between gap-3 rounded-lg px-1 py-1 text-sm">
+                      <span className="sc-text min-w-0 truncate font-semibold">{v.titulo}</span>
                       <span className="flex shrink-0 items-center gap-2">
-                        {v.monto != null ? <span className="sc-muted tabular-nums">{formatMoney(v.monto, { compact: true })}</span> : null}
-                        <span className={`sc-badge ${urgente ? 'sc-badge--danger' : 'sc-badge--neutral'}`}>{formatFecha(v.fecha)}</span>
+                        {v.monto != null ? (
+                          <span className="sc-muted tabular-nums text-xs font-semibold">
+                            {formatMoney(v.monto, { compact: true })}
+                          </span>
+                        ) : null}
+                        <span className={`sc-badge ${urgente ? 'sc-badge--danger' : 'sc-badge--neutral'}`}>
+                          {formatFecha(v.fecha)}
+                        </span>
                       </span>
                     </li>
                   );
@@ -96,21 +141,12 @@ export default function FiscalHealthPanel({ snapshot, loading, disponible, onOpe
           </div>
 
           {onOpenSat ? (
-            <button type="button" onClick={onOpenSat} className="sc-primary self-start text-xs font-black hover:underline">
-              Abrir motor fiscal SAT →
+            <button type="button" onClick={onOpenSat} className="sc-link self-start text-xs font-semibold">
+              Abrir detalle SAT →
             </button>
           ) : null}
         </>
       )}
     </section>
-  );
-}
-
-function Dato({ label, value, tone }) {
-  return (
-    <div>
-      <dt className="sc-muted font-semibold">{label}</dt>
-      <dd className={`mt-0.5 text-lg font-black tabular-nums ${tone === 'warning' ? 'sc-warning' : 'sc-text'}`}>{value}</dd>
-    </div>
   );
 }

@@ -24,13 +24,13 @@ export default function KpiCard({
     <Wrapper
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`sc-card flex min-w-0 flex-col gap-3 p-4 text-left ${onClick ? 'transition hover:-translate-y-0.5' : ''}`}
+      className={`sc-card flex min-w-0 flex-col gap-3.5 p-5 text-left ${onClick ? 'sc-card--interactive' : ''}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="sc-muted text-xs font-bold uppercase tracking-wide">{label}</span>
+        <span className="sc-label">{label}</span>
         {Icon ? (
           <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
             style={{ background: 'var(--sc-soft)', color: `var(--sc-${tone})` }}
           >
             <Icon className="h-4 w-4" />
@@ -41,7 +41,7 @@ export default function KpiCard({
       {loading ? (
         <div className="sc-skeleton h-8 w-3/4" />
       ) : (
-        <p className="sc-text truncate text-2xl font-black tabular-nums">{value}</p>
+        <p className="sc-metric truncate text-2xl tabular-nums tracking-tight">{value}</p>
       )}
 
       <div className="flex min-h-5 flex-wrap items-center gap-2 text-xs">
@@ -51,7 +51,7 @@ export default function KpiCard({
             {Math.abs(trend)}%
           </span>
         ) : null}
-        {hint ? <span className="sc-muted font-semibold">{hint}</span> : null}
+        {hint ? <span className="sc-muted font-medium leading-snug">{hint}</span> : null}
       </div>
     </Wrapper>
   );
