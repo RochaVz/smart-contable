@@ -215,6 +215,97 @@ const Dashboard = ({ onLogout }) => {
     }
   };
 
+  // Renderizar tarjeta de empresa
+  const renderCompanyCard = (e) => (
+    <div 
+      key={e.id} 
+      onClick={() => handleNavigateEmpresa(e.id)} 
+      className="btn-physical hub-accent-fuchsia font-display group cursor-pointer rounded-2xl border p-5 sm:rounded-3xl sm:p-7"
+    >
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="hub-card__icon flex h-12 w-12 items-center justify-center">
+          <span className="hub-card__emoji" aria-hidden="true">🏢</span>
+          <Building2 className="hub-card__glyph h-6 w-6" />
+        </div>
+        <span className="flex items-center gap-1 text-xs font-bold text-white/90">
+          Abrir <ChevronRight className="h-4 w-4" />
+        </span>
+      </div>
+
+      <h3 className="mb-1 break-words text-lg font-black text-white sm:text-xl">{e.razon_social}</h3>
+      <p className="font-mono text-xs uppercase tracking-widest text-white/75">{e.rfc}</p>
+      {e.local_only && (
+        <span className="mt-3 inline-flex rounded-full border border-white/25 bg-white/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+          Guardado en este dispositivo
+        </span>
+      )}
+
+      {/* ACCESOS DIRECTOS DE REPORTES DENTRO DE LA TARJETA */}
+      <div className="mt-5 border-t border-white/20 pt-4" onClick={(ev) => ev.stopPropagation()}>
+        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/70">Reportes rápidos</p>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleNavigateEmpresa(e.id, 'informes', 'estado')}
+            className="btn-physical hub-accent-emerald rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
+          >
+            📈 Ingresos / Gastos
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNavigateEmpresa(e.id, 'informes', 'resumen')}
+            className="btn-physical hub-accent-blue rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
+          >
+            📊 Utilidad
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNavigateEmpresa(e.id, 'informes', 'padron')}
+            className="btn-physical hub-accent-indigo rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
+          >
+            👥 Proveedores
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNavigateEmpresa(e.id, 'informes', 'trasladados')}
+            className="btn-physical hub-accent-orange rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
+          >
+            💰 IVA / Impuestos
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNavigateEmpresa(e.id, 'conciliacion')}
+            className="btn-physical hub-accent-cyan rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
+          >
+            🏦 Conciliación
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNavigateEmpresa(e.id, 'fiscal')}
+            className="btn-physical hub-accent-amber rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
+          >
+            ⚖️ Motor SAT
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-white/20 pt-4">
+        <DeviceBackupPanel compact company={e} prepareCompanyBackup={prepareCompanyBackup} />
+      </div>
+
+      <button
+        type="button"
+        onClick={(event) => handleDeleteCompany(e, event)}
+        disabled={deletingCompanyId === e.id}
+        className="btn-press mt-4 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/30 bg-black/20 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-red-500/30 disabled:cursor-wait disabled:opacity-60"
+        title={`Eliminar ${e.razon_social}`}
+      >
+        {deletingCompanyId === e.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+        {deletingCompanyId === e.id ? 'Eliminando...' : 'Eliminar negocio'}
+      </button>
+    </div>
+  );
+
   return (
     <div className="app-page min-h-screen bg-slate-950 text-slate-200">
       {/* NAVBAR SUPERIOR PROFESIONAL */}
@@ -235,7 +326,7 @@ const Dashboard = ({ onLogout }) => {
 
       {/* CONTENIDO */}
       <main className="app-container max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8">
-        <header className="mb-5 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 p-5 shadow-xl shadow-black/10 sm:mb-8 sm:rounded-3xl sm:p-8">
+        <header className="mb-5 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 p-5 shadow-xl shadow-black/10 sm:mb-8 sm:rounded-3xl sm:p-7">
           <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-blue-300">
@@ -254,7 +345,7 @@ const Dashboard = ({ onLogout }) => {
                   type="text" 
                   value={searchTerm}
                   placeholder="Buscar negocio o RFC..."
-                  className="min-h-12 w-full rounded-2xl border border-slate-700 bg-slate-900 py-3 pl-10 pr-4 text-base text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500 sm:w-80 sm:text-sm"
+                  className="min-h-12 w-full rounded-2xl border border-slate-700 bg-slate-900 py-3 pl-10 pr-4 text-base text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500/50"
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
@@ -293,6 +384,7 @@ const Dashboard = ({ onLogout }) => {
           </div>
         </div>
 
+        {/* PANEL DE RESPALDO GLOBAL - ÚNICO, AL PRINCIPIO */}
         <DeviceBackupPanel prepareDeviceBackup={prepareDeviceBackup} />
 
         {loading ? (
@@ -328,7 +420,7 @@ const Dashboard = ({ onLogout }) => {
                     <button
                       type="button"
                       onClick={() => fileImportRef.current?.click()}
-                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-bold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-700 hover:text-white"
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-bold text-slate-200 transition-colors hover:border-blue-500 hover:text-white"
                     >
                       <Upload className="h-4 w-4 text-emerald-400" /> Cargar respaldo (.json)
                     </button>
@@ -337,97 +429,9 @@ const Dashboard = ({ onLogout }) => {
               </div>
             </div>
           ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {empresasFiltradas.map((e) => (
-              <div 
-                key={e.id} 
-                onClick={() => handleNavigateEmpresa(e.id)} 
-                className="btn-physical hub-accent-fuchsia font-display group cursor-pointer rounded-2xl border p-5 sm:rounded-3xl sm:p-7"
-              >
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div className="hub-card__icon flex h-12 w-12 items-center justify-center">
-                    <span className="hub-card__emoji" aria-hidden="true">🏢</span>
-                    <Building2 className="hub-card__glyph h-6 w-6" />
-                  </div>
-                  <span className="flex items-center gap-1 text-xs font-bold text-white/90">
-                    Abrir <ChevronRight className="h-4 w-4" />
-                  </span>
-                </div>
-
-                <h3 className="mb-1 break-words text-lg font-black text-white sm:text-xl">{e.razon_social}</h3>
-                <p className="font-mono text-xs uppercase tracking-widest text-white/75">{e.rfc}</p>
-                {e.local_only && (
-                  <span className="mt-3 inline-flex rounded-full border border-white/25 bg-white/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
-                    Guardado en este dispositivo
-                  </span>
-                )}
-
-                {/* ACCESOS DIRECTOS DE REPORTES DENTRO DE LA TARJETA */}
-                <div className="mt-5 border-t border-white/20 pt-4" onClick={(ev) => ev.stopPropagation()}>
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/70">Reportes rápidos</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleNavigateEmpresa(e.id, 'informes', 'estado')}
-                      className="btn-physical hub-accent-emerald rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
-                    >
-                      📈 Ingresos / Gastos
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleNavigateEmpresa(e.id, 'informes', 'resumen')}
-                      className="btn-physical hub-accent-blue rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
-                    >
-                      📊 Utilidad
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleNavigateEmpresa(e.id, 'informes', 'padron')}
-                      className="btn-physical hub-accent-indigo rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
-                    >
-                      👥 Proveedores
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleNavigateEmpresa(e.id, 'informes', 'trasladados')}
-                      className="btn-physical hub-accent-orange rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
-                    >
-                      💰 IVA / Impuestos
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleNavigateEmpresa(e.id, 'conciliacion')}
-                      className="btn-physical hub-accent-cyan rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
-                    >
-                      🏦 Conciliación
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleNavigateEmpresa(e.id, 'fiscal')}
-                      className="btn-physical hub-accent-amber rounded-lg border px-2.5 py-1 text-[11px] font-bold text-white"
-                    >
-                      ⚖️ Motor SAT
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4 border-t border-white/20 pt-4">
-                  <DeviceBackupPanel compact company={e} prepareCompanyBackup={prepareCompanyBackup} />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={(event) => handleDeleteCompany(e, event)}
-                  disabled={deletingCompanyId === e.id}
-                  className="btn-press mt-4 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/30 bg-black/20 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-red-500/30 disabled:cursor-wait disabled:opacity-60"
-                  title={`Eliminar ${e.razon_social}`}
-                >
-                  {deletingCompanyId === e.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  {deletingCompanyId === e.id ? 'Eliminando...' : 'Eliminar negocio'}
-                </button>
-              </div>
-            ))}
-          </div>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {empresasFiltradas.map((e) => renderCompanyCard(e))}
+            </div>
           )
         )}
       </main>
