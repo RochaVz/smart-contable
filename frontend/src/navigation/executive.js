@@ -75,8 +75,8 @@ export const activeSidebarId = (pathname, empresaId) => {
 
 /** Categorías del Centro de Inteligencia y el panel existente que las alimenta. */
 export const INTELIGENCIA_CATEGORIAS = [
-  { id: 'ingresos', label: 'Ingresos', icon: TrendingUp, desc: 'Ventas y estado de resultados', fuente: { tipo: 'informes', tab: 'estado' } },
-  { id: 'gastos', label: 'Gastos', icon: TrendingDown, desc: 'Compras y gastos deducibles', fuente: { tipo: 'informes', tab: 'acreditables' } },
+  { id: 'ingresos', label: 'Ingresos', icon: TrendingUp, desc: 'Ventas y estado de resultados', fuente: { tipo: 'movimientos', filtro: 'ingresos' } },
+  { id: 'gastos', label: 'Gastos', icon: TrendingDown, desc: 'Compras y gastos deducibles', fuente: { tipo: 'movimientos', filtro: 'egresos' } },
   { id: 'utilidades', label: 'Utilidades', icon: Wallet, desc: 'Utilidad, margen y resumen', fuente: { tipo: 'informes', tab: 'resumen' } },
   { id: 'clientes', label: 'Clientes', icon: Users, desc: 'Facturación emitida por cliente', fuente: { tipo: 'informes', tab: 'trasladados' } },
   { id: 'proveedores', label: 'Proveedores', icon: Truck, desc: 'Padrón y montos acumulados', fuente: { tipo: 'informes', tab: 'padron' } },

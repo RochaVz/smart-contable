@@ -96,6 +96,15 @@ const CompanyDetail = ({ vista = null }) => {
 
   const hubKind = moduloId ? 'modulos' : reporteId ? 'reportes' : null;
   const hubSlug = moduloId || reporteId || null;
+  const movimientoQuery = searchParams.get('movimiento');
+  const movimientoCategoria = vista === 'inteligencia'
+    ? INTELIGENCIA_CATEGORIAS.find((item) => item.id === categoria && item.fuente.tipo === 'movimientos')?.fuente.filtro
+    : null;
+  const movimientoSolicitado = ['ingresos', 'egresos'].includes(movimientoQuery)
+    ? movimientoQuery
+    : ['ingresos', 'egresos'].includes(reporteId)
+      ? reporteId
+      : movimientoCategoria || null;
   const vistaActiva = useMemo(
     () => (hubKind && hubSlug ? getHubItem(hubKind, hubSlug) : null),
     [hubKind, hubSlug],
@@ -120,7 +129,7 @@ const CompanyDetail = ({ vista = null }) => {
   const [anioFiltro, setAnioFiltro] = useState(hoy.getFullYear());
   const [empresa, setEmpresa] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const [filtroMovimiento, setFiltroMovimiento] = useState('ninguno');
+  const [filtroMovimiento, setFiltroMovimiento] = useState(movimientoSolicitado || 'ninguno');
   const [exportandoEmpresa, setExportandoEmpresa] = useState(false);
   const [tipoExportacion, setTipoExportacion] = useState('todo');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -136,6 +145,12 @@ const CompanyDetail = ({ vista = null }) => {
     navigate(legacyQueryToHubPath(id, legacySeccion || 'historial', legacyTab), { replace: true });
   }, [id, moduloId, reporteId, navigate, searchParams]);
 
+  useEffect(() => {
+    // Sincroniza la selección del panel con el filtro reflejado en la ruta.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFiltroMovimiento(movimientoSolicitado || 'ninguno');
+  }, [movimientoSolicitado]);
+
   // Ruta desconocida de módulo/reporte → hub
   useEffect(() => {
     if ((moduloId || reporteId) && !vistaActiva) {
@@ -146,6 +161,10 @@ const CompanyDetail = ({ vista = null }) => {
   const irADestino = useCallback((destino) => {
     if (destino === 'bancos') navigate(`/empresa/${id}/modulos/conciliacion`);
     else if (destino === 'sat') navigate(`/empresa/${id}/modulos/fiscal`);
+    else if (destino === 'ingresos' || destino === 'egresos' || destino === 'gastos') {
+      const movimiento = destino === 'gastos' ? 'egresos' : destino;
+      navigate(`/empresa/${id}/modulos/documentos?movimiento=${movimiento}`);
+    }
     else navigate(`/empresa/${id}/inteligencia/${destino}`);
   }, [id, navigate]);
   const isLocalCompany = String(id).startsWith('local-');
@@ -1271,6 +1290,8 @@ const CompanyDetail = ({ vista = null }) => {
     switch (fuente.tipo) {
       case 'informes':
         return renderSeccion('informes', fuente.tab);
+      case 'movimientos':
+        return renderSeccion('historial');
       case 'fiscal':
         return renderSeccion('fiscal', fuente.tab);
       case 'bancos':
@@ -1407,7 +1428,13 @@ const CompanyDetail = ({ vista = null }) => {
           <InteligenciaView
             lectura={lectura}
             categoriaId={INTELIGENCIA_CATEGORIAS.some((c) => c.id === categoria) ? categoria : null}
-            onSelect={(destino) => navigate(`/empresa/${id}/inteligencia${destino ? `/${destino}` : ''}`)}
+            onSelect={(destino) => {
+              if (destino === 'ingresos' || destino === 'gastos') {
+                irADestino(destino);
+                return;
+              }
+              navigate(`/empresa/${id}/inteligencia${destino ? `/${destino}` : ''}`);
+            }}
             onNavigate={irADestino}
             renderFuente={renderFuente}
           />
@@ -1433,7 +1460,13 @@ const CompanyDetail = ({ vista = null }) => {
           />
         );
       case 'modulo':
-        return <div className="sc-card min-w-0 p-4 sm:p-6">{renderSeccion()}</div>;
+        return (
+          <div className="sc-card min-w-0 p-4 sm:p-6">
+            {vistaActiva?.kind === 'reportes' && ['ingresos', 'egresos'].includes(vistaActiva.id)
+              ? renderSeccion('historial')
+              : renderSeccion()}
+          </div>
+        );
       default:
         return <ExecutiveDashboard lectura={lectura} mes={mesFiltro} anio={anioFiltro} onNavigate={irADestino} />;
     }
@@ -1488,5 +1521,3 @@ const CompanyDetail = ({ vista = null }) => {
 };
 
 export default CompanyDetail;
-
-

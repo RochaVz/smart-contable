@@ -12,7 +12,7 @@ import {
 } from '../navigation/executive.js';
 import { COMPANY_HUB_ITEMS, getHubItem, hubPath, legacyQueryToHubPath } from '../navigation/companyHub.js';
 
-const TIPOS_FUENTE = new Set(['informes', 'fiscal', 'bancos', 'polizas', 'balance']);
+const TIPOS_FUENTE = new Set(['informes', 'fiscal', 'bancos', 'polizas', 'balance', 'movimientos']);
 const TABS_INFORMES = new Set(['resumen', 'estado', 'padron', 'trasladados', 'acreditables', 'retenidos', 'sugerencias']);
 const TABS_FISCAL = new Set(['resumen', 'indicadores', 'isr', 'iva', 'diot', 'anual', 'diferencias', 'config', 'bitacora', 'complementos']);
 
@@ -63,6 +63,11 @@ test('las 9 categorías de inteligencia tienen ids únicos y fuente válida', ()
   INTELIGENCIA_CATEGORIAS.forEach((c) => {
     assert.ok(TIPOS_FUENTE.has(c.fuente.tipo), `${c.id}: tipo inválido`);
   });
+  assert.deepEqual(
+    INTELIGENCIA_CATEGORIAS.filter((c) => ['ingresos', 'gastos'].includes(c.id))
+      .map((c) => [c.fuente.tipo, c.fuente.filtro]),
+    [['movimientos', 'ingresos'], ['movimientos', 'egresos']],
+  );
 });
 
 test('las fuentes referencian pestañas que existen en los paneles', () => {
@@ -105,4 +110,11 @@ test('las rutas de hub legacy siguen resolviéndose', () => {
   assert.equal(legacyQueryToHubPath(3, 'fiscal', null), '/empresa/3/modulos/fiscal');
   assert.equal(legacyQueryToHubPath(3, 'informes', 'padron').startsWith('/empresa/3/reportes/'), true);
   assert.equal(legacyQueryToHubPath(3, 'desconocida', null), '/empresa/3');
+});
+
+test('los accesos de ingresos y egresos del hub abren el historial de CFDI', () => {
+  assert.equal(getHubItem('reportes', 'ingresos').seccion, 'informes');
+  assert.equal(getHubItem('reportes', 'egresos').seccion, 'informes');
+  assert.equal(getHubItem('reportes', 'ingresos').id, 'ingresos');
+  assert.equal(getHubItem('reportes', 'egresos').id, 'egresos');
 });
