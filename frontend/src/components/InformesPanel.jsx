@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../services/api';
 import {
   Loader2, Calendar, FileBarChart, Users, ArrowDownCircle, ArrowUpCircle,
@@ -37,13 +37,41 @@ const TablaSimple = ({ cols, rows }) => (
   </div>
 );
 
-const InformesPanel = ({ empresaId }) => {
+const InformesPanel = ({ empresaId, empresaRegimen }) => {
   const hoy = new Date();
   const [mes, setMes] = useState(hoy.getMonth() + 1);
   const [anio, setAnio] = useState(hoy.getFullYear());
   const [tab, setTab] = useState('resumen');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const regimenNormalizado = String(empresaRegimen ?? '').replace(/\D/g, '');
+
+  const TABS = useMemo(() => {
+    const tabsBase = [
+      { id: 'resumen', label: 'Resumen', icon: FileBarChart },
+      { id: 'estado', label: 'Estado de resultados', icon: TrendingUp },
+      { id: 'trasladados', label: 'IVA trasladado', icon: ArrowUpCircle },
+      { id: 'acreditables', label: 'IVA acreditable', icon: ArrowDownCircle },
+      { id: 'retenidos', label: 'Retenciones', icon: Receipt },
+    ];
+
+    const regimenRelevante = ['601', '603', '605', '606', '607', '608', '610', '611', '612', '614', '620', '621', '625'];
+    if (!regimenNormalizado || !regimenRelevante.includes(regimenNormalizado)) {
+      return tabsBase.slice(0, 3).concat([
+        { id: 'acreditables', label: 'IVA acreditable', icon: ArrowDownCircle },
+        { id: 'retenidos', label: 'Retenciones', icon: Receipt },
+      ]);
+    }
+
+    return tabsBase;
+  }, [regimenNormalizado]);
+
+  useEffect(() => {
+    if (!TABS.some(({ id }) => id === tab)) {
+      setTab('resumen');
+    }
+  }, [TABS, tab]);
 
   const fetchInformes = useCallback(async () => {
     setLoading(true);
@@ -63,16 +91,6 @@ const InformesPanel = ({ empresaId }) => {
   useEffect(() => {
     fetchInformes();
   }, [fetchInformes]);
-
-  const TABS = [
-    { id: 'resumen', label: 'Resumen', icon: FileBarChart },
-    { id: 'estado', label: 'Estado de resultados', icon: TrendingUp },
-    { id: 'padron', label: 'Padrón proveedores', icon: Users },
-    { id: 'trasladados', label: 'IVA trasladado', icon: ArrowUpCircle },
-    { id: 'acreditables', label: 'IVA acreditable', icon: ArrowDownCircle },
-    { id: 'retenidos', label: 'Retenciones', icon: Receipt },
-    { id: 'sugerencias', label: 'Más informes', icon: Lightbulb },
-  ];
 
   const renderResumen = () => {
     const r = data.resumen_ingresos_egresos;
@@ -307,11 +325,9 @@ const InformesPanel = ({ empresaId }) => {
     if (!data) return <p className="text-slate-500 text-center py-12">No se pudieron cargar los informes.</p>;
     switch (tab) {
       case 'estado': return renderEstado();
-      case 'padron': return renderPadron();
       case 'trasladados': return renderTrasladados();
       case 'acreditables': return renderAcreditables();
       case 'retenidos': return renderRetenidos();
-      case 'sugerencias': return renderSugerencias();
       default: return renderResumen();
     }
   };

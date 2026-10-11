@@ -3,13 +3,11 @@ from sqlalchemy import (
     Integer,
     String,
     Boolean,
-    DateTime,
     ForeignKey,
     Enum
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from app.core.database import Base
+from app.core.base_model import Base, TimestampMixin
 import enum
 
 
@@ -25,7 +23,7 @@ class RegimenFiscal(str, enum.Enum):
     general_de_ley = "601"
 
 
-class Empresa(Base):
+class Empresa(Base, TimestampMixin):
     __tablename__ = "empresas"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -65,17 +63,6 @@ class Empresa(Base):
         Boolean,
         default=True
     )
-    # pylint: disable=not-callable
-    creado_en = Column(
-        DateTime(timezone=True),
-        server_default=func.now()
-    ) # pylint: disable=not-callable
-
-    actualizado_en = Column(
-        DateTime,
-        server_default=func.now(),
-        onupdate=func.now()
-    )
 
     usuario = relationship(
         "Usuario",
@@ -114,3 +101,4 @@ class Empresa(Base):
 
     def __repr__(self):
         return f"<Empresa {self.rfc} - {self.razon_social}>"
+

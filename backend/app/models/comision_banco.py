@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String, Boolean, Numeric, ForeignKey
 from sqlalchemy.orm import relationship
-from app.core.database import Base
+from app.core.base_model import Base, TimestampMixin
 
 
-class ComisionBanco(Base):
+class ComisionBanco(Base, TimestampMixin):
     """Comisión por banco y tipo de tarjeta (crédito / débito) por empresa."""
 
     __tablename__ = "comisiones_banco"
@@ -19,3 +19,4 @@ class ComisionBanco(Base):
     es_default = Column(Boolean, default=False)
 
     empresa = relationship("Empresa", back_populates="comisiones_banco")
+

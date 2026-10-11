@@ -23,7 +23,7 @@ const Login = ({ onLoginSuccess }) => {
       const response = await api.post('/auth/login', formData);
       
       // Guardamos el token
-      localStorage.setItem('token', response.data.access_token);
+      localStorage.setItem('token', response.data.data.access_token);
       
       // Avisamos a la App que el login fue exitoso
       onLoginSuccess();

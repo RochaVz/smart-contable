@@ -5,6 +5,7 @@ import {
   ArrowLeft, FileText, UploadCloud,
   Loader2, BrainCircuit, ChevronUp, ChevronDown, Download, Calendar,
   BookOpen, FileBarChart, Landmark, Settings2, Trash2,
+  TrendingUp, WalletCards,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
@@ -28,28 +29,64 @@ const MESES = [
 
 const SECCIONES = [
   {
-    id: 'historial',
-    label: 'Historial',
+    id: 'resumen',
+    label: 'Resumen del negocio',
     icon: FileText,
-    descripcion: 'CFDI del periodo, tendencia y exportación',
+    descripcion: 'Ingresos, egresos, utilidad, IVA e ISR del periodo',
   },
   {
-    id: 'polizas',
-    label: 'Pólizas',
-    icon: BookOpen,
-    descripcion: 'Diario, ingresos, egresos y comisiones bancarias',
+    id: 'ingresos',
+    label: 'Ingresos',
+    icon: TrendingUp,
+    descripcion: 'Ventas, clientes, métodos de pago y tendencias',
   },
   {
-    id: 'informes',
-    label: 'Informes fiscales',
+    id: 'egresos',
+    label: 'Egresos',
+    icon: Landmark,
+    descripcion: 'Gastos, proveedores, categorías e impuestos',
+  },
+  {
+    id: 'utilidad',
+    label: 'Utilidad',
+    icon: WalletCards,
+    descripcion: 'Resultado neto, margen y comparativos',
+  },
+  {
+    id: 'impuestos',
+    label: 'Impuestos',
     icon: FileBarChart,
-    descripcion: 'Estado de resultados, impuestos y padrón',
+    descripcion: 'IVA, ISR, obligaciones y riesgo fiscal',
+  },
+  {
+    id: 'bancos',
+    label: 'Bancos',
+    icon: Landmark,
+    descripcion: 'Flujo, depósitos, retiros y movimientos del mes',
   },
   {
     id: 'conciliacion',
     label: 'Conciliación',
     icon: Landmark,
-    descripcion: 'Estado de cuenta vs pólizas',
+    descripcion: 'Paridad entre CFDI y estados de cuenta',
+  },
+  {
+    id: 'obligaciones',
+    label: 'Obligaciones fiscales',
+    icon: BookOpen,
+    descripcion: 'Declaraciones, vencimientos y pagos pendientes',
+  },
+  {
+    id: 'polizas',
+    label: 'Pólizas',
+    icon: BookOpen,
+    descripcion: 'Auditoría y revisión contable especializada',
+  },
+  {
+    id: 'detalles',
+    label: 'Detalles técnicos',
+    icon: Settings2,
+    descripcion: 'Historial completo, clasificación y exportación',
   },
 ];
 
@@ -115,7 +152,7 @@ const CompanyDetail = () => {
   const navigate = useNavigate();
   const hoy = new Date();
 
-  const [seccion, setSeccion] = useState('historial');
+  const [seccion, setSeccion] = useState('resumen');
   const [facturas, setFacturas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -606,6 +643,19 @@ const CompanyDetail = () => {
 
   const renderSeccion = () => {
     switch (seccion) {
+      case 'resumen':
+      case 'utilidad':
+      case 'bancos':
+      case 'obligaciones':
+      case 'detalles':
+        return renderHistorial();
+      case 'ingresos':
+      case 'egresos':
+        return renderHistorial();
+      case 'impuestos':
+        return <InformesPanel empresaId={id} empresaRegimen={empresa?.regimen_fiscal} />;
+      case 'conciliacion':
+        return <ConciliacionBancariaPanel empresaId={id} />;
       case 'polizas':
         return (
           <div className="space-y-8">
@@ -617,10 +667,6 @@ const CompanyDetail = () => {
             <PolizasPanel empresaId={id} onRefreshFacturas={handleRefresh} />
           </div>
         );
-      case 'informes':
-        return <InformesPanel empresaId={id} />;
-      case 'conciliacion':
-        return <ConciliacionBancariaPanel empresaId={id} />;
       default:
         return renderHistorial();
     }
@@ -686,7 +732,12 @@ const CompanyDetail = () => {
                 <button
                   key={id}
                   type="button"
-                  onClick={() => setSeccion(id)}
+                  onClick={() => {
+                    setSeccion(id);
+                    if (id === 'ingresos') setFiltroMovimiento('ingresos');
+                    if (id === 'egresos') setFiltroMovimiento('egresos');
+                    if (id === 'resumen' || id === 'utilidad' || id === 'impuestos' || id === 'bancos' || id === 'conciliacion' || id === 'obligaciones' || id === 'polizas' || id === 'detalles') setFiltroMovimiento('todos');
+                  }}
                   className={`flex flex-col items-start gap-1 px-4 py-3 rounded-xl text-left transition-all ${
                     activo
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
