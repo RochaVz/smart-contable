@@ -228,6 +228,7 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
   if (!resumenSat) {
     return {
       items: [],
+      desgloseRegimen: [],
       totalPagar: null,
       ivaTrasladado: null,
       ivaAcreditable: null,
@@ -403,6 +404,122 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
     2,
   );
 
+  // Desglose de impuestos de acuerdo al régimen fiscal
+  const obligaciones = resumenSat.obligaciones_regimen || {};
+  const regimen = resumenSat.regimen || {};
+  const empresaData = resumenSat.empresa || {};
+  const aplicables = resumenSat.impuestos_aplicables || [];
+
+  const regimenClave = regimen.clave
+    || empresaData.regimen_fiscal
+    || (typeof empresaData.regimen === 'string' ? empresaData.regimen : null)
+    || null;
+
+  const regimenNombre = regimen.descripcion
+    || regimen.nombre
+    || obligaciones.regimen
+    || (regimenClave ? `Régimen ${regimenClave}` : null);
+
+  const desgloseRegimen = [];
+
+  // 1. ISR provisional / definitivo según régimen
+  const aplicaIsr = obligaciones.aplica_isr ?? (impuestos.isr?.aplica !== false);
+  if (aplicaIsr) {
+    const isResico = obligaciones.calculo_isr_tipo === 'tasa_directa_ingresos'
+      || obligaciones.calculo_isr_tipo === 'resico_pf_tasa_directa'
+      || regimenClave === '626';
+    const labelIsr = isResico ? 'ISR (RESICO)' : 'ISR provisional';
+    desgloseRegimen.push({
+      id: 'isr',
+      label: labelIsr,
+      monto: round(isrMonto || 0, 2),
+      tipo: 'cargo',
+      vencimiento: isrSug?.vencimiento || null,
+      tasa: impuestos.isr?.tasa_efectiva || impuestos.isr?.tasa || null,
+      detalle: obligaciones.calculo_isr_tipo
+        ? String(obligaciones.calculo_isr_tipo).replaceAll('_', ' ')
+        : (isResico ? 'Tasa reducida sobre ingresos cobrados' : 'Pago provisional'),
+    });
+  }
+
+  // 2. IVA según régimen
+  const aplicaIva = obligaciones.aplica_iva ?? (impuestos.iva?.aplica !== false);
+  if (aplicaIva) {
+    if (ivaAFavor > 0 && ivaMonto <= 0) {
+      desgloseRegimen.push({
+        id: 'iva',
+        label: 'IVA a favor',
+        monto: round(ivaAFavor, 2),
+        tipo: 'favor',
+        vencimiento: null,
+        detalle: 'Saldo a favor del periodo',
+      });
+    } else {
+      desgloseRegimen.push({
+        id: 'iva',
+        label: 'IVA a cargo',
+        monto: round(ivaMonto || 0, 2),
+        tipo: 'cargo',
+        vencimiento: ivaSug?.vencimiento || null,
+        detalle: 'Trasladado menos acreditable',
+      });
+    }
+  }
+
+  // 3. Retenciones (ISR e IVA retenidos)
+  const tieneRetenciones = retencionesMonto > 0
+    || (impuestos.retenciones && (impuestos.retenciones.total > 0 || impuestos.retenciones.isr > 0 || impuestos.retenciones.iva > 0))
+    || Boolean(obligaciones.retencion_resico_1_25);
+  if (tieneRetenciones) {
+    desgloseRegimen.push({
+      id: 'retenciones',
+      label: 'Retenciones',
+      monto: round(retencionesMonto || 0, 2),
+      tipo: 'cargo',
+      vencimiento: retSug?.vencimiento || null,
+      detalle: 'Retenciones por enterar',
+    });
+  }
+
+  // 4. ISH estatal si aplica
+  if (ish > 0 || obligaciones.aplica_ish || aplicables.some((a) => a.clave === 'ish')) {
+    desgloseRegimen.push({
+      id: 'ish',
+      label: 'Imp. s/ Hospedaje',
+      monto: round(ish || 0, 2),
+      tipo: 'cargo',
+      vencimiento: ivaSug?.vencimiento || isrSug?.vencimiento || null,
+      detalle: 'ISH estatal',
+    });
+  }
+
+  // 5. IEPS si aplica
+  if (obligaciones.aplica_ieps || aplicables.some((a) => a.clave === 'ieps')) {
+    const iepsMonto = toNumber(totales.ieps || impuestos.ieps?.a_cargo || 0);
+    desgloseRegimen.push({
+      id: 'ieps',
+      label: 'IEPS',
+      monto: round(iepsMonto, 2),
+      tipo: 'cargo',
+      vencimiento: ivaSug?.vencimiento || isrSug?.vencimiento || null,
+      detalle: 'Impuesto especial',
+    });
+  }
+
+  // 6. Otras sugerencias de pago específicas
+  (resumenSat.sugerencias_pago || []).forEach((s) => {
+    if (['iva', 'isr', 'retenciones', 'iva_favor', 'ish', 'ieps', 'iva_acreditable'].includes(s.clave)) return;
+    if (s.accion !== 'pagar') return;
+    desgloseRegimen.push({
+      id: s.clave || s.concepto,
+      label: s.concepto || s.clave,
+      monto: round(toNumber(s.monto || s.monto_estimado || 0), 2),
+      tipo: 'cargo',
+      vencimiento: s.vencimiento || null,
+      detalle: s.nota || 'A cargo',
+    });
+  });
+
   return {
     items,
     totalPagar: totales.total_a_pagar != null
@@ -417,6 +534,9 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
     retenciones: retenciones || null,
     ish: ish || null,
     vencimientoPrincipal: items.find((i) => i.accion === 'pagar' && i.vencimiento)?.vencimiento || null,
+    regimenNombre,
+    regimenClave,
+    desgloseRegimen,
   };
 };
 
@@ -608,6 +728,21 @@ export const buildExecutiveSnapshot = ({
     : null;
 
   const impuestosDetalle = construirImpuestosDetalle(resumenSat);
+  if (!Array.isArray(impuestosDetalle.desgloseRegimen)) {
+    impuestosDetalle.desgloseRegimen = [];
+  }
+  if (impuestosDetalle.desgloseRegimen.length === 0 && (ivaNeto != null || actualCfdi.ivaNeto != null)) {
+    const ivaVal = ivaNeto ?? actualCfdi.ivaNeto;
+    if (ivaVal != null && ivaVal !== 0) {
+      impuestosDetalle.desgloseRegimen.push({
+        id: 'iva',
+        label: ivaVal < 0 ? 'IVA a favor (CFDI)' : 'IVA por pagar (CFDI)',
+        monto: round(Math.abs(ivaVal), 2),
+        tipo: ivaVal < 0 ? 'favor' : 'cargo',
+        detalle: 'Estimación basada en CFDI',
+      });
+    }
+  }
   const kpiAhorro = construirKpiAhorro(facturas, mes, anio, indicadores);
 
   const snapshot = {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
+import { getNavigationCache, setNavigationCache } from '../services/navigationCache';
 import { periodoAnterior } from '../utils/financialHealth';
 
 const VACIO = {
@@ -18,7 +19,11 @@ const valorONulo = (resultado) => (resultado.status === 'fulfilled' ? resultado.
  * dashboard siempre muestre lo que sí está disponible.
  */
 export default function useExecutiveData({ empresaId, esLocal, mes, anio, refreshToken = 0, enabled = true }) {
-  const [estado, setEstado] = useState({ ...VACIO, loading: !esLocal, fallidos: [] });
+  const cacheKey = `executive:${empresaId}:${anio}-${mes}`;
+  const datosCacheados = getNavigationCache(cacheKey);
+  const [estado, setEstado] = useState(() => (
+    datosCacheados || { ...VACIO, loading: !esLocal, fallidos: [] }
+  ));
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -31,10 +36,15 @@ export default function useExecutiveData({ empresaId, esLocal, mes, anio, refres
     }
 
     let cancelado = false;
+    const cacheActual = getNavigationCache(cacheKey);
+    if (cacheActual) {
+      setEstado(cacheActual);
+    } else {
+      setEstado((actual) => ({ ...actual, loading: true }));
+    }
+
     const previo = periodoAnterior(mes, anio);
     const params = { empresa_id: empresaId, mes, anio };
-
-    setEstado((actual) => ({ ...actual, loading: true }));
 
     Promise.allSettled([
       api.get('/reportes/paquete-fiscal', { params }),
@@ -47,7 +57,7 @@ export default function useExecutiveData({ empresaId, esLocal, mes, anio, refres
       const [paquete, anterior, sat, indicadores, banco] = resultados;
       const nombres = ['paquete', 'anterior', 'sat', 'indicadores', 'banco'];
       const movimientos = valorONulo(banco);
-      setEstado({
+      const datosActualizados = {
         paquete: valorONulo(paquete),
         paqueteAnterior: valorONulo(anterior),
         resumenSat: valorONulo(sat),
@@ -55,13 +65,15 @@ export default function useExecutiveData({ empresaId, esLocal, mes, anio, refres
         movimientosBanco: Array.isArray(movimientos) ? movimientos : null,
         loading: false,
         fallidos: resultados.flatMap((r, i) => (r.status === 'rejected' ? [nombres[i]] : [])),
-      });
+      };
+      setNavigationCache(cacheKey, datosActualizados);
+      setEstado(datosActualizados);
     });
 
     return () => {
       cancelado = true;
     };
-  }, [empresaId, esLocal, mes, anio, refreshToken, enabled]);
+  }, [empresaId, esLocal, mes, anio, refreshToken, enabled, cacheKey]);
 
   return estado;
 }

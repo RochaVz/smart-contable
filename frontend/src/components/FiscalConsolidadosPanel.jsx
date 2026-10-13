@@ -9,6 +9,7 @@ import {
   History,
   Loader2,
   Percent,
+  Receipt,
   RefreshCw,
   Scale,
   Settings2,
@@ -72,7 +73,15 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated, initialTab = 'resumen' })
   const [loadingIndicadores, setLoadingIndicadores] = useState(false);
   const [loadingResumen, setLoadingResumen] = useState(false);
   const [savingRevision, setSavingRevision] = useState(null);
-  const [bloqueExpandido, setBloqueExpandido] = useState('impuestos');
+  const [bloquesAbiertos, setBloquesAbiertos] = useState({
+    impuestos: true,
+    declaraciones: true,
+    pagos: true,
+  });
+
+  const toggleBloque = (id) => {
+    setBloquesAbiertos((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const cargarCalculos = useCallback(async () => {
     if (!empresa?.id) return;
@@ -130,16 +139,16 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated, initialTab = 'resumen' })
 
   useEffect(() => {
     if (!empresa?.id) return;
-    if (['isr', 'iva', 'diferencias'].includes(tab)) {
-      queueMicrotask(cargarCalculos);
-    }
-    if (tab === 'indicadores') {
-      queueMicrotask(cargarIndicadores);
-    }
-    if (tab === 'resumen') {
-      queueMicrotask(cargarResumenSat);
-    }
-  }, [cargarCalculos, cargarIndicadores, cargarResumenSat, empresa?.id, tab]);
+    queueMicrotask(cargarResumenSat);
+  }, [cargarResumenSat, empresa?.id]);
+
+  const regimenClave = resumenSat?.regimen?.clave
+    || resumenSat?.empresa?.regimen_fiscal
+    || empresa?.regimen_fiscal
+    || null;
+  const regimenNombre = resumenSat?.regimen?.descripcion
+    || resumenSat?.obligaciones_regimen?.regimen
+    || (regimenClave ? `Régimen ${regimenClave}` : null);
 
   const aprobarModulo = async (moduloId) => {
     if (!empresa?.id) return;
@@ -181,170 +190,79 @@ const FiscalConsolidadosPanel = ({ empresa, onUpdated, initialTab = 'resumen' })
 
   return (
     <section className="space-y-5">
-      {/* Header + filtros compartidos */}
-      <div className="border border-slate-800 bg-slate-900 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-black text-white">Centro fiscal</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Salud · ISR · IVA · DIOT · Anual · conciliación de fuentes y bitácora
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${badgeTone(estadoResumen)}`}>
-                Estado: {String(estadoResumen).replaceAll('_', ' ')}
-              </span>
-              {indicadores?.salud?.score != null && (
-                <span className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold text-blue-200">
-                  Score {indicadores.salud.score}/100
-                </span>
-              )}
-              {pendientes.length > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-200">
-                  <AlertTriangle className="h-3 w-3" />
-                  {pendientes.length} pendiente{pendientes.length === 1 ? '' : 's'}
-                </span>
-              )}
-              {(diferencias?.alertas?.length > 0 || indicadores?.diferencias?.desvios > 0) && (
-                <span className="inline-flex items-center rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold text-rose-200">
-                  {(diferencias?.alertas?.length || indicadores?.diferencias?.desvios || 0)} desvío(s)
-                </span>
-              )}
-            </div>
+      {/* Barra de periodo del Motor Fiscal SAT (Centro fiscal oculto) */}
+      <div className="sc-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <Receipt className="h-4 w-4" />
+            </span>
+            <h2 className="text-base font-bold text-slate-900 sm:text-lg dark:text-white">
+              Motor Fiscal SAT
+            </h2>
           </div>
-          <button
-            type="button"
-            onClick={refreshAll}
-            disabled={loadingCalc || loadingIndicadores}
-            className="inline-flex min-h-10 items-center gap-2 border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold text-slate-200 hover:border-blue-500 hover:text-white disabled:opacity-40"
-          >
-            {(loadingCalc || loadingIndicadores) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Actualizar
-          </button>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Cálculo informativo y proyección de impuestos según el régimen fiscal ({MESES[mes - 1]} {anio})
+          </p>
+          {regimenNombre && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-300">
+                Régimen: {regimenClave ? `${regimenClave} · ` : ''}{regimenNombre}
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            Mes
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Mes:
+            </label>
             <select
               value={mes}
               onChange={(e) => setMes(Number(e.target.value))}
-              className="mt-1 w-full border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+              className="rounded-lg border border-[color:var(--sc-border)] bg-[color:var(--sc-card)] px-2.5 py-1.5 text-xs font-semibold text-slate-900 dark:text-white"
             >
               {MESES.map((nombre, idx) => (
                 <option key={nombre} value={idx + 1}>{nombre}</option>
               ))}
             </select>
-          </label>
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            Año
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Año:
+            </label>
             <input
               type="number"
               value={anio}
               onChange={(e) => setAnio(Number(e.target.value) || now.getFullYear())}
-              className="mt-1 w-full border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+              className="w-20 rounded-lg border border-[color:var(--sc-border)] bg-[color:var(--sc-card)] px-2.5 py-1.5 text-xs font-semibold text-slate-900 dark:text-white"
             />
-          </label>
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            Proveedor / RFC
-            <input
-              type="text"
-              value={proveedor}
-              onChange={(e) => setProveedor(e.target.value)}
-              placeholder="Filtrar DIOT..."
-              className="mt-1 w-full border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white placeholder:text-slate-600"
-            />
-          </label>
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            Tipo operación
-            <select
-              value={tipoOperacion}
-              onChange={(e) => setTipoOperacion(e.target.value)}
-              className="mt-1 w-full border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
-            >
-              <option value="">Todos</option>
-              <option value="nacional">Nacional</option>
-              <option value="extranjero">Extranjero</option>
-              <option value="global">Global</option>
-            </select>
-          </label>
+          </div>
+
+          <button
+            type="button"
+            onClick={cargarResumenSat}
+            disabled={loadingResumen}
+            className="btn-ui btn-ui--primary btn-ui--sm inline-flex items-center gap-1.5 text-xs font-bold"
+          >
+            {loadingResumen ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Actualizar
+          </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-slate-800 pb-1">
-        {TABS.map(({ id, label, icon: Icon }) => {
-          const active = tab === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`btn-press inline-flex min-h-10 items-center gap-2 border-b-2 px-3 py-2 text-xs font-black uppercase tracking-wide transition ${
-                active
-                  ? 'border-blue-500 bg-blue-500/10 text-white'
-                  : 'border-transparent text-slate-500 hover:text-slate-200'
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      {tab === 'resumen' && (
-        <ResumenSatPanel
-          data={resumenSat}
-          loading={loadingResumen}
-          bloqueExpandido={bloqueExpandido}
-          onToggleBloque={setBloqueExpandido}
-        />
-      )}
-      {tab === 'indicadores' && (
-        <IndicadoresPanel
-          data={indicadores}
-          loading={loadingIndicadores}
-          mes={mes}
-          anio={anio}
-          savingRevision={savingRevision}
-          onAprobar={aprobarModulo}
-        />
-      )}
-      {tab === 'isr' && (
-        <CalcIsrPanel data={isr} loading={loadingCalc} mes={mes} anio={anio} />
-      )}
-      {tab === 'iva' && (
-        <CalcIvaPanel data={iva} loading={loadingCalc} mes={mes} anio={anio} />
-      )}
-      {tab === 'diot' && (
-        <DiotPanel
-          empresa={empresa}
-          mes={mes}
-          anio={anio}
-          onPeriodoChange={({ mes: m, anio: a }) => {
-            if (m != null) setMes(m);
-            if (a != null) setAnio(a);
-          }}
-          filtroProveedor={proveedor}
-          filtroTipo={tipoOperacion}
-          hidePeriodControls
-        />
-      )}
-      {tab === 'anual' && (
-        <FiscalAnualPanel empresa={empresa} anio={anio} onAnioChange={setAnio} />
-      )}
-      {tab === 'diferencias' && (
-        <DiferenciasPanel data={diferencias} loading={loadingCalc} />
-      )}
-      {tab === 'config' && (
-        <FiscalRegimenPanel empresa={empresa} onUpdated={onUpdated} />
-      )}
-      {tab === 'bitacora' && (
-        <HistorialDeclaracionesPanel empresa={empresa} />
-      )}
-      {tab === 'complementos' && (
-        <CfdiComplementosPanel empresa={empresa} />
-      )}
+      {/* Contenedores exclusivos del Motor Fiscal SAT:
+          1. Cómo se calculan los impuestos
+          2. Declaraciones y periodicidad
+          3. Sugerencias de pago */}
+      <ResumenSatPanel
+        data={resumenSat}
+        loading={loadingResumen}
+        abiertos={bloquesAbiertos}
+        onToggleBloque={toggleBloque}
+      />
     </section>
   );
 };
@@ -758,19 +676,19 @@ const DiferenciasPanel = ({ data, loading }) => {
 };
 
 const ExpandBlock = ({ id, title, subtitle, open, onToggle, children }) => (
-  <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-300">
+  <div className="sc-card overflow-hidden transition-all duration-300">
     <button
       type="button"
-      onClick={() => onToggle(open ? null : id)}
-      className={`btn-press flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors ${
-        open ? 'bg-slate-800/80' : 'hover:bg-slate-800/40'
+      onClick={onToggle}
+      className={`btn-press flex w-full items-center justify-between gap-3 p-4 sm:p-5 text-left transition-colors ${
+        open ? 'bg-[color:var(--sc-soft)]/70' : 'hover:bg-[color:var(--sc-soft)]/40'
       }`}
     >
       <div>
-        <p className="text-sm font-black text-white">{title}</p>
-        {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+        <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">{title}</p>
+        {subtitle && <p className="mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">{subtitle}</p>}
       </div>
-      <span className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▾</span>
+      <span className={`text-slate-400 dark:text-slate-500 transition-transform duration-200 text-lg ${open ? 'rotate-180' : ''}`}>▾</span>
     </button>
     <div
       className={`grid transition-all duration-300 ease-out ${
@@ -778,90 +696,54 @@ const ExpandBlock = ({ id, title, subtitle, open, onToggle, children }) => (
       }`}
     >
       <div className="overflow-hidden">
-        <div className="border-t border-slate-800 px-4 py-4">{children}</div>
+        <div className="border-t border-[color:var(--sc-divider)] p-4 sm:p-5">{children}</div>
       </div>
     </div>
   </div>
 );
 
-const ResumenSatPanel = ({ data, loading, bloqueExpandido, onToggleBloque }) => {
+const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
   if (loading && !data) {
     return (
       <div className="flex justify-center py-14">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
       </div>
     );
   }
   if (!data) {
-    return <p className="py-10 text-center text-sm text-slate-500">Sin resumen fiscal para el periodo.</p>;
+    return (
+      <div className="sc-card p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+        Sin resumen fiscal para el periodo seleccionado.
+      </div>
+    );
   }
 
   const impuestos = data.impuestos || {};
   const declaraciones = data.declaraciones || [];
   const sugerencias = data.sugerencias_pago || [];
   const obligaciones = data.obligaciones_regimen || {};
-    const noAplicables = data.impuestos_no_aplicables || [];
-    const aplicables = data.impuestos_aplicables || [];
-    const totales = data.totales || {};
-    const acciones = data.acciones || [];
-    const totalPagar = totales.total_a_pagar ?? sugerencias
-      .filter((s) => (s.accion || 'pagar') === 'pagar')
-      .reduce((acc, s) => acc + Number(s.monto ?? s.monto_estimado ?? 0), 0);
+  const totales = data.totales || {};
+  const acciones = data.acciones || [];
+  const totalPagar = totales.total_a_pagar ?? sugerencias
+    .filter((s) => (s.accion || 'pagar') === 'pagar')
+    .reduce((acc, s) => acc + Number(s.monto ?? s.monto_estimado ?? 0), 0);
 
-    return (
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
-          {data.aviso}
-      </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <Metric label="ISR a cargo" value={money(impuestos.isr?.a_cargo)} tone="amber" />
-          <Metric label="IVA a cargo" value={money(impuestos.iva?.a_cargo)} tone="rose" />
-          <Metric label="IVA a favor" value={money(impuestos.iva?.a_favor)} tone="emerald" />
-          <Metric label="Retenciones" value={money(impuestos.retenciones?.total)} tone="sky" />
-          <Metric label="Total a pagar" value={money(totalPagar)} tone="emerald" />
-        </div>
-
-        {(aplicables.length > 0 || noAplicables.length > 0) && (
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Obligaciones que aplican</p>
-              <ul className="mt-2 space-y-1 text-sm text-slate-200">
-                {(aplicables.length ? aplicables : [{ nombre: 'ISR' }, { nombre: 'IVA' }]).map((i) => (
-                  <li key={i.clave || i.nombre}>• {i.nombre}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No aplican en este régimen</p>
-              {noAplicables.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">Ninguno identificado.</p>
-              ) : (
-                <ul className="mt-2 space-y-2 text-sm text-slate-300">
-                  {noAplicables.map((i) => (
-                    <li key={i.clave}>
-                      <span className="font-bold text-slate-200">{i.nombre}</span>
-                      {i.motivo && <span className="block text-xs text-slate-500">{i.motivo}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-
+  return (
+    <div className="space-y-4">
+      {/* 1. Cómo se calculan los impuestos */}
       <ExpandBlock
         id="impuestos"
         title="Cómo se calculan los impuestos"
-        subtitle="ISR · IVA · retenciones (informativo)"
-        open={bloqueExpandido === 'impuestos'}
-        onToggle={onToggleBloque}
+        subtitle="ISR · IVA · retenciones (informativo según régimen)"
+        open={abiertos?.impuestos ?? true}
+        onToggle={() => onToggleBloque('impuestos')}
       >
         <div className="grid gap-3 lg:grid-cols-3">
           <SourceCard
             title="ISR provisional"
+            badge={obligaciones.calculo_isr_tipo ? String(obligaciones.calculo_isr_tipo).replaceAll('_', ' ') : null}
             rows={[
-              ['Método', obligaciones.calculo_isr_tipo || '—'],
+              ['Método', obligaciones.calculo_isr_tipo ? String(obligaciones.calculo_isr_tipo).replaceAll('_', ' ') : '—'],
               ['A cargo', money(impuestos.isr?.a_cargo)],
               ['Resumen', impuestos.isr?.resumen || '—'],
             ]}
@@ -879,96 +761,111 @@ const ResumenSatPanel = ({ data, loading, bloqueExpandido, onToggleBloque }) => 
             rows={[
               ['ISR retenido', money(impuestos.retenciones?.isr)],
               ['IVA retenido', money(impuestos.retenciones?.iva)],
-              ['Total', money(impuestos.retenciones?.total)],
+              ['Total retenciones', money(impuestos.retenciones?.total)],
             ]}
           />
         </div>
       </ExpandBlock>
 
+      {/* 2. Declaraciones y periodicidad */}
       <ExpandBlock
         id="declaraciones"
         title="Declaraciones y periodicidad"
         subtitle="Qué presentar y cuándo (mensual / bimestral / anual)"
-        open={bloqueExpandido === 'declaraciones'}
-        onToggle={onToggleBloque}
+        open={abiertos?.declaraciones ?? true}
+        onToggle={() => onToggleBloque('declaraciones')}
       >
-        <div className="space-y-2">
-          {declaraciones.map((d) => (
-            <div
-              key={`${d.tipo}-${d.periodicidad}`}
-              className="flex flex-col gap-1 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="text-sm font-bold text-white">{d.tipo}</p>
-                <p className="text-xs text-slate-400">{d.descripcion}</p>
-                <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-500">{d.base_legal}</p>
+        {declaraciones.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">No hay declaraciones registradas para este régimen.</p>
+        ) : (
+          <div className="space-y-2">
+            {declaraciones.map((d) => (
+              <div
+                key={`${d.tipo}-${d.periodicidad}`}
+                className="flex flex-col gap-2 rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{d.tipo}</p>
+                    <span className="inline-flex rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">
+                      {d.periodicidad}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{d.descripcion}</p>
+                  <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{d.base_legal}</p>
+                </div>
+                <div className="text-left sm:text-right shrink-0">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{d.periodo_corresponde || '—'}</p>
+                  <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Vence: {d.proximo_vencimiento || '—'}</p>
+                </div>
               </div>
-              <div className="text-left sm:text-right">
-                <span className="inline-flex rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-cyan-200">
-                  {d.periodicidad}
-                </span>
-                <p className="mt-1 text-xs text-slate-300">{d.periodo_corresponde || '—'}</p>
-                <p className="text-xs font-bold text-amber-200">Vence: {d.proximo_vencimiento || '—'}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </ExpandBlock>
 
+      {/* 3. Sugerencias de pago */}
       <ExpandBlock
         id="pagos"
         title="Sugerencias de pago"
-              subtitle={`Total estimado a pagar: ${money(totalPagar)}`}
-        open={bloqueExpandido === 'pagos'}
-        onToggle={onToggleBloque}
+        subtitle={`Total estimado a pagar: ${money(totalPagar)}`}
+        open={abiertos?.pagos ?? true}
+        onToggle={() => onToggleBloque('pagos')}
       >
         {sugerencias.length === 0 ? (
-          <p className="text-sm text-slate-500">No hay montos a cargo estimados en este periodo.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No hay montos a cargo estimados en este periodo.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {sugerencias.map((s) => (
-              <div key={s.concepto} className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+              <div key={s.concepto} className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-bold text-white">{s.concepto}</p>
-                        <p className="text-sm font-black text-emerald-300">{money(s.monto ?? s.monto_estimado)}</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{s.concepto}</p>
+                  <p className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">{money(s.monto ?? s.monto_estimado)}</p>
                 </div>
-                <p className="mt-1 text-xs text-slate-400">{s.nota}</p>
+                {s.nota && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{s.nota}</p>}
                 {s.vencimiento && (
-                  <p className="mt-1 text-[11px] font-bold text-amber-200">Vencimiento estimado: {s.vencimiento}</p>
+                  <p className="mt-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">Vencimiento estimado: {s.vencimiento}</p>
                 )}
               </div>
             ))}
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 flex items-center justify-between">
-                    <p className="text-sm font-bold text-emerald-100">Total a pagar (estimado)</p>
-                    <p className="text-base font-black text-emerald-300">{money(totalPagar)}</p>
-                  </div>
-                </div>
-              )}
-              {acciones.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Acciones recomendadas</p>
-                  {acciones.map((a) => (
-                    <div key={a.tipo} className="rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-xs text-slate-300">
-                      <span className="font-bold text-white">{a.titulo}</span>
-                      {a.monto > 0 && <span className="ml-2 text-emerald-300">{money(a.monto)}</span>}
-                      {a.vencimiento && <span className="ml-2 text-amber-200">· vence {a.vencimiento}</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ExpandBlock>
+            <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
+              <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Total a pagar (estimado)</p>
+              <p className="font-mono text-base font-black text-emerald-700 dark:text-emerald-300">{money(totalPagar)}</p>
+            </div>
           </div>
-        );
-      };
+        )}
+        {acciones.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Acciones recomendadas</p>
+            {acciones.map((a) => (
+              <div key={a.tipo} className="rounded-lg border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
+                <span className="font-bold text-slate-900 dark:text-white">{a.titulo}</span>
+                {a.monto > 0 && <span className="ml-2 font-mono font-bold text-emerald-600 dark:text-emerald-400">{money(a.monto)}</span>}
+                {a.vencimiento && <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">· vence {a.vencimiento}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </ExpandBlock>
+    </div>
+  );
+};
 
-const SourceCard = ({ title, rows }) => (
-  <div className="border border-slate-800 bg-slate-900 p-4">
-    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{title}</p>
+const SourceCard = ({ title, badge, rows }) => (
+  <div className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-4">
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{title}</p>
+      {badge && (
+        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+          {badge}
+        </span>
+      )}
+    </div>
     <dl className="mt-3 space-y-2">
       {rows.map(([k, v]) => (
-        <div key={k} className="flex items-center justify-between gap-3 text-xs">
-          <dt className="text-slate-500">{k}</dt>
-          <dd className="max-w-[60%] text-right font-mono text-slate-200">{v}</dd>
+        <div key={k} className="flex items-start justify-between gap-3 text-xs">
+          <dt className="text-slate-500 dark:text-slate-400 font-medium">{k}</dt>
+          <dd className="max-w-[65%] text-right font-mono font-bold text-slate-900 dark:text-white">{v}</dd>
         </div>
       ))}
     </dl>
@@ -976,19 +873,19 @@ const SourceCard = ({ title, rows }) => (
 );
 
 const Metric = ({ label, value, tone }) => (
-  <div className="border border-slate-800 bg-slate-900 p-4">
-    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+  <div className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-4">
+    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{label}</p>
     <p
-      className={`mt-2 text-sm font-bold ${
+      className={`mt-2 font-mono text-sm font-bold ${
         tone === 'rose'
-          ? 'text-rose-300'
+          ? 'text-rose-600 dark:text-rose-300'
           : tone === 'emerald'
-            ? 'text-emerald-300'
+            ? 'text-emerald-600 dark:text-emerald-300'
             : tone === 'sky'
-              ? 'text-sky-300'
+              ? 'text-sky-600 dark:text-sky-300'
               : tone === 'amber'
-                ? 'text-amber-300'
-                : 'text-white'
+                ? 'text-amber-600 dark:text-amber-300'
+                : 'text-slate-900 dark:text-white'
       }`}
     >
       {value}

@@ -41,6 +41,10 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
   ];
 
   const totalImpuestos = s.impuestosDetalle?.totalPagar ?? s.impuestosPendientes;
+  const desglose = s.impuestosDetalle?.desgloseRegimen || [];
+  const regimenDesc = s.impuestosDetalle?.regimenNombre
+    || s.obligacionesRegimen?.regimen
+    || (s.obligacionesRegimen?.calculo_isr_tipo ? `Régimen (${String(s.obligacionesRegimen.calculo_isr_tipo).replaceAll('_', ' ')})` : null);
 
   return (
     <div className="sc-stack">
@@ -108,7 +112,42 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
           hint={esLocal ? 'Requiere negocio sincronizado' : (s.impuestosDetalle?.vencimientoPrincipal ? `Vence ${s.impuestosDetalle.vencimientoPrincipal}` : 'IVA + ISR + retenciones')}
           loading={loading}
           onClick={() => onNavigate('impuestos')}
-        />
+        >
+          {!loading && (
+            <div className="w-full mt-0.5 pt-2 border-t border-[color:var(--sc-border)] flex flex-col gap-1.5 text-xs">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                <span className="truncate max-w-[170px]" title={regimenDesc || 'Régimen fiscal'}>
+                  {regimenDesc || 'Régimen fiscal'}
+                </span>
+                <span className="text-slate-400 dark:text-slate-500 font-semibold text-[9px] shrink-0">
+                  Desglose
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                {(desglose.length > 0 ? desglose : [
+                  { id: 'iva', label: 'IVA estimado', monto: s.ivaNeto || 0, tipo: 'cargo' },
+                  { id: 'isr', label: 'ISR provisional', monto: 0, tipo: 'cargo' },
+                ]).map((imp) => (
+                  <div key={imp.id} className="flex items-center justify-between gap-2">
+                    <span className="text-slate-700 dark:text-slate-300 font-medium truncate text-xs" title={imp.label}>
+                      {imp.label}
+                    </span>
+                    <span className={`font-mono font-bold text-xs shrink-0 ${
+                      imp.tipo === 'favor'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : imp.monto > 0
+                          ? 'text-slate-900 dark:text-white'
+                          : 'text-slate-400 dark:text-slate-500'
+                    }`}>
+                      {formatMoney(imp.monto)}
+                      {imp.tipo === 'favor' ? ' (fav)' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </KpiCard>
         <KpiCard
           label="Cumplimiento fiscal"
           value={s.cumplimientoFiscal == null ? '—' : formatPct(s.cumplimientoFiscal, 0)}

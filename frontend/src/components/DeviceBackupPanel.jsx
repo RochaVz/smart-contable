@@ -181,17 +181,17 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
           <button
             type="button"
             onClick={() => setIsOpen((value) => !value)}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm font-bold text-slate-300 transition-colors hover:border-blue-500 hover:text-white"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-950/70 px-3 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 transition-colors hover:border-blue-500 hover:text-blue-600 dark:hover:text-white"
             aria-label="Opciones de respaldo"
             aria-expanded={isOpen}
           >
-            <HardDrive className="h-4 w-4 text-emerald-400" />
+            <HardDrive className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
 
         {isOpen && (
-          <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl border border-slate-800 bg-slate-950/80 p-2">
+          <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/90 p-2.5 shadow-xl">
             <button
               type="button"
               onClick={handleExport}
@@ -205,7 +205,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={working}
-              className="flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:border-blue-500 disabled:opacity-50"
+              className="flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 px-3 py-2 text-xs font-bold text-slate-800 dark:text-white hover:border-blue-500 disabled:opacity-50"
             >
               <Upload className="h-4 w-4" /> Restaurar
             </button>
@@ -225,15 +225,15 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
   }
 
   return (
-    <section className="mb-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl shadow-black/10">
-      <div className="border-b border-slate-800 p-5">
+    <section className="sc-card mb-8 overflow-hidden shadow-xl">
+      <div className="border-b border-slate-200/80 dark:border-slate-800 p-5">
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
             <HardDrive className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-black text-white">Respaldo en este dispositivo</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-500">
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">Respaldo en este dispositivo</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
               Guarda una copia descargable de la información local. Incluye CFDI, pólizas, mapeos y movimientos bancarios. No incluye contraseña ni token de sesión.
             </p>
           </div>
@@ -242,25 +242,25 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
 
       <div className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Registros locales</p>
-            <p className="mt-1 text-2xl font-black text-white">{loading ? '...' : stats.totalRecords}</p>
+          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Registros locales</p>
+            <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white">{loading ? '...' : stats.totalRecords}</p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">CFDI / Pólizas</p>
-            <p className="mt-1 text-sm font-bold text-slate-300">
+          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">CFDI / Pólizas</p>
+            <p className="mt-1 text-sm font-bold text-slate-700 dark:text-slate-200">
               {loading ? '...' : `${stats.invoices || 0} / ${stats.polizas || 0}`}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Banco / Mapeos</p>
-            <p className="mt-1 text-sm font-bold text-slate-300">
+          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Banco / Mapeos</p>
+            <p className="mt-1 text-sm font-bold text-slate-700 dark:text-slate-200">
               {loading ? '...' : `${stats.bankMovements || 0} / ${stats.accountMappings || 0}`}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Última copia local</p>
-            <p className="mt-1 text-sm font-bold text-slate-300">{loading ? 'Revisando...' : formatDate(stats.lastSavedAt)}</p>
+          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Última copia local</p>
+            <p className="mt-1 text-sm font-bold text-slate-700 dark:text-slate-200">{loading ? 'Revisando...' : formatDate(stats.lastSavedAt)}</p>
           </div>
         </div>
 
@@ -278,7 +278,7 @@ const DeviceBackupPanel = ({ compact = false, company = null, prepareCompanyBack
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={working}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:border-blue-500 disabled:opacity-50"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-4 py-2 text-sm font-bold text-slate-800 dark:text-white hover:border-blue-500 disabled:opacity-50 transition-colors"
           >
             <Upload className="h-4 w-4" /> Restaurar
           </button>

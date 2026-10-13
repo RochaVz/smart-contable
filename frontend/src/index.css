@@ -816,6 +816,32 @@ input[type='submit'] {
 	color: #0f172a !important;
 }
 
+/* Excepciones de alto contraste: Contenedores con fondo oscuro, gradientes y botones que SIEMPRE deben mantener texto blanco nítido */
+:root[data-theme='light'] .sc-gradient,
+:root[data-theme='light'] .sc-gradient *,
+:root[data-theme='light'] [class*='from-blue-950'],
+:root[data-theme='light'] [class*='from-blue-950'] *,
+:root[data-theme='light'] [class*='from-slate-900'],
+:root[data-theme='light'] [class*='from-slate-900'] *,
+:root[data-theme='light'] .btn-ui:not(.btn-ui--secondary):not(.btn-ui--ghost),
+:root[data-theme='light'] .btn-ui:not(.btn-ui--secondary):not(.btn-ui--ghost) *,
+:root[data-theme='light'] .btn-physical,
+:root[data-theme='light'] .btn-physical *,
+:root[data-theme='light'] [class*='hub-accent-'],
+:root[data-theme='light'] [class*='hub-accent-'] * {
+	color: #ffffff !important;
+}
+
+:root[data-theme='light'] .sc-gradient input,
+:root[data-theme='light'] [class*='from-blue-950'] input {
+	color: #ffffff !important;
+}
+
+:root[data-theme='light'] .sc-gradient input::placeholder,
+:root[data-theme='light'] [class*='from-blue-950'] input::placeholder {
+	color: rgba(255, 255, 255, 0.75) !important;
+}
+
 :root[data-theme='light'] [class~='bg-blue-600'][class~='text-white'],
 :root[data-theme='light'] [class~='bg-blue-500'][class~='text-white'],
 :root[data-theme='light'] [class~='bg-emerald-600'][class~='text-white'],

@@ -15,6 +15,8 @@ export default function KpiCard({
   tone = 'primary',
   loading = false,
   onClick,
+  children,
+  className = '',
 }) {
   const sube = trend != null && trend > 0;
   const bueno = trend == null ? null : (invertTrend ? trend <= 0 : trend >= 0);
@@ -24,7 +26,7 @@ export default function KpiCard({
     <Wrapper
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`sc-card flex min-w-0 flex-col gap-3.5 p-5 text-left ${onClick ? 'sc-card--interactive' : ''}`}
+      className={`sc-card flex min-w-0 flex-col gap-3.5 p-5 text-left ${onClick ? 'sc-card--interactive' : ''} ${className}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="sc-label">{label}</span>
@@ -43,6 +45,8 @@ export default function KpiCard({
       ) : (
         <p className="sc-metric truncate text-2xl tabular-nums tracking-tight">{value}</p>
       )}
+
+      {children}
 
       <div className="flex min-h-5 flex-wrap items-center gap-2 text-xs">
         {!loading && trend != null ? (

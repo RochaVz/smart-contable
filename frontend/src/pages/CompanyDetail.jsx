@@ -37,6 +37,7 @@ import {
 import { downloadCsv } from '../utils/csv';
 import { downloadBlob, filenameFromContentDisposition } from '../utils/download';
 import { deleteLocalInvoice, getLocalCompany, getLocalInvoices } from '../services/localBackup';
+import { getNavigationCache, setNavigationCache } from '../services/navigationCache';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -113,9 +114,11 @@ const CompanyDetail = ({ vista = null }) => {
   const seccion = vistaActiva?.seccion || 'historial';
   const tabActual = vistaActiva?.tab || (seccion === 'informes' ? 'resumen' : null);
 
+  const datosCacheKey = `company:${id}:bootstrap`;
+  const datosIniciales = getNavigationCache(datosCacheKey);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [facturas, setFacturas] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [facturas, setFacturas] = useState(() => datosIniciales?.facturas || []);
+  const [loading, setLoading] = useState(() => !datosIniciales);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClassifyOpen, setIsClassifyOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -127,7 +130,7 @@ const CompanyDetail = ({ vista = null }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'fecha', direction: 'desc' });
   const [mesFiltro, setMesFiltro] = useState(hoy.getMonth() + 1);
   const [anioFiltro, setAnioFiltro] = useState(hoy.getFullYear());
-  const [empresa, setEmpresa] = useState(null);
+  const [empresa, setEmpresa] = useState(() => datosIniciales?.empresa || null);
   const [deletingId, setDeletingId] = useState(null);
   const [filtroMovimiento, setFiltroMovimiento] = useState(movimientoSolicitado || 'ninguno');
   const [exportandoEmpresa, setExportandoEmpresa] = useState(false);
@@ -185,15 +188,29 @@ const CompanyDetail = ({ vista = null }) => {
     setAnioFiltro(anio);
   }, []);
 
-  const fetchDatos = useCallback(async () => {
+  const fetchDatos = useCallback(async ({ background = false } = {}) => {
+    const datosCacheados = getNavigationCache(datosCacheKey);
+    if (datosCacheados) {
+      setFacturas(datosCacheados.facturas);
+      setEmpresa(datosCacheados.empresa);
+      if (background) setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     try {
       if (String(id).startsWith('local-')) {
         const [localEmpresa, localFacturas] = await Promise.all([
           getLocalCompany(id),
           getLocalInvoices(id),
         ]);
-        setEmpresa(localEmpresa || { id, razon_social: `Negocio local`, rfc: '' });
-        setFacturas(Array.isArray(localFacturas) ? localFacturas : []);
+        const datosActualizados = {
+          empresa: localEmpresa || { id, razon_social: 'Negocio local', rfc: '' },
+          facturas: Array.isArray(localFacturas) ? localFacturas : [],
+        };
+        setNavigationCache(datosCacheKey, datosActualizados);
+        setEmpresa(datosActualizados.empresa);
+        setFacturas(datosActualizados.facturas);
         return;
       }
 
@@ -201,17 +218,22 @@ const CompanyDetail = ({ vista = null }) => {
         api.get(`/facturas/?empresa_id=${id}`),
         api.get(`/empresas/${id}`),
       ]);
-      setFacturas(Array.isArray(facturasRes.data) ? facturasRes.data : []);
-      setEmpresa(empresaRes.data);
+      const datosActualizados = {
+        facturas: Array.isArray(facturasRes.data) ? facturasRes.data : [],
+        empresa: empresaRes.data,
+      };
+      setNavigationCache(datosCacheKey, datosActualizados);
+      setFacturas(datosActualizados.facturas);
+      setEmpresa(datosActualizados.empresa);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [datosCacheKey, id]);
 
   useEffect(() => {
-    queueMicrotask(fetchDatos);
+    queueMicrotask(() => fetchDatos({ background: true }));
   }, [fetchDatos]);
 
   const handleRefresh = useCallback(() => {

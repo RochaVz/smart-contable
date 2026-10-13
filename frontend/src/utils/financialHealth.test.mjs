@@ -153,8 +153,28 @@ test('impuestos detalle expone IVA/ISR con vencimiento', () => {
   assert.equal(s.impuestosDetalle.totalPagar, 20450);
   assert.ok(s.impuestosDetalle.items.some((i) => i.id.includes('iva') && i.accion === 'pagar'));
   assert.ok(s.impuestosDetalle.items.some((i) => i.id.includes('isr') && i.accion === 'pagar'));
+  assert.ok(s.impuestosDetalle.desgloseRegimen.length > 0);
   assert.ok(s.accionesFiscales.length > 0);
   assert.ok(s.kpiAhorro.cfdiAnalizados >= 3);
+});
+
+test('desgloseRegimen desglosa ISR, IVA y retenciones según régimen fiscal', async () => {
+  const { construirImpuestosDetalle } = await import('./financialHealth.js');
+  const detalleResico = construirImpuestosDetalle({
+    regimen: { clave: '626', nombre: 'Régimen Simplificado de Confianza' },
+    totales: { total_a_pagar: 15400 },
+    impuestos: {
+      isr: { a_cargo: 3400, tasa_efectiva: '2.0%', resumen: '1%-2.5% sobre ingresos cobrados' },
+      iva: { a_cargo: 12000, a_favor: 0 },
+      retenciones: { total: 0 },
+    },
+    obligaciones_regimen: { calculo_isr_tipo: 'resico_pf_tasa_directa' },
+  });
+
+  assert.equal(detalleResico.regimenClave, '626');
+  assert.equal(detalleResico.regimenNombre, 'Régimen Simplificado de Confianza');
+  assert.ok(detalleResico.desgloseRegimen.some((d) => d.id === 'isr' && d.monto === 3400 && d.tasa === '2.0%'));
+  assert.ok(detalleResico.desgloseRegimen.some((d) => d.id === 'iva' && d.monto === 12000));
 });
 
 test('agrupa conceptos CFDI del periodo', async () => {
