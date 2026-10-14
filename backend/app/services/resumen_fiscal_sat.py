@@ -136,21 +136,18 @@ def construir_resumen_fiscal_sat(
     mes_venc, anio_venc = _periodo_siguiente(mes, anio)
     vencimiento = _ultimo_dia_habil_aproximado(anio_venc, mes_venc, 17)
 
-    isr_a_cargo = float(Decimal(str(isr.get("isr_a_cargo") or isr.get("isr_causado") or 0)))
-    iva_a_cargo = float(Decimal(str(iva.get("iva_a_cargo") or iva.get("saldo_a_cargo") or 0)))
-    iva_a_favor = float(Decimal(str(iva.get("iva_a_favor") or iva.get("saldo_a_favor") or 0)))
-    ret_isr = float(Decimal(str(
-        isr.get("isr_retenido")
-        or isr.get("retenciones_isr")
-        or iva.get("isr_retenido")
-        or 0
+    saldo_isr = isr.get("saldo") or {}
+    iva_periodo = iva.get("periodo_actual") or {}
+
+    isr_a_cargo = float(Decimal(str(
+        saldo_isr.get("isr_a_cargo") or isr.get("isr_a_cargo") or isr.get("isr_estimado") or 0
     )))
-    ret_iva = float(Decimal(str(
-        iva.get("iva_retenido")
-        or iva.get("retenciones_iva")
-        or isr.get("iva_retenido")
-        or 0
+    iva_a_cargo = float(Decimal(str(
+        max(float(iva_periodo.get("iva_a_cargo") or iva.get("iva_a_cargo") or 0), 0)
     )))
+    iva_a_favor = float(Decimal(str(iva_periodo.get("saldo_a_favor") or iva.get("iva_a_favor") or 0)))
+    ret_isr = float(Decimal(str(isr.get("retenciones_isr") or isr.get("isr_retenido") or 0)))
+    ret_iva = float(Decimal(str(iva_periodo.get("iva_retenido") or iva.get("iva_retenido") or 0)))
 
     impuestos_reg = impuestos_aplicables_regimen(rules)
     flags = impuestos_reg["flags"]

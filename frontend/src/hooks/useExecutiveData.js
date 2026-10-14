@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import { getNavigationCache, setNavigationCache } from '../services/navigationCache';
 import { periodoAnterior } from '../utils/financialHealth';
@@ -24,6 +24,7 @@ export default function useExecutiveData({ empresaId, esLocal, mes, anio, refres
   const [estado, setEstado] = useState(() => (
     datosCacheados || { ...VACIO, loading: !esLocal, fallidos: [] }
   ));
+  const ultimoRefreshToken = useRef(refreshToken);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -36,9 +37,15 @@ export default function useExecutiveData({ empresaId, esLocal, mes, anio, refres
     }
 
     let cancelado = false;
+    const debeActualizar = refreshToken !== ultimoRefreshToken.current;
+    ultimoRefreshToken.current = refreshToken;
     const cacheActual = getNavigationCache(cacheKey);
     if (cacheActual) {
       setEstado(cacheActual);
+      // La caché de navegación evita repetir las cinco consultas al volver a
+      // una empresa o a un periodo ya visitado. Las actualizaciones explícitas
+      // incrementan refreshToken y sí fuerzan la revalidación.
+      if (!debeActualizar) return undefined;
     } else {
       setEstado((actual) => ({ ...actual, loading: true }));
     }

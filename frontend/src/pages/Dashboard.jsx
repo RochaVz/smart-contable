@@ -24,7 +24,7 @@ const Dashboard = ({ onLogout }) => {
   const [newCompanyModalKey, setNewCompanyModalKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingCompanyId, setDeletingCompanyId] = useState(null);
-  const hasLoaded = useRef(false);
+  const hasLoaded = useRef(Boolean(getNavigationCache(empresasCacheKey)));
 
   const fetchEmpresas = useCallback(async () => {
     try {

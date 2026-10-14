@@ -19,9 +19,6 @@ import {
   YAxis,
 } from 'recharts';
 import KpiCard from './KpiCard';
-import AlertsList from './AlertsList';
-import FinancialHealthPanel from './FinancialHealthPanel';
-import FiscalHealthPanel from './FiscalHealthPanel';
 import ImpuestosPorPagarPanel from './ImpuestosPorPagarPanel';
 import IngresosEgresosBreakdown from './IngresosEgresosBreakdown';
 import KpiAhorroPanel from './KpiAhorroPanel';
@@ -30,7 +27,7 @@ import { periodoAnterior } from '../../utils/financialHealth';
 
 /** Dashboard ejecutivo: el estado del negocio en menos de 30 segundos. */
 export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
-  const { snapshot: s, score, alertas, recomendaciones, loading, esLocal, fallidos } = lectura;
+  const { snapshot: s, score, loading, esLocal, fallidos } = lectura;
   const previo = periodoAnterior(mes, anio);
   const sinBanco = s.saldoBancario == null && s.flujoBancario == null;
   const sinDatos = !loading && s.cfdiIngresos + s.cfdiEgresos === 0;
@@ -167,27 +164,12 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
         />
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ImpuestosPorPagarPanel
-          snapshot={s}
-          loading={loading}
-          disponible={!esLocal}
-          onOpenSat={() => onNavigate('sat')}
-        />
-        <FiscalHealthPanel
-          snapshot={s}
-          loading={loading}
-          disponible={!esLocal}
-          onOpenSat={() => onNavigate('sat')}
-          onNavigate={onNavigate}
-        />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <FinancialHealthPanel score={score} recomendaciones={recomendaciones} loading={loading} />
-        <AlertsList alertas={alertas} onNavigate={onNavigate} />
-      </div>
-
+      <ImpuestosPorPagarPanel
+        snapshot={s}
+        loading={loading}
+        disponible={!esLocal}
+        onOpenSat={() => onNavigate('sat')}
+      />
       <IngresosEgresosBreakdown snapshot={s} loading={loading} />
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">

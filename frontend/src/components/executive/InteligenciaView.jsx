@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react';
 import AlertsList from './AlertsList';
 import FinancialHealthPanel from './FinancialHealthPanel';
+import FiscalHealthPanel from './FiscalHealthPanel';
 import { INTELIGENCIA_CATEGORIAS } from '../../navigation/executive';
 import { formatMoney, formatPct } from './format';
 
@@ -77,10 +78,18 @@ export default function InteligenciaView({ lectura, categoriaId, onSelect, onNav
             })}
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+          <div className="grid gap-6 xl:grid-cols-2">
+            <FiscalHealthPanel
+              snapshot={lectura.snapshot}
+              loading={lectura.loading}
+              disponible={!lectura.esLocal}
+              onOpenSat={() => onNavigate('sat')}
+              onNavigate={onNavigate}
+            />
             <FinancialHealthPanel score={lectura.score} recomendaciones={lectura.recomendaciones} loading={lectura.loading} />
-            <AlertsList alertas={lectura.alertas} onNavigate={onNavigate} />
           </div>
+
+          <AlertsList alertas={lectura.alertas} onNavigate={onNavigate} />
         </>
       )}
     </div>

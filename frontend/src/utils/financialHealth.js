@@ -244,7 +244,8 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
 
   const totales = resumenSat.totales || {};
   const impuestos = resumenSat.impuestos || {};
-  const ivaDetalle = impuestos.iva?.detalle || {};
+  const ivaDetalleRaw = impuestos.iva?.detalle || {};
+  const ivaDetalle = { ...ivaDetalleRaw, ...(ivaDetalleRaw.periodo_actual || {}) };
   const isrDetalle = impuestos.isr?.detalle || {};
 
   const ivaTrasladado = toNumber(
