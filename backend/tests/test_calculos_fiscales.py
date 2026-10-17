@@ -19,9 +19,9 @@ def test_calcular_iva_separa_periodo_y_acumulado(monkeypatch):
     rfc_empresa = "AAA010101AAA"
     facturas = [
         factura("I", "2026-01-10", rfc_empresa, "BBB010101BBB", 160),
-        factura("E", "2026-01-15", "CCC010101CCC", rfc_empresa, 80),
+        factura("I", "2026-01-15", "CCC010101CCC", rfc_empresa, 80),
         factura("I", "2026-02-10", rfc_empresa, "DDD010101DDD", 320, 20),
-        factura("E", "2026-02-15", "EEE010101EEE", rfc_empresa, 100),
+        factura("I", "2026-02-15", "EEE010101EEE", rfc_empresa, 100),
     ]
 
     class Query:
@@ -54,6 +54,58 @@ def test_calcular_iva_separa_periodo_y_acumulado(monkeypatch):
     assert resultado["acumulado_anual"]["iva_acreditable"] == 180.0
 
 
+def test_iva_acreditable_incluye_cfdi_ingreso_recibidos(monkeypatch):
+    rfc_empresa = "AAA010101AAA"
+    facturas = [
+        factura("I", "2026-02-10", rfc_empresa, "BBB010101BBB", 160),
+        factura("I", "2026-02-11", "CCC010101CCC", rfc_empresa, 80),
+        factura("N", "2026-02-12", rfc_empresa, "DDD010101DDD", 0),
+    ]
+
+    class Query:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return SimpleNamespace(rfc=rfc_empresa)
+
+    class Db:
+        def query(self, model):
+            return Query()
+
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_del_periodo", lambda *_a: facturas)
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_hasta_periodo", lambda *_a: facturas)
+
+    r = calcular_iva_provisional(Db(), 1, 2, 2026)["periodo_actual"]
+    assert r["iva_trasladado"] == 160.0
+    assert r["iva_acreditable"] == 80.0
+    assert r["iva_a_cargo"] == 80.0
+
+
+def test_nota_de_credito_recibida_resta_iva_acreditable(monkeypatch):
+    rfc_empresa = "AAA010101AAA"
+    facturas = [
+        factura("I", "2026-02-11", "CCC010101CCC", rfc_empresa, 160),
+        factura("E", "2026-02-12", "CCC010101CCC", rfc_empresa, 16),
+    ]
+
+    class Query:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return SimpleNamespace(rfc=rfc_empresa)
+
+    class Db:
+        def query(self, model):
+            return Query()
+
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_del_periodo", lambda *_a: facturas)
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_hasta_periodo", lambda *_a: facturas)
+
+    r = calcular_iva_provisional(Db(), 1, 2, 2026)["periodo_actual"]
+    assert r["iva_acreditable"] == 144.0
+
 def test_calcular_isr_acumula_ingresos_deducciones_y_retenciones(monkeypatch):
     rfc_empresa = "AAA010101AAA"
     facturas = [
@@ -62,7 +114,7 @@ def test_calcular_isr_acumula_ingresos_deducciones_y_retenciones(monkeypatch):
             subtotal=1000, isr_retenido=100, es_deducible=True,
         ),
         SimpleNamespace(
-            tipo_comprobante="E", rfc_emisor="CCC010101CCC", rfc_receptor=rfc_empresa,
+            tipo_comprobante="I", rfc_emisor="CCC010101CCC", rfc_receptor=rfc_empresa,
             subtotal=300, isr_retenido=0, es_deducible=True,
         ),
     ]
@@ -85,6 +137,7 @@ def test_calcular_isr_acumula_ingresos_deducciones_y_retenciones(monkeypatch):
         "app.services.calculos_fiscales._facturas_hasta_periodo",
         lambda *_args: facturas,
     )
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_del_periodo", lambda *_a: facturas)
     monkeypatch.setattr(
         "app.services.calculos_fiscales._pagos_provisionales_isr",
         lambda *_args, **_kwargs: __import__("decimal").Decimal("0"),
@@ -126,6 +179,9 @@ def test_isr_resico_no_aplica_deducciones_reportadas(monkeypatch):
         lambda *_args: [factura_ingreso],
     )
     monkeypatch.setattr(
+        "app.services.calculos_fiscales._facturas_del_periodo", lambda *_a: [factura_ingreso]
+    )
+    monkeypatch.setattr(
         "app.services.calculos_fiscales._pagos_provisionales_isr",
         lambda *_args, **_kwargs: __import__("decimal").Decimal("0"),
     )
@@ -134,7 +190,7 @@ def test_isr_resico_no_aplica_deducciones_reportadas(monkeypatch):
 
     assert resultado["deducciones_aplicadas"] == 0.0
     assert resultado["base_gravable"] == 1000.0
-    assert resultado["isr_estimado"] == 25.0
+    assert resultado["isr_estimado"] == 10.0
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -231,7 +287,7 @@ def test_isr_anual_aplica_perdidas_y_saldo_favor(monkeypatch):
             iva_retenido=0,
         ),
         SimpleNamespace(
-            tipo_comprobante="E",
+            tipo_comprobante="I",
             rfc_emisor="CCC010101CCC",
             rfc_receptor=rfc,
             subtotal=1000,
@@ -311,3 +367,58 @@ def test_ieps_sin_operaciones(monkeypatch):
     r = calcular_ieps_provisional(Db(), 1, 6, 2025)
     assert r["aplica"] is False
     assert r["ieps_periodo"] == 0.0
+
+
+def test_coeficiente_utilidad_se_calcula_desde_cfdi(monkeypatch):
+    from decimal import Decimal
+    from app.services.calculos_fiscales import _coeficiente_desde_cfdi
+
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_ejercicio", lambda *_a: [])
+    actual = {"ingresos_acumulados": Decimal("1000"), "deducciones_acumuladas": Decimal("600")}
+    assert _coeficiente_desde_cfdi(None, 1, 2026, "AAA010101AAA", actual) == (Decimal("0.4000"), "cfdi_acumulado_2026")
+
+
+def _db_con_regimen(regimen, rfc="AAA010101AAA"):
+    class Query:
+        def filter(self, *a, **k):
+            return self
+
+        def first(self):
+            return SimpleNamespace(rfc=rfc, regimen_fiscal=regimen)
+
+    class Db:
+        def query(self, model):
+            return Query()
+
+    return Db()
+
+
+def test_isr_resico_pf_aplica_tabla_mensual(monkeypatch):
+    rfc = "AAA010101AAA"
+    facturas = [
+        SimpleNamespace(
+            tipo_comprobante="I", rfc_emisor=rfc, rfc_receptor="BBB010101BBB",
+            subtotal=30000, isr_retenido=100, es_deducible=True,
+        )
+    ]
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_del_periodo", lambda *_a: facturas)
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_hasta_periodo", lambda *_a: facturas)
+    r = calcular_isr_provisional(_db_con_regimen("626_PF"), 1, 3, 2026)
+    assert r["tasa_isr_aplicada"] == 1.1
+    assert r["isr_estimado"] == 230.0
+    assert r["estatus"] == "estimado"
+
+
+def test_sueldos_no_causa_iva_ni_isr_provisional(monkeypatch):
+    rfc = "AAA010101AAA"
+    facturas = [
+        SimpleNamespace(
+            tipo_comprobante="I", rfc_emisor=rfc, rfc_receptor="BBB010101BBB",
+            subtotal=1000, isr_retenido=0, es_deducible=True, iva_trasladado=160, iva_retenido=0,
+        )
+    ]
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_del_periodo", lambda *_a: facturas)
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_hasta_periodo", lambda *_a: facturas)
+    db = _db_con_regimen("605")
+    assert calcular_iva_provisional(db, 1, 2, 2026)["periodo_actual"]["iva_trasladado"] == 0.0
+    assert calcular_isr_provisional(db, 1, 2, 2026)["estatus"] == "no_aplica_pago_provisional"

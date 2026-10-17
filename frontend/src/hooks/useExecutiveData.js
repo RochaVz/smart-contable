@@ -13,6 +13,9 @@ const VACIO = {
 
 const valorONulo = (resultado) => (resultado.status === 'fulfilled' ? resultado.value.data : null);
 
+// Evita repetir las mismas consultas cuando el efecto se ejecuta dos veces.
+const enVuelo = new Map();
+
 /**
  * Consume los servicios existentes (paquete fiscal, resumen SAT, indicadores y
  * movimientos bancarios). Cada fuente falla de forma independiente para que el
@@ -53,13 +56,16 @@ export default function useExecutiveData({ empresaId, esLocal, mes, anio, refres
     const previo = periodoAnterior(mes, anio);
     const params = { empresa_id: empresaId, mes, anio };
 
-    Promise.allSettled([
+    const solicitudes = enVuelo.get(cacheKey) || Promise.allSettled([
       api.get('/reportes/paquete-fiscal', { params }),
       api.get('/reportes/paquete-fiscal', { params: { ...params, mes: previo.mes, anio: previo.anio } }),
       api.get('/fiscal/resumen-sat', { params }),
       api.get('/fiscal/indicadores', { params }),
       api.get('/conciliacion/movimientos', { params: { empresa_id: empresaId } }),
-    ]).then((resultados) => {
+    ]).finally(() => enVuelo.delete(cacheKey));
+    enVuelo.set(cacheKey, solicitudes);
+
+    solicitudes.then((resultados) => {
       if (cancelado) return;
       const [paquete, anterior, sat, indicadores, banco] = resultados;
       const nombres = ['paquete', 'anterior', 'sat', 'indicadores', 'banco'];

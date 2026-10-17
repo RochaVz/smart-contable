@@ -6,6 +6,7 @@ from app.models.factura import Factura
 from app.models.poliza import Poliza, MovimientoPoliza
 from app.models.mapeo_cuenta import MapeoCuenta
 from app.models.empresa import Empresa
+from app.core.sat_fiscal import SAT_REGIMEN_RULES, SatRegimenEnum
 from app.services.cfdi_helpers import es_venta, extraer_datos_xml
 
 
@@ -26,14 +27,25 @@ def _rfc_empresa(db: Session, empresa_id: int) -> str:
     return (emp.rfc or "").strip().upper() if emp else ""
 
 
+def _regimen_info(db: Session, empresa_id: int) -> tuple[str, bool]:
+    """Devuelve (clave de régimen, aplica IVA) según el régimen registrado."""
+    emp = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    raw = getattr(emp, "regimen_fiscal", "")
+    clave = str(getattr(raw, "value", raw) or "")
+    try:
+        return clave, bool(SAT_REGIMEN_RULES[SatRegimenEnum(clave)]["aplica_iva"])
+    except (ValueError, KeyError):
+        return clave, True
+
+
 def generar_resumen_ingresos_egresos(
     db: Session, empresa_id: int, mes: int, anio: int
 ) -> dict:
     rfc = _rfc_empresa(db, empresa_id)
     facturas = _facturas_periodo(db, empresa_id, mes, anio)
 
-    ingresos = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0}
-    egresos = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0}
+    ingresos = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0, "total_con_iva": 0.0}
+    egresos = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0, "total_con_iva": 0.0}
 
     for f in facturas:
         venta = es_venta(f, rfc)
@@ -41,10 +53,11 @@ def generar_resumen_ingresos_egresos(
         bucket["cantidad"] += 1
         bucket["subtotal"] += float(f.subtotal or 0)
         bucket["iva"] += float(f.iva_trasladado or 0)
-        bucket["total"] += float((f.subtotal if venta else f.total) or 0)
+        bucket["total_con_iva"] += float(f.total or 0)
+        bucket["total"] += float(f.subtotal or 0)
 
     for b in (ingresos, egresos):
-        for k in ("subtotal", "iva", "total"):
+        for k in ("subtotal", "iva", "total", "total_con_iva"):
             b[k] = round(b[k], 2)
 
     utilidad = round(ingresos["total"] - egresos["total"], 2)
@@ -427,7 +440,14 @@ def generar_impuestos_trasladados(db: Session, empresa_id: int, mes: int, anio: 
         or 0
     )
 
+    regimen, aplica_iva = _regimen_info(db, empresa_id)
+    if not aplica_iva:
+        total_iva = 0.0
+        for d in detalle:
+            d["iva_trasladado"] = 0.0
     return {
+        "regimen_fiscal": regimen,
+        "aplica_iva": aplica_iva,
         "total_iva_trasladado": round(total_iva, 2),
         "total_impuestos_locales": round(total_ish, 2),
         "total_subtotal_ventas": round(total_subtotal, 2),
@@ -440,16 +460,24 @@ def generar_impuestos_trasladados(db: Session, empresa_id: int, mes: int, anio: 
 def generar_impuestos_acreditables(db: Session, empresa_id: int, mes: int, anio: int) -> dict:
     rfc = _rfc_empresa(db, empresa_id)
     facturas = _facturas_periodo(db, empresa_id, mes, anio)
-    compras = [f for f in facturas if not es_venta(f, rfc)]
+    def _tipo(f) -> str:
+        return str(getattr(f.tipo_comprobante, "value", f.tipo_comprobante) or "").upper()
+
+    compras = [
+        f for f in facturas
+        if (f.rfc_emisor or "").strip().upper() != rfc
+        and _tipo(f) in ("I", "E")
+    ]
 
     detalle = []
     total_iva = 0.0
     total_subtotal = 0.0
 
     for f in compras:
-        iva = float(f.iva_trasladado or 0)
+        signo = -1 if _tipo(f) == "E" else 1
+        iva = signo * float(f.iva_trasladado or 0)
         total_iva += iva
-        total_subtotal += float(f.subtotal or 0)
+        total_subtotal += signo * float(f.subtotal or 0)
         detalle.append({
             "uuid": f.uuid,
             "fecha": str(f.fecha_emision),
@@ -474,7 +502,14 @@ def generar_impuestos_acreditables(db: Session, empresa_id: int, mes: int, anio:
         or 0
     )
 
+    regimen, aplica_iva = _regimen_info(db, empresa_id)
+    if not aplica_iva:
+        total_iva = 0.0
+        for d in detalle:
+            d["iva_acreditable"] = 0.0
     return {
+        "regimen_fiscal": regimen,
+        "aplica_iva": aplica_iva,
         "total_iva_acreditable": round(total_iva, 2),
         "total_subtotal_compras": round(total_subtotal, 2),
         "iva_desde_polizas": round(float(iva_polizas), 2),
@@ -589,7 +624,14 @@ def generar_sugerencias(
             "nivel": "warning",
             "mensaje": f"{sin_clasificar} gasto(s) con proveedor sin clasificar en el padrón.",
         })
-    if iva_neto > 0:
+    regimen, aplica_iva = _regimen_info(db, empresa_id)
+    if not aplica_iva:
+        iva_neto = 0.0
+        alertas.append({
+            "nivel": "info",
+            "mensaje": f"El régimen registrado ({regimen}) no causa IVA; no se calcula IVA a cargo ni a favor.",
+        })
+    elif iva_neto > 0:
         alertas.append({
             "nivel": "info",
             "mensaje": f"IVA a cargo estimado del periodo: ${iva_neto:,.2f} (trasladado − acreditable).",
@@ -600,8 +642,20 @@ def generar_sugerencias(
             "mensaje": f"Saldo a favor de IVA estimado: ${abs(iva_neto):,.2f}.",
         })
 
+    recomendaciones = [
+        "Balanza de comprobación por cuenta (activo, pasivo, capital).",
+        "Flujo de efectivo mensual (cobros vs pagos).",
+        "CFDI cancelados vs vigentes del periodo.",
+        "Conciliación bancaria vs pólizas de ingreso.",
+    ]
+    if regimen == "605":
+        recomendaciones.append("Sueldos y salarios: no hay pagos provisionales; revisa deducciones personales para la anual.")
+    elif regimen in ("626_PF", "626_PM"):
+        recomendaciones.append("RESICO: el ISR se paga mensual sobre ingresos cobrados; vigila el límite anual de ingresos.")
+    else:
+        recomendaciones.append("Proyección de ISR anual con base en utilidad acumulada.")
+
     return {
-        "iva_neto_periodo": iva_neto,
         "facturas_sin_poliza": sin_poliza,
         "gastos_sin_clasificar": sin_clasificar,
         "comisiones_bancarias": round(float(comisiones), 2),
@@ -612,13 +666,7 @@ def generar_sugerencias(
             {**g, "total": round(g["total"], 2)} for g in gastos
         ],
         "alertas": alertas,
-        "recomendaciones": [
-            "Balanza de comprobación por cuenta (activo, pasivo, capital).",
-            "Flujo de efectivo mensual (cobros vs pagos).",
-            "CFDI cancelados vs vigentes del periodo.",
-            "Conciliación bancaria vs pólizas de ingreso.",
-            "Proyección de ISR anual con base en utilidad acumulada.",
-        ],
+        "recomendaciones": recomendaciones,
     }
 
 

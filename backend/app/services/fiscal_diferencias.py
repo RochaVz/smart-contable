@@ -63,13 +63,17 @@ def comparar_fuentes_fiscales(
     for fac in facturas:
         tipo = getattr(getattr(fac, "tipo_comprobante", ""), "value", fac.tipo_comprobante)
         tipo = str(tipo or "").upper()
-        if tipo == "I" and es_venta(fac, rfc):
-            cfdi_ingreso_sub += _m(fac.subtotal)
-            cfdi_ingreso_iva += _m(fac.iva_trasladado)
+        venta = es_venta(fac, rfc)
+        signo = Decimal("-1") if tipo == "E" else Decimal("1")
+        if tipo not in ("I", "E"):
+            continue
+        if venta:
+            cfdi_ingreso_sub += signo * _m(fac.subtotal)
+            cfdi_ingreso_iva += signo * _m(fac.iva_trasladado)
             cfdi_count_i += 1
-        elif tipo == "E" and not es_venta(fac, rfc):
-            cfdi_egreso_sub += _m(fac.subtotal)
-            cfdi_egreso_iva += _m(fac.iva_trasladado)
+        else:
+            cfdi_egreso_sub += signo * _m(fac.subtotal)
+            cfdi_egreso_iva += signo * _m(fac.iva_trasladado)
             cfdi_count_e += 1
 
     polizas = (

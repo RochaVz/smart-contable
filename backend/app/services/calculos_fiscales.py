@@ -17,6 +17,12 @@ from app.services.cfdi_helpers import es_venta
 
 
 CENTAVOS = Decimal("0.01")
+# Compras: CFDI recibidos tipo I (factura del proveedor); tipo E (nota de crédito) resta.
+_TIPOS_COMPRA = ("I", "E")
+
+
+def _es_emitido(factura, rfc_empresa: str) -> bool:
+    return (factura.rfc_emisor or "").strip().upper() == (rfc_empresa or "").strip().upper()
 
 
 def _moneda(valor) -> Decimal:
@@ -75,11 +81,16 @@ def _resumen_iva(facturas: list[Factura], rfc_empresa: str) -> dict[str, Decimal
     for factura in facturas:
         tipo = getattr(getattr(factura, "tipo_comprobante", ""), "value", factura.tipo_comprobante)
         tipo = str(tipo or "").upper()
-        if tipo == "I" and es_venta(factura, rfc_empresa):
+        emitido = _es_emitido(factura, rfc_empresa)
+        if tipo == "I" and emitido:
             trasladado += _moneda(factura.iva_trasladado)
             retenido += _moneda(factura.iva_retenido)
-        elif tipo == "E" and not es_venta(factura, rfc_empresa):
+        elif tipo == "E" and emitido:
+            trasladado -= _moneda(factura.iva_trasladado)
+        elif tipo == "I":
             acreditable += _moneda(factura.iva_trasladado)
+        elif tipo == "E":
+            acreditable -= _moneda(factura.iva_trasladado)
 
     iva_a_cargo = trasladado - acreditable - retenido
     return {
@@ -100,14 +111,26 @@ def calcular_iva_provisional(
     periodo = _resumen_iva(facturas_periodo, rfc_empresa)
     acumulado = _resumen_iva(facturas_acumuladas, rfc_empresa)
 
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    regimen_valor = getattr(getattr(empresa, "regimen_fiscal", ""), "value", getattr(empresa, "regimen_fiscal", ""))
+    try:
+        aplica_iva = SAT_REGIMEN_RULES[SatRegimenEnum(regimen_valor)]["aplica_iva"]
+    except (ValueError, KeyError):
+        aplica_iva = True
+    if not aplica_iva:
+        cero = {k: Decimal("0.00") for k in periodo}
+        periodo, acumulado = cero, dict(cero)
+
     return {
         "empresa_id": empresa_id,
         "periodo": {"mes": mes, "anio": anio},
+        "regimen_fiscal": regimen_valor,
+        "aplica_iva": aplica_iva,
         "periodo_actual": {key: float(value) for key, value in periodo.items()},
         "acumulado_anual": {key: float(value) for key, value in acumulado.items()},
         "criterio": {
             "trasladado": "CFDI tipo I emitidos por la empresa",
-            "acreditable": "CFDI tipo E recibidos de proveedores",
+            "acreditable": "CFDI tipo I recibidos de proveedores, menos notas de crédito (tipo E)",
             "retenido": "IVA retenido en CFDI tipo I",
             "alcance": "Estimación informativa; requiere revisión contable antes de declarar",
         },
@@ -122,11 +145,14 @@ def _resumen_isr(facturas: list[Factura], rfc_empresa: str) -> dict[str, Decimal
     for factura in facturas:
         tipo = getattr(getattr(factura, "tipo_comprobante", ""), "value", factura.tipo_comprobante)
         tipo = str(tipo or "").upper()
-        if tipo == "I" and es_venta(factura, rfc_empresa):
+        emitido = _es_emitido(factura, rfc_empresa)
+        if tipo == "I" and emitido:
             ingresos += _moneda(factura.subtotal)
             retenciones += _moneda(getattr(factura, "isr_retenido", 0))
-        elif tipo == "E" and not es_venta(factura, rfc_empresa) and getattr(factura, "es_deducible", True):
-            deducciones += _moneda(factura.subtotal)
+        elif tipo == "E" and emitido:
+            ingresos -= _moneda(factura.subtotal)
+        elif tipo in _TIPOS_COMPRA and not emitido and getattr(factura, "es_deducible", True):
+            deducciones += _moneda(factura.subtotal) * (1 if tipo == "I" else -1)
 
     base = max(ingresos - deducciones, Decimal("0"))
     return {
@@ -193,6 +219,79 @@ def _perdidas_aplicables(
     }
 
 
+def _coeficiente_desde_cfdi(
+    db: Session, empresa_id: int, anio: int, rfc_empresa: str, resumen_actual: dict
+) -> tuple[Decimal | None, str | None]:
+    """Coeficiente de utilidad = utilidad fiscal / ingresos nominales, según los CFDI parseados.
+
+    Usa el ejercicio anterior; si no hay CFDI de ingreso, estima con lo acumulado del ejercicio actual.
+    """
+    previo = _resumen_isr(_facturas_ejercicio(db, empresa_id, anio - 1), rfc_empresa)
+    if previo["ingresos_acumulados"] > 0:
+        origen, base = f"cfdi_ejercicio_{anio - 1}", previo
+    elif resumen_actual["ingresos_acumulados"] > 0:
+        origen, base = f"cfdi_acumulado_{anio}", resumen_actual
+    else:
+        return None, None
+    utilidad = max(base["ingresos_acumulados"] - base["deducciones_acumuladas"], Decimal("0"))
+    return (utilidad / base["ingresos_acumulados"]).quantize(Decimal("0.0001")), origen
+
+
+# Tabla mensual RESICO PF (art. 113-E LISR): (límite superior de ingresos del mes, tasa %)
+_TABLA_RESICO_PF = (
+    (Decimal("25000"), Decimal("1.00")),
+    (Decimal("50000"), Decimal("1.10")),
+    (Decimal("83333.33"), Decimal("1.50")),
+    (Decimal("208333.33"), Decimal("2.00")),
+    (Decimal("3500000"), Decimal("2.50")),
+)
+
+
+_TABLA_RESICO_ANUAL = (
+    (Decimal("300000"), Decimal("1.00")),
+    (Decimal("600000"), Decimal("1.10")),
+    (Decimal("1000000"), Decimal("1.50")),
+    (Decimal("2500000"), Decimal("2.00")),
+    (Decimal("3500000"), Decimal("2.50")),
+)
+
+
+def _isr_resico_pf(
+    db: Session, empresa_id: int, mes: int, anio: int, rfc_empresa: str,
+    regimen_valor, calculo_tipo, resumen_acumulado: dict,
+) -> dict:
+    """RESICO PF: ISR mensual sobre ingresos cobrados del mes (sin deducciones), menos retenciones."""
+    mensual = _resumen_isr(_facturas_del_periodo(db, empresa_id, mes, anio), rfc_empresa)
+    ingresos = mensual["ingresos_acumulados"]
+    tasa = next((t for limite, t in _TABLA_RESICO_PF if ingresos <= limite), _TABLA_RESICO_PF[-1][1])
+    isr_causado = (ingresos * tasa / Decimal("100")).quantize(CENTAVOS)
+    neto = isr_causado - mensual["retenciones_isr"]
+    a_cargo = max(neto, Decimal("0")).quantize(CENTAVOS)
+    return {
+        "empresa_id": empresa_id,
+        "periodo": {"mes": mes, "anio": anio},
+        "regimen_fiscal": regimen_valor,
+        "calculo_isr_tipo": calculo_tipo,
+        **{key: float(value) for key, value in resumen_acumulado.items()},
+        "ingresos_mes": float(ingresos),
+        "deducciones_aplicadas": 0.0,
+        "base_gravable": float(ingresos),
+        "tasa_isr_aplicada": float(tasa),
+        "retenciones_isr_mes": float(mensual["retenciones_isr"]),
+        "isr_estimado": float(a_cargo),
+        "saldo": {
+            "isr_causado": float(isr_causado),
+            "pagos_provisionales_anteriores": 0.0,
+            "retenciones_isr": float(mensual["retenciones_isr"]),
+            "isr_a_cargo": float(a_cargo),
+            "saldo_a_favor": float(max(-neto, Decimal("0")).quantize(CENTAVOS)),
+        },
+        "parametros_faltantes": [],
+        "estatus": "estimado",
+        "criterio": "RESICO PF: tasa 1.00%–2.50% según ingresos cobrados del mes, sin deducciones.",
+    }
+
+
 def calcular_isr_provisional(
     db: Session,
     empresa_id: int,
@@ -227,9 +326,11 @@ def calcular_isr_provisional(
     deducciones_aplicadas = resumen["deducciones_acumuladas"]
     base_gravable = resumen["base_gravable"]
 
-    if regimen in {SatRegimenEnum.resico_pf, SatRegimenEnum.resico_pm}:
+    if regimen == SatRegimenEnum.resico_pf:
         deducciones_aplicadas = Decimal("0")
         base_gravable = resumen["ingresos_acumulados"]
+    elif regimen == SatRegimenEnum.resico_pm:
+        pass
     elif regimen == SatRegimenEnum.arrendamiento and deduccion_ciega_pct is not None:
         deducciones_aplicadas = (
             resumen["ingresos_acumulados"] * deduccion_ciega_pct / Decimal("100")
@@ -237,6 +338,39 @@ def calcular_isr_provisional(
         base_gravable = max(resumen["ingresos_acumulados"] - deducciones_aplicadas, Decimal("0"))
     elif regimen == SatRegimenEnum.arrendamiento and getattr(getattr(empresa, "opcion_deduccion", None), "value", getattr(empresa, "opcion_deduccion", None)) == "CIEGA":
         parametros_faltantes.append("deduccion_ciega_pct")
+
+    if regimen == SatRegimenEnum.resico_pm and tasa_isr is None:
+        tasa_isr = Decimal("30")
+
+    if regimen == SatRegimenEnum.resico_pf:
+        return _isr_resico_pf(
+            db, empresa_id, mes, anio, rfc_empresa, regimen_valor, calculo_tipo, resumen
+        )
+    if regimen == SatRegimenEnum.sueldos_salarios:
+        return {
+            "empresa_id": empresa_id,
+            "periodo": {"mes": mes, "anio": anio},
+            "regimen_fiscal": regimen_valor,
+            "calculo_isr_tipo": calculo_tipo,
+            **{key: float(value) for key, value in resumen.items()},
+            "isr_estimado": 0.0,
+            "saldo": None,
+            "parametros_faltantes": [],
+            "estatus": "no_aplica_pago_provisional",
+            "criterio": "Sueldos y salarios: el ISR se cubre vía retenciones del patrón; no hay pago provisional.",
+        }
+
+    if regimen in {SatRegimenEnum.general_de_ley, SatRegimenEnum.personas_morales_no_lucrativas} and tasa_isr is None:
+        tasa_isr = Decimal("30")
+
+    coeficiente_origen = "manual" if coeficiente_utilidad is not None else None
+    if (
+        regimen in {SatRegimenEnum.general_de_ley, SatRegimenEnum.personas_morales_no_lucrativas}
+        and coeficiente_utilidad is None
+    ):
+        coeficiente_utilidad, coeficiente_origen = _coeficiente_desde_cfdi(
+            db, empresa_id, anio, rfc_empresa, resumen
+        )
 
     if regimen in {SatRegimenEnum.general_de_ley, SatRegimenEnum.personas_morales_no_lucrativas} and coeficiente_utilidad is None:
         parametros_faltantes.append("coeficiente_utilidad")
@@ -288,6 +422,7 @@ def calcular_isr_provisional(
         "base_gravable": float(base_gravable),
         "tasa_isr_aplicada": float(tasa_isr) if tasa_isr is not None else None,
         "coeficiente_utilidad_aplicado": float(coeficiente_utilidad) if coeficiente_utilidad is not None else None,
+        "coeficiente_utilidad_origen": coeficiente_origen,
         "deduccion_ciega_pct_aplicada": float(deduccion_ciega_pct) if deduccion_ciega_pct is not None else None,
         "tarifa_progresiva": tarifa_info,
         "pagos_provisionales_anteriores": float(pagos_previos),
@@ -394,9 +529,19 @@ def calcular_isr_anual(
     utilidad = resumen["base_gravable"]
     parametros_faltantes = []
 
-    if regimen in {SatRegimenEnum.resico_pf, SatRegimenEnum.resico_pm}:
+    if regimen == SatRegimenEnum.resico_pf:
         deducciones_aplicadas = Decimal("0")
         utilidad = resumen["ingresos_acumulados"]
+        if tasa_isr is None:
+            tasa_isr = next(
+                (t for limite, t in _TABLA_RESICO_ANUAL if resumen["ingresos_acumulados"] <= limite),
+                _TABLA_RESICO_ANUAL[-1][1],
+            )
+    elif regimen == SatRegimenEnum.resico_pm and tasa_isr is None:
+        tasa_isr = Decimal("30")
+    elif regimen == SatRegimenEnum.sueldos_salarios:
+        tasa_isr = Decimal("0")
+        utilidad = Decimal("0")
     elif regimen == SatRegimenEnum.arrendamiento and deduccion_ciega_pct is not None:
         deducciones_aplicadas = (
             resumen["ingresos_acumulados"] * deduccion_ciega_pct / Decimal("100")

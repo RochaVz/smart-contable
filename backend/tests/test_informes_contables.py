@@ -50,8 +50,9 @@ def test_resumen_ingresos_egresos_excluye_nomina_emitida_por_la_empresa(monkeypa
     assert resultado["ingresos"]["subtotal"] == 1000
     assert resultado["ingresos"]["total"] == 1000
     assert resultado["egresos"]["cantidad"] == 2
-    assert resultado["egresos"]["total"] == 5348
-    assert resultado["utilidad_neta"] == -4348
+    assert resultado["egresos"]["total"] == 5300
+    assert resultado["egresos"]["total_con_iva"] == 5348
+    assert resultado["utilidad_neta"] == -4300
 
 
 def test_estado_resultados_excluye_nomina_de_ingresos(monkeypatch):
@@ -228,6 +229,40 @@ def test_sugerencias_limita_top_clientes_y_gastos_a_diez(monkeypatch):
     assert resultado["top_clientes"][0]["nombre"] == "Cliente 12"
     assert len(resultado["top_gastos"]) == 10
     assert resultado["top_gastos"][0]["nombre"] == "Proveedor 12"
+
+
+def test_sugerencias_605_sin_iva_y_sin_pagos_provisionales(monkeypatch):
+    monkeypatch.setattr(informes_contables, "_rfc_empresa", lambda *_a: "AAA010101AAA")
+    monkeypatch.setattr(informes_contables, "_facturas_periodo", lambda *_a: [])
+    monkeypatch.setattr(informes_contables, "_regimen_info", lambda *_a: ("605", False))
+
+    class Query:
+        def filter(self, *_a, **_k):
+            return self
+
+        def join(self, *_a, **_k):
+            return self
+
+        def first(self):
+            return object()
+
+        def scalar(self):
+            return 0
+
+    resultado = informes_contables.generar_sugerencias(
+        db=SimpleNamespace(query=lambda *_a: Query()),
+        empresa_id=1,
+        mes=7,
+        anio=2026,
+        paquete={
+            "impuestos_trasladados": {"total_iva_trasladado": 500},
+            "impuestos_acreditables": {"total_iva_acreditable": 100},
+        },
+    )
+
+    textos = str(resultado["alertas"]) + str(resultado["recomendaciones"])
+    assert "IVA a pagar" not in textos
+    assert "provisional" in textos.lower()
 
 
 def test_venta_por_transferencia_genera_poliza_de_ingreso(monkeypatch):

@@ -1,4 +1,4 @@
-import { Fragment, useState, useCallback, useEffect, useMemo } from 'react';
+import { Fragment, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import {
@@ -235,6 +235,20 @@ const CompanyDetail = ({ vista = null }) => {
   useEffect(() => {
     queueMicrotask(() => fetchDatos({ background: true }));
   }, [fetchDatos]);
+
+  const periodoAutoAjustado = useRef(false);
+  useEffect(() => {
+    if (periodoAutoAjustado.current || !facturas.length) return;
+    periodoAutoAjustado.current = true;
+    const fechas = facturas.map((f) => String(f.fecha || '').slice(0, 7)).filter((p) => /^\d{4}-\d{2}$/.test(p));
+    const actual = `${anioFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+    if (!fechas.length || fechas.includes(actual)) return;
+    const [a, m] = fechas.sort().at(-1).split('-').map(Number);
+    // Ajuste único del periodo inicial al último mes con datos.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAnioFiltro(a);
+    setMesFiltro(m);
+  }, [facturas, anioFiltro, mesFiltro]);
 
   const handleRefresh = useCallback(() => {
     setLoading(true);

@@ -45,7 +45,7 @@ const FiscalAnualPanel = ({ empresa, anio: anioProp, onAnioChange }) => {
     } finally {
       setLoading(false);
     }
-  }, [empresa?.id, anio]);
+  }, [empresa, anio]);
 
   useEffect(() => {
     if (empresa?.id) queueMicrotask(cargar);

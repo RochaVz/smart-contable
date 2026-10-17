@@ -55,7 +55,7 @@ const DiotPanel = ({
     } finally {
       setLoading(false);
     }
-  }, [empresa?.id, mes, anio]);
+  }, [empresa, mes, anio]);
 
   useEffect(() => {
     if (empresa?.id) queueMicrotask(cargar);

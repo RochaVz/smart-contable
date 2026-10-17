@@ -8,7 +8,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.core.config import settings
 from app.core.database import get_db
 from app.services.sat_parser import parsear_xml_sat
@@ -657,10 +657,15 @@ def listar_facturas(
         mi_rfc = mi_empresa.rfc.strip().upper() if mi_empresa else ""
 
         # 2. Consultamos las facturas asegurando la tenencia
-        facturas = db.query(Factura).filter(
-            Factura.empresa_id == empresa_id, 
-            Factura.empresa.has(usuario_id=current_user.id)
-        ).all()
+        facturas = (
+            db.query(Factura)
+            .options(selectinload(Factura.polizas).selectinload(Poliza.movimientos))
+            .filter(
+                Factura.empresa_id == empresa_id,
+                Factura.empresa.has(usuario_id=current_user.id),
+            )
+            .all()
+        )
 
         respuesta =[]
         for f in facturas:
@@ -678,19 +683,20 @@ def listar_facturas(
                 poliza_padre = f.polizas[0]
                 
                 # Buscamos el movimiento que define el gasto o ingreso
+                movs = sorted(poliza_padre.movimientos, key=lambda m: m.id)
                 if venta:
-                    mov = db.query(MovimientoPoliza).filter(
-                        MovimientoPoliza.poliza_id == poliza_padre.id,
-                        MovimientoPoliza.haber > 0,
-                        MovimientoPoliza.nombre_cuenta.not_in(["IVA Trasladado", "IVA Pendiente de Trasladar"])
-                    ).first()
+                    excluidas = {"IVA Trasladado", "IVA Pendiente de Trasladar"}
+                    mov = next(
+                        (m for m in movs if (m.haber or 0) > 0 and m.nombre_cuenta not in excluidas),
+                        None,
+                    )
                 else:
-                    mov = db.query(MovimientoPoliza).filter(
-                        MovimientoPoliza.poliza_id == poliza_padre.id,
-                        MovimientoPoliza.debe > 0,
-                        MovimientoPoliza.nombre_cuenta.not_in(["IVA Acreditable", "IVA Pendiente de Acreditar"])
-                    ).first()
-                
+                    excluidas = {"IVA Acreditable", "IVA Pendiente de Acreditar"}
+                    mov = next(
+                        (m for m in movs if (m.debe or 0) > 0 and m.nombre_cuenta not in excluidas),
+                        None,
+                    )
+
                 if mov:
                     cuenta_nombre = mov.nombre_cuenta
 

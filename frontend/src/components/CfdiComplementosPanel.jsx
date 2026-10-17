@@ -42,6 +42,7 @@ const CfdiComplementosPanel = ({ empresa }) => {
   }, [empresaId, anio, mes]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial al cambiar el periodo
     load();
   }, [load]);
 

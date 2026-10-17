@@ -75,7 +75,7 @@ const HistorialDeclaracionesPanel = ({ empresa }) => {
     } finally {
       setLoading(false);
     }
-  }, [empresa?.id, anio, mes]);
+  }, [empresa, anio, mes]);
 
   useEffect(() => {
     if (empresa?.id) queueMicrotask(cargar);
