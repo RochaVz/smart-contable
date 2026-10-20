@@ -224,6 +224,16 @@ def purgar_datos_operativos_empresa(db: Session, empresa_id: int) -> dict:
     return resumen
 
 
+def eliminar_empresa_definitivamente(db: Session, empresa) -> dict:
+    """Borra la empresa (incluido su RFC) y todo su historial; no hace commit."""
+    resumen = purgar_datos_operativos_empresa(db, empresa.id)
+    db.expire(empresa)
+    db.delete(empresa)
+    db.flush()
+    logger.info("Empresa eliminada definitivamente", extra={"empresa_id": resumen["empresa_id"]})
+    return resumen
+
+
 def purgar_periodo_empresa(db: Session, empresa_id: int, mes: int, anio: int) -> dict:
     """Elimina facturas, pólizas y movimientos bancarios de un mes para reimportar."""
     if mes < 1 or mes > 12:

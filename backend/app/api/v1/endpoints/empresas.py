@@ -31,7 +31,11 @@ from app.services.exportacion_empresa import (  # noqa: F401
     generar_zip_exportacion_empresa,
     generar_csv_consolidado_exportacion,
 )
-from app.services.purga_datos import purgar_datos_operativos_empresa, purgar_periodo_empresa
+from app.services.purga_datos import (
+    eliminar_empresa_definitivamente,
+    purgar_datos_operativos_empresa,
+    purgar_periodo_empresa,
+)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -508,6 +512,46 @@ def desactivar_empresa(
         db.rollback()
         logger.error("Error inesperado al desactivar empresa", exc_info=True)
         raise DatabaseException("Error inesperado al desactivar empresa") from e
+
+# ─────────────────────────────────────────
+# ELIMINAR EMPRESA DEFINITIVAMENTE (hard delete)
+# ─────────────────────────────────────────
+@router.delete(
+    "/por-rfc/{rfc}",
+    summary="Eliminar empresa definitivamente por RFC",
+    description=(
+        "Borra el RFC y todos los datos de la empresa (facturas, pólizas, banco, "
+        "fiscal, mapeos contables), incluso si estaba desactivada. Irreversible; "
+        "permite repetir el onboarding."
+    ),
+)
+def eliminar_empresa_definitivo(
+    rfc: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    try:
+        rfc_normalizado = rfc.strip().upper()
+        empresas = db.query(Empresa).filter(
+            Empresa.usuario_id == current_user.id,
+            Empresa.rfc == rfc_normalizado,
+        ).all()
+        resumenes = [eliminar_empresa_definitivamente(db, e) for e in empresas]
+        db.commit()
+        logger.info(
+            "Empresas eliminadas definitivamente",
+            extra={"rfc": rfc_normalizado, "user_id": current_user.id, "total": len(resumenes)},
+        )
+        return {"mensaje": "Empresa eliminada definitivamente", "eliminadas": len(resumenes), "detalle": resumenes}
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error("Error en base de datos al eliminar empresa definitivamente", exc_info=True)
+        raise DatabaseException("Error al eliminar la empresa") from e
+    except Exception as e:
+        db.rollback()
+        logger.error("Error inesperado al eliminar empresa definitivamente", exc_info=True)
+        raise DatabaseException("Error inesperado al eliminar la empresa") from e
+
 
 # ─────────────────────────────────────────
 # PURGAR PERIODO (mes) PARA REIMPORTAR

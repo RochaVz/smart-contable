@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Receipt, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
+import FiscalImpuestosCards from './FiscalImpuestosCards';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -202,33 +203,7 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
         open={abiertos?.impuestos ?? true}
         onToggle={() => onToggleBloque('impuestos')}
       >
-        <div className="grid gap-3 lg:grid-cols-3">
-          <SourceCard
-            title="ISR provisional"
-            badge={obligaciones.calculo_isr_tipo ? String(obligaciones.calculo_isr_tipo).replaceAll('_', ' ') : null}
-            rows={[
-              ['Método', obligaciones.calculo_isr_tipo ? String(obligaciones.calculo_isr_tipo).replaceAll('_', ' ') : '—'],
-              ['A cargo', money(impuestos.isr?.a_cargo)],
-              ['Resumen', impuestos.isr?.resumen || '—'],
-            ]}
-          />
-          <SourceCard
-            title="IVA del periodo"
-            rows={[
-              ['A cargo', money(impuestos.iva?.a_cargo)],
-              ['A favor', money(impuestos.iva?.a_favor)],
-              ['Resumen', impuestos.iva?.resumen || '—'],
-            ]}
-          />
-          <SourceCard
-            title="Retenciones"
-            rows={[
-              ['ISR retenido', money(impuestos.retenciones?.isr)],
-              ['IVA retenido', money(impuestos.retenciones?.iva)],
-              ['Total retenciones', money(impuestos.retenciones?.total)],
-            ]}
-          />
-        </div>
+        <FiscalImpuestosCards impuestos={impuestos} obligaciones={obligaciones} />
       </ExpandBlock>
 
       {/* 2. Declaraciones y periodicidad */}
@@ -314,26 +289,5 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
     </div>
   );
 };
-
-const SourceCard = ({ title, badge, rows }) => (
-  <div className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-4">
-    <div className="flex items-center justify-between gap-2">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{title}</p>
-      {badge && (
-        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
-          {badge}
-        </span>
-      )}
-    </div>
-    <dl className="mt-3 space-y-2">
-      {rows.map(([k, v]) => (
-        <div key={k} className="flex items-start justify-between gap-3 text-xs">
-          <dt className="text-slate-500 dark:text-slate-400 font-medium">{k}</dt>
-          <dd className="max-w-[65%] text-right font-mono font-bold text-slate-900 dark:text-white">{v}</dd>
-        </div>
-      ))}
-    </dl>
-  </div>
-);
 
 export default FiscalConsolidadosPanel;

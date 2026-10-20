@@ -25,6 +25,11 @@ import KpiAhorroPanel from './KpiAhorroPanel';
 import { etiquetaPeriodo, formatMoney, formatPct } from './format';
 import { periodoAnterior } from '../../utils/financialHealth';
 
+// Visibilidad temporal de widgets: cambiar a true para volver a mostrarlos.
+const SHOW_PRIORIDAD_PAGO = false;
+const SHOW_SCORE_FINANCIERO = false;
+const SHOW_AHORRO_PRODUCTIVIDAD = false;
+
 /** Dashboard ejecutivo: el estado del negocio en menos de 30 segundos. */
 export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
   const { snapshot: s, score, loading, esLocal, fallidos } = lectura;
@@ -153,26 +158,31 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
           hint={s.riesgoFiscal ? `Riesgo ${s.riesgoFiscal.toLowerCase()}` : 'Sin datos fiscales'}
           loading={loading}
           onClick={() => onNavigate('indicadores')}
+          className={SHOW_SCORE_FINANCIERO ? '' : 'sm:col-span-2'}
         />
-        <KpiCard
-          label="Score financiero"
-          value={score.score == null ? '—' : `${score.score}/100`}
-          icon={Activity}
-          tone={score.nivel.tone === 'danger' ? 'danger' : score.nivel.tone === 'warning' ? 'warning' : 'success'}
-          hint={score.nivel.label}
-          loading={loading}
-        />
+        {SHOW_SCORE_FINANCIERO ? (
+          <KpiCard
+            label="Score financiero"
+            value={score.score == null ? '—' : `${score.score}/100`}
+            icon={Activity}
+            tone={score.nivel.tone === 'danger' ? 'danger' : score.nivel.tone === 'warning' ? 'warning' : 'success'}
+            hint={score.nivel.label}
+            loading={loading}
+          />
+        ) : null}
       </section>
 
-      <ImpuestosPorPagarPanel
-        snapshot={s}
-        loading={loading}
-        disponible={!esLocal}
-        onOpenSat={() => onNavigate('sat')}
-      />
+      {SHOW_PRIORIDAD_PAGO ? (
+        <ImpuestosPorPagarPanel
+          snapshot={s}
+          loading={loading}
+          disponible={!esLocal}
+          onOpenSat={() => onNavigate('sat')}
+        />
+      ) : null}
       <IngresosEgresosBreakdown snapshot={s} loading={loading} />
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+      <div className={`grid gap-6 ${SHOW_AHORRO_PRODUCTIVIDAD ? 'xl:grid-cols-[1.2fr_1fr]' : ''}`}>
         <section className="sc-card p-5 sm:p-6">
           <header className="mb-4">
             <p className="sc-label">Tendencia</p>
@@ -210,7 +220,7 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
           )}
         </section>
 
-        <KpiAhorroPanel snapshot={s} loading={loading} />
+        {SHOW_AHORRO_PRODUCTIVIDAD ? <KpiAhorroPanel snapshot={s} loading={loading} /> : null}
       </div>
     </div>
   );

@@ -391,6 +391,23 @@ export const clearDeviceBackup = async () => {
 
 export const getLocalCompanies = async () => readAllFromStore(STORE_COMPANIES);
 
+export const clearApiSnapshots = async () => {
+  await runStore(STORE_SNAPSHOTS, 'readwrite', (store) => store.clear());
+  await runStore(STORE_META, 'readwrite', (store) => store.delete('lastSnapshotAt'));
+  window.dispatchEvent(new CustomEvent('smartcontable:local-backup-updated'));
+};
+
+export const deleteLocalCompaniesByRfc = async (rfc) => {
+  const objetivo = String(rfc || '').trim().toUpperCase();
+  if (!objetivo) return 0;
+  const companies = await readAllFromStore(STORE_COMPANIES);
+  const coincidentes = companies.filter((c) => String(c.rfc || '').trim().toUpperCase() === objetivo);
+  for (const company of coincidentes) {
+    await deleteLocalCompany(company);
+  }
+  return coincidentes.length;
+};
+
 export const deleteLocalCompany = async (company) => {
   const id = company?.id;
   if (!id) return;

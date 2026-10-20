@@ -780,6 +780,7 @@ export const buildExecutiveSnapshot = ({
     impuestosDetalle,
     kpiAhorro,
     obligacionesRegimen: resumenSat?.obligaciones_regimen || null,
+    impuestosSat: resumenSat?.impuestos || null,
   };
 
   const fiscal = construirAccionesFiscales(snapshot);

@@ -10,6 +10,7 @@ import NewCompanyModal from '../components/NewCompanyModal';
 import SmartContableMark from '../components/SmartContableMark';
 import DeviceBackupPanel from '../components/DeviceBackupPanel';
 import { deleteLocalCompany, getLocalCompanies, importDeviceBackup } from '../services/localBackup';
+import { resetOnboardingForRfc } from '../services/resetOnboarding';
 import { getNavigationCache, setNavigationCache } from '../services/navigationCache';
 
 const Dashboard = ({ onLogout }) => {
@@ -219,6 +220,31 @@ const Dashboard = ({ onLogout }) => {
     }
   };
 
+  const handleResetOnboarding = async (empresa, event) => {
+    event.stopPropagation();
+    const escrito = window.prompt(
+      `Esto BORRA DEFINITIVAMENTE el RFC ${empresa.rfc} y todos sus datos (CFDI, pólizas, banco, fiscal, cuentas) y reinicia el registro inicial.\n\nEscribe el RFC para confirmar:`,
+    );
+    if (String(escrito || '').trim().toUpperCase() !== String(empresa.rfc || '').toUpperCase()) {
+      if (escrito !== null) toast.error('El RFC no coincide; no se eliminó nada');
+      return;
+    }
+
+    setDeletingCompanyId(empresa.id);
+    try {
+      await resetOnboardingForRfc(empresa.rfc);
+      setEmpresas([]);
+      setNewCompanyDraft({});
+      toast.success('RFC eliminado. Puedes registrar tu negocio de nuevo.');
+      navigate('/', { replace: true });
+      await fetchEmpresas();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || err.message || 'No se pudo reiniciar el registro');
+    } finally {
+      setDeletingCompanyId(null);
+    }
+  };
+
   // Renderizar tarjeta de empresa
   const renderCompanyCard = (e) => (
     <div 
@@ -313,6 +339,15 @@ const Dashboard = ({ onLogout }) => {
         >
           {deletingCompanyId === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
           {deletingCompanyId === e.id ? 'Eliminando...' : 'Eliminar negocio'}
+        </button>
+        <button
+          type="button"
+          onClick={(event) => handleResetOnboarding(e, event)}
+          disabled={deletingCompanyId === e.id}
+          className="mt-2 flex min-h-9 w-full items-center justify-center gap-2 rounded-xl border border-rose-500/40 px-3 py-1.5 text-xs font-bold text-rose-700 dark:text-rose-400 transition-colors hover:bg-rose-500/10 disabled:cursor-wait disabled:opacity-60"
+          title="Borra el RFC y todos sus datos para repetir el registro inicial"
+        >
+          Borrar RFC y reiniciar registro
         </button>
       </div>
     </div>
