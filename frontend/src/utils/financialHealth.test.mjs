@@ -182,6 +182,84 @@ test('el snapshot expone totales SAT para las tarjetas de impuestos', () => {
   assert.equal(s.impuestosDetalle.isrProvisional, 8450);
 });
 
+test('recupera los importes fiscales cuando el backend entrega totales en ceros', async () => {
+  const { construirImpuestosDetalle } = await import('./financialHealth.js');
+
+  // Respuesta de un backend con versión anterior al anidamiento `saldo` /
+  // `periodo_actual`: `totales` y `sugerencias_pago` llegan en ceros, pero el
+  // bloque `detalle` conserva el cálculo real del motor fiscal.
+  const detalle = construirImpuestosDetalle({
+    regimen: { clave: '601', nombre: 'Sociedad Anónima' },
+    periodo: { mes: 8, anio: 2026 },
+    totales: {
+      isr_a_cargo: 0,
+      iva_a_cargo: 0,
+      iva_a_favor: 0,
+      retenciones: 0,
+      total_a_pagar: 0,
+    },
+    impuestos: {
+      isr: {
+        a_cargo: 0,
+        resumen: 'Pago provisional estimado',
+        detalle: { saldo: { isr_a_cargo: 8450.5 } },
+      },
+      iva: {
+        a_cargo: 0,
+        a_favor: 0,
+        resumen: 'IVA del periodo',
+        detalle: {
+          periodo_actual: {
+            iva_a_cargo: 9713.03,
+            saldo_a_favor: 0,
+            iva_trasladado: 12000,
+            iva_acreditable: 2286.97,
+          },
+        },
+      },
+      retenciones: { isr: 300, iva: 200, total: 500 },
+    },
+    sugerencias_pago: [
+      { clave: 'iva', concepto: 'IVA a cargo', monto: 0, accion: 'pagar' },
+      { clave: 'isr', concepto: 'ISR provisional', monto: 0, accion: 'pagar' },
+    ],
+    obligaciones_regimen: { regimen: '601', aplica_isr: true, aplica_iva: true },
+  });
+
+  assert.equal(detalle.ivaACargo, 9713.03);
+  assert.equal(detalle.isrProvisional, 8450.5);
+  assert.equal(detalle.retenciones, 500);
+  assert.ok(Math.abs(detalle.totalPagar - 18663.53) < 0.01, `totalPagar=${detalle.totalPagar}`);
+  assert.ok(detalle.desgloseRegimen.some((d) => d.id === 'iva' && d.monto === 9713.03));
+  assert.ok(detalle.desgloseRegimen.some((d) => d.id === 'isr' && d.monto === 8450.5));
+});
+
+test('el snapshot mantiene el total a pagar con totales del backend en ceros', () => {
+  const s = buildExecutiveSnapshot({
+    facturas,
+    mes: 8,
+    anio: 2026,
+    resumenSat: {
+      totales: {
+        isr_a_cargo: 0,
+        iva_a_cargo: 0,
+        iva_a_favor: 0,
+        retenciones: 0,
+        total_a_pagar: 0,
+      },
+      impuestos: {
+        isr: { a_cargo: 0, detalle: { saldo: { isr_a_cargo: 8450.5 } } },
+        iva: { a_cargo: 0, detalle: { periodo_actual: { iva_a_cargo: 9713.03 } } },
+        retenciones: { isr: 300, iva: 200, total: 500 },
+      },
+    },
+  });
+
+  assert.equal(s.impuestosDetalle.ivaACargo, 9713.03);
+  assert.equal(s.impuestosDetalle.isrProvisional, 8450.5);
+  assert.ok(s.impuestosPendientes > 0, `impuestosPendientes=${s.impuestosPendientes}`);
+});
+
 test('desgloseRegimen desglosa ISR, IVA y retenciones según régimen fiscal', async () => {
   const { construirImpuestosDetalle } = await import('./financialHealth.js');
   const detalleResico = construirImpuestosDetalle({
@@ -225,3 +303,99 @@ test('agrupa conceptos CFDI del periodo', async () => {
   assert.ok(grupo.ingresos.items.length >= 2);
   assert.ok(grupo.egresos.items.some((i) => /nomina/i.test(i.label) || /n[oó]mina/i.test(i.label)));
 });
+
+test('el ISH calculado por el backend se refleja una sola vez en los impuestos por pagar', async () => {
+  const { construirImpuestosDetalle } = await import('./financialHealth.js');
+
+  const detalle = construirImpuestosDetalle({
+    regimen: { clave: '601', nombre: 'Sociedad Anónima' },
+    periodo: { mes: 8, anio: 2026 },
+    totales: {
+      isr_a_cargo: 8450.5,
+      iva_a_cargo: 9713.03,
+      iva_a_favor: 0,
+      retenciones: 500,
+      ish: 1250.75,
+      total_a_pagar: 19914.28,
+    },
+    impuestos: {
+      isr: { a_cargo: 8450.5, detalle: { saldo: { isr_a_cargo: 8450.5 } } },
+      iva: {
+        a_cargo: 9713.03,
+        a_favor: 0,
+        detalle: { periodo_actual: { iva_a_cargo: 9713.03, ish: 1250.75 } },
+      },
+      retenciones: { isr: 300, iva: 200, total: 500 },
+      ish: { a_cargo: 1250.75, detalle: { ish: 1250.75 } },
+    },
+    sugerencias_pago: [
+      { clave: 'iva', concepto: 'IVA a cargo', monto: 9713.03, accion: 'pagar', vencimiento: '2026-09-17' },
+      { clave: 'isr', concepto: 'ISR provisional', monto: 8450.5, accion: 'pagar', vencimiento: '2026-09-17' },
+      { clave: 'ish', concepto: 'Impuesto sobre hospedaje (ISH)', monto: 1250.75, accion: 'pagar', vencimiento: '2026-09-17' },
+    ],
+    obligaciones_regimen: { regimen: '601', aplica_isr: true, aplica_iva: true },
+  });
+
+  assert.equal(detalle.ish, 1250.75);
+
+  // La sugerencia `ish` del backend no debe duplicar el concepto ya agregado.
+  const itemsIsh = detalle.items.filter((i) => i.id === 'ish');
+  assert.equal(itemsIsh.length, 1, `items ISH=${itemsIsh.length}`);
+  assert.equal(itemsIsh[0].monto, 1250.75);
+
+  const desgloseIsh = detalle.desgloseRegimen.filter((d) => d.id === 'ish');
+  assert.equal(desgloseIsh.length, 1, `desglose ISH=${desgloseIsh.length}`);
+  assert.equal(desgloseIsh[0].monto, 1250.75);
+
+  // 9713.03 (IVA) + 8450.5 (ISR) + 500 (retenciones) + 1250.75 (ISH)
+  assert.ok(Math.abs(detalle.totalPagar - 19914.28) < 0.01, `totalPagar=${detalle.totalPagar}`);
+});
+
+test('el snapshot expone el ISH calculado por el backend', () => {
+  const s = buildExecutiveSnapshot({
+    facturas,
+    mes: 8,
+    anio: 2026,
+    resumenSat: {
+      totales: {
+        isr_a_cargo: 8450.5,
+        iva_a_cargo: 9713.03,
+        iva_a_favor: 0,
+        retenciones: 500,
+        ish: 1250.75,
+        total_a_pagar: 19914.28,
+      },
+      impuestos: {
+        isr: { a_cargo: 8450.5, detalle: { saldo: { isr_a_cargo: 8450.5 } } },
+        iva: { a_cargo: 9713.03, a_favor: 0, detalle: { periodo_actual: { iva_a_cargo: 9713.03, ish: 1250.75 } } },
+        retenciones: { isr: 300, iva: 200, total: 500 },
+        ish: { a_cargo: 1250.75, detalle: { ish: 1250.75 } },
+      },
+    },
+  });
+
+  assert.equal(s.totalesSat.ish, 1250.75);
+  assert.equal(s.impuestosSat.ish.a_cargo, 1250.75);
+  assert.equal(s.impuestosDetalle.ish, 1250.75);
+  assert.ok(Math.abs(s.impuestosDetalle.totalPagar - 19914.28) < 0.01, `totalPagar=${s.impuestosDetalle.totalPagar}`);
+});
+
+test('sin ISH no se agrega el concepto al desglose ni al total a pagar', async () => {
+  const { construirImpuestosDetalle } = await import('./financialHealth.js');
+
+  const detalle = construirImpuestosDetalle({
+    regimen: { clave: '601', nombre: 'Sociedad Anónima' },
+    totales: { isr_a_cargo: 8450.5, iva_a_cargo: 9713.03, retenciones: 500, total_a_pagar: 18663.53 },
+    impuestos: {
+      isr: { a_cargo: 8450.5 },
+      iva: { a_cargo: 9713.03, a_favor: 0, detalle: { periodo_actual: { iva_a_cargo: 9713.03 } } },
+      retenciones: { isr: 300, iva: 200, total: 500 },
+    },
+    obligaciones_regimen: { regimen: '601', aplica_isr: true, aplica_iva: true },
+  });
+
+  assert.equal(detalle.ish, null);
+  assert.ok(!detalle.desgloseRegimen.some((d) => d.id === 'ish'));
+  assert.ok(Math.abs(detalle.totalPagar - 18663.53) < 0.01, `totalPagar=${detalle.totalPagar}`);
+});
+

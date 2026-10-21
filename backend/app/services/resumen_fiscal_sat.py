@@ -146,8 +146,16 @@ def construir_resumen_fiscal_sat(
         max(float(iva_periodo.get("iva_a_cargo") or iva.get("iva_a_cargo") or 0), 0)
     )))
     iva_a_favor = float(Decimal(str(iva_periodo.get("saldo_a_favor") or iva.get("iva_a_favor") or 0)))
-    ret_isr = float(Decimal(str(isr.get("retenciones_isr") or isr.get("isr_retenido") or 0)))
+    ret_isr_raw = saldo_isr.get("retenciones_isr")
+    if ret_isr_raw is None:
+        # Fallback para respuestas planas: el motor anida las retenciones en
+        # `saldo` y expone el acumulado solo en el nivel superior.
+        ret_isr_raw = isr.get("retenciones_isr")
+    if ret_isr_raw is None:
+        ret_isr_raw = isr.get("isr_retenido")
+    ret_isr = float(Decimal(str(ret_isr_raw or 0)))
     ret_iva = float(Decimal(str(iva_periodo.get("iva_retenido") or iva.get("iva_retenido") or 0)))
+    ish = float(Decimal(str(iva_periodo.get("ish") or 0)))
 
     impuestos_reg = impuestos_aplicables_regimen(rules)
     flags = impuestos_reg["flags"]
@@ -157,6 +165,9 @@ def construir_resumen_fiscal_sat(
     if not flags.get("iva", True):
         iva_a_cargo = 0.0
         iva_a_favor = 0.0
+    # El ISH no se anula por régimen: proviene del impuesto local efectivamente
+    # cobrado en los CFDI emitidos (dato autoritativo). El flag `aplica_ish`
+    # solo describe si la empresa está sujeta al impuesto estatal.
 
     declaraciones = _periodicidad_declaraciones(empresa, rules)
     if not flags.get("iva", True):
@@ -243,6 +254,25 @@ def construir_resumen_fiscal_sat(
             "vencimiento": item["vencimiento"],
         })
 
+    if ish > 0:
+        item = {
+            "concepto": "Impuesto sobre hospedaje (ISH)",
+            "clave": "ish",
+            "monto": round(ish, 2),
+            "monto_estimado": round(ish, 2),
+            "vencimiento": vencimiento.isoformat(),
+            "periodicidad": "mensual",
+            "accion": "pagar",
+            "nota": "ISH estatal detectado en los CFDI emitidos del periodo (informativo).",
+        }
+        sugerencias_pago.append(item)
+        acciones.append({
+            "tipo": "pago_ish",
+            "titulo": "Pagar ISH del periodo",
+            "monto": item["monto"],
+            "vencimiento": item["vencimiento"],
+        })
+
     if flags.get("aplica_diot") and any(d.get("tipo") == "DIOT" for d in declaraciones):
         acciones.append({
             "tipo": "presentar_diot",
@@ -290,6 +320,7 @@ def construir_resumen_fiscal_sat(
             "iva_a_cargo": round(iva_a_cargo, 2),
             "iva_a_favor": round(iva_a_favor, 2),
             "retenciones": round(ret_isr + ret_iva, 2),
+            "ish": round(ish, 2),
             "total_a_pagar": total_a_pagar,
         },
         "impuestos": {
@@ -311,6 +342,15 @@ def construir_resumen_fiscal_sat(
                 "isr": round(ret_isr, 2),
                 "iva": round(ret_iva, 2),
                 "total": round(ret_isr + ret_iva, 2),
+            },
+            "ish": {
+                "resumen": (
+                    "Impuesto sobre hospedaje (ISH) cobrado en los CFDI emitidos. "
+                    "Es un impuesto local; el pago se presenta ante la autoridad estatal."
+                ),
+                "a_cargo": round(ish, 2),
+                "aplica": flags.get("ish", False),
+                "detalle": {"ish": round(ish, 2)},
             },
         },
         "impuestos_aplicables": impuestos_reg["aplicables"],

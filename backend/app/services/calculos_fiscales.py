@@ -77,6 +77,7 @@ def _resumen_iva(facturas: list[Factura], rfc_empresa: str) -> dict[str, Decimal
     trasladado = Decimal("0")
     acreditable = Decimal("0")
     retenido = Decimal("0")
+    ish = Decimal("0")
 
     for factura in facturas:
         tipo = getattr(getattr(factura, "tipo_comprobante", ""), "value", factura.tipo_comprobante)
@@ -85,8 +86,10 @@ def _resumen_iva(facturas: list[Factura], rfc_empresa: str) -> dict[str, Decimal
         if tipo == "I" and emitido:
             trasladado += _moneda(factura.iva_trasladado)
             retenido += _moneda(factura.iva_retenido)
+            ish += _moneda(getattr(factura, "impuestos_locales", 0))
         elif tipo == "E" and emitido:
             trasladado -= _moneda(factura.iva_trasladado)
+            ish -= _moneda(getattr(factura, "impuestos_locales", 0))
         elif tipo == "I":
             acreditable += _moneda(factura.iva_trasladado)
         elif tipo == "E":
@@ -99,6 +102,8 @@ def _resumen_iva(facturas: list[Factura], rfc_empresa: str) -> dict[str, Decimal
         "iva_retenido": retenido.quantize(CENTAVOS),
         "iva_a_cargo": iva_a_cargo.quantize(CENTAVOS),
         "saldo_a_favor": max(-iva_a_cargo, Decimal("0")).quantize(CENTAVOS),
+        # ISH estatal: suma el impuesto local aplicado en los CFDI emitidos.
+        "ish": max(ish, Decimal("0")).quantize(CENTAVOS),
     }
 
 

@@ -41,27 +41,50 @@ export default function FiscalImpuestosCards({ impuestos, obligaciones, totales 
   const tot = totales || {};
   const metodo = formatMetodo(obligaciones?.calculo_isr_tipo);
 
+  // Prefiere el primer importe positivo: `totales` es la fuente primaria, pero una
+  // versión desfasada del backend lo entrega en ceros mientras `detalle` conserva
+  // el cálculo real del motor fiscal.
   const getValor = (...valores) => {
-    const encontrado = valores.find((v) => v != null);
-    return Number(encontrado ?? 0);
+    const candidatos = valores
+      .filter((v) => v != null)
+      .map((v) => Number(v))
+      .filter((v) => Number.isFinite(v));
+    const positivo = candidatos.find((v) => v > 0);
+    return positivo ?? candidatos[0] ?? 0;
   };
 
+  const ivaDetalle = imp.iva?.detalle?.periodo_actual || {};
+  const isrDetalle = imp.isr?.detalle || {};
+
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
+    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
       <SourceCard
         title="ISR provisional"
         badge={metodo}
         rows={[
           ['Método', metodo || '—'],
-          ['A cargo', money(getValor(tot.isr_a_cargo, imp.isr?.a_cargo))],
+          ['A cargo', money(getValor(
+            tot.isr_a_cargo,
+            imp.isr?.a_cargo,
+            isrDetalle.saldo?.isr_a_cargo,
+            isrDetalle.isr_estimado,
+          ))],
           ['Resumen', imp.isr?.resumen || '—'],
         ]}
       />
       <SourceCard
         title="IVA del periodo"
         rows={[
-          ['A cargo', money(getValor(tot.iva_a_cargo, imp.iva?.a_cargo))],
-          ['A favor', money(getValor(tot.iva_a_favor, imp.iva?.a_favor))],
+          ['A cargo', money(getValor(
+            tot.iva_a_cargo,
+            imp.iva?.a_cargo,
+            ivaDetalle.iva_a_cargo,
+          ))],
+          ['A favor', money(getValor(
+            tot.iva_a_favor,
+            imp.iva?.a_favor,
+            ivaDetalle.saldo_a_favor,
+          ))],
           ['Resumen', imp.iva?.resumen || '—'],
         ]}
       />
@@ -70,7 +93,22 @@ export default function FiscalImpuestosCards({ impuestos, obligaciones, totales 
         rows={[
           ['ISR retenido', money(getValor(imp.retenciones?.isr))],
           ['IVA retenido', money(getValor(imp.retenciones?.iva))],
-          ['Total retenciones', money(getValor(tot.retenciones, imp.retenciones?.total))],
+          ['Total retenciones', money(getValor(
+            tot.retenciones,
+            imp.retenciones?.total,
+            (Number(imp.retenciones?.isr) || 0) + (Number(imp.retenciones?.iva) || 0) || null,
+          ))],
+        ]}
+      />
+      <SourceCard
+        title="ISH (hospedaje)"
+        rows={[
+          ['A cargo', money(getValor(
+            tot.ish,
+            imp.ish?.a_cargo,
+            ivaDetalle.ish,
+          ))],
+          ['Resumen', imp.ish?.resumen || 'Impuesto local cobrado en los CFDI emitidos.'],
         ]}
       />
     </div>

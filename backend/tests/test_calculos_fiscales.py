@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from app.services.calculos_fiscales import calcular_isr_provisional, calcular_iva_provisional
 
 
-def factura(tipo, fecha, emisor, receptor, iva, iva_retenido=0):
+def factura(tipo, fecha, emisor, receptor, iva, iva_retenido=0, impuestos_locales=0):
     return SimpleNamespace(
         tipo_comprobante=tipo,
         fecha_emision=datetime.fromisoformat(fecha),
@@ -12,6 +12,7 @@ def factura(tipo, fecha, emisor, receptor, iva, iva_retenido=0):
         rfc_receptor=receptor,
         iva_trasladado=iva,
         iva_retenido=iva_retenido,
+        impuestos_locales=impuestos_locales,
     )
 
 
@@ -105,6 +106,59 @@ def test_nota_de_credito_recibida_resta_iva_acreditable(monkeypatch):
 
     r = calcular_iva_provisional(Db(), 1, 2, 2026)["periodo_actual"]
     assert r["iva_acreditable"] == 144.0
+
+
+def test_iva_suma_ish_de_impuestos_locales_de_cfdi_emitidos(monkeypatch):
+    """El ISH se obtiene del impuesto local de los CFDI emitidos por la empresa."""
+    rfc_empresa = "AAA010101AAA"
+    facturas = [
+        factura("I", "2026-02-10", rfc_empresa, "BBB010101BBB", 160, impuestos_locales=120.50),
+        factura("I", "2026-02-15", rfc_empresa, "CCC010101CCC", 320, impuestos_locales=200.25),
+        # CFDI recibido: el ISH del proveedor no es obligación de la empresa.
+        factura("I", "2026-02-16", "DDD010101DDD", rfc_empresa, 100, impuestos_locales=80.00),
+        # Nota de crédito emitida: revierte el ISH cobrado.
+        factura("E", "2026-02-20", rfc_empresa, "BBB010101BBB", 16, impuestos_locales=12.05),
+    ]
+
+    class Query:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return SimpleNamespace(rfc=rfc_empresa)
+
+    class Db:
+        def query(self, model):
+            return Query()
+
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_del_periodo", lambda *_a: facturas)
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_hasta_periodo", lambda *_a: facturas)
+
+    r = calcular_iva_provisional(Db(), 1, 2, 2026)["periodo_actual"]
+    # 120.50 + 200.25 - 12.05 = 308.70
+    assert r["ish"] == 308.70
+
+
+def test_iva_sin_impuestos_locales_reporta_ish_en_cero(monkeypatch):
+    rfc_empresa = "AAA010101AAA"
+    facturas = [factura("I", "2026-02-10", rfc_empresa, "BBB010101BBB", 160)]
+
+    class Query:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return SimpleNamespace(rfc=rfc_empresa)
+
+    class Db:
+        def query(self, model):
+            return Query()
+
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_del_periodo", lambda *_a: facturas)
+    monkeypatch.setattr("app.services.calculos_fiscales._facturas_hasta_periodo", lambda *_a: facturas)
+
+    r = calcular_iva_provisional(Db(), 1, 2, 2026)["periodo_actual"]
+    assert r["ish"] == 0.0
 
 def test_calcular_isr_acumula_ingresos_deducciones_y_retenciones(monkeypatch):
     rfc_empresa = "AAA010101AAA"

@@ -51,6 +51,23 @@ const moneyPlain = (value) => Number(value || 0).toLocaleString('es-MX', {
   maximumFractionDigits: 0,
 });
 
+/**
+ * Selecciona el primer importe positivo disponible entre varias fuentes del mismo
+ * concepto. El motor fiscal entrega el mismo dato en `totales` y dentro de
+ * `impuestos.*.detalle`; cuando la versión desplegada del backend todavía no
+ * anida los cálculos en `saldo`/`periodo_actual`, `totales` llega en ceros
+ * mientras `detalle` conserva el cálculo real. Si ninguna fuente tiene un valor
+ * positivo se conserva el cero, para no inventar importes.
+ */
+const primerImporte = (...valores) => {
+  const candidatos = valores
+    .filter((valor) => valor !== null && valor !== undefined && valor !== '')
+    .map((valor) => toNumber(valor))
+    .filter((valor) => Number.isFinite(valor));
+  const positivo = candidatos.find((valor) => valor > 0);
+  return positivo ?? candidatos[0] ?? 0;
+};
+
 /** Normaliza la descripción de un concepto CFDI para agrupar. */
 export const normalizarConcepto = (raw) => {
   const texto = String(raw || '')
@@ -247,6 +264,7 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
   const ivaDetalleRaw = impuestos.iva?.detalle || {};
   const ivaDetalle = { ...ivaDetalleRaw, ...(ivaDetalleRaw.periodo_actual || {}) };
   const isrDetalle = impuestos.isr?.detalle || {};
+  const isrSaldo = isrDetalle.saldo || {};
 
   const ivaTrasladado = toNumber(
     ivaDetalle.iva_trasladado ?? ivaDetalle.trasladado ?? ivaDetalle.iva_cobrado,
@@ -254,21 +272,40 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
   const ivaAcreditable = toNumber(
     ivaDetalle.iva_acreditable ?? ivaDetalle.acreditable ?? ivaDetalle.iva_pagado,
   );
-  const ivaACargo = toNumber(totales.iva_a_cargo ?? impuestos.iva?.a_cargo);
-  const ivaAFavor = toNumber(totales.iva_a_favor ?? impuestos.iva?.a_favor);
-  const isrProvisional = toNumber(totales.isr_a_cargo ?? impuestos.isr?.a_cargo);
-  const retenciones = toNumber(totales.retenciones ?? impuestos.retenciones?.total);
+  // `totales` es la fuente primaria; `detalle` es el respaldo cuando el backend
+  // desplegado entrega los totales en ceros por versión desfasada.
+  const ivaACargo = primerImporte(
+    totales.iva_a_cargo,
+    impuestos.iva?.a_cargo,
+    ivaDetalle.iva_a_cargo,
+  );
+  const ivaAFavor = primerImporte(
+    totales.iva_a_favor,
+    impuestos.iva?.a_favor,
+    ivaDetalle.saldo_a_favor,
+  );
+  const isrProvisional = primerImporte(
+    totales.isr_a_cargo,
+    impuestos.isr?.a_cargo,
+    isrSaldo.isr_a_cargo,
+    isrDetalle.isr_estimado,
+  );
+  const retenciones = primerImporte(
+    totales.retenciones,
+    impuestos.retenciones?.total,
+    (toNumber(impuestos.retenciones?.isr) + toNumber(impuestos.retenciones?.iva)) || null,
+  );
   const mesPeriodo = resumenSat.periodo?.mes || 1;
   const isrAnualEstimado = toNumber(
     isrDetalle.isr_anual_estimado
     ?? isrDetalle.estimado_anual
     ?? (isrProvisional > 0 ? isrProvisional * (13 - mesPeriodo + 1) : 0),
   );
-  const ish = toNumber(
-    ivaDetalle.ish
-    ?? ivaDetalle.impuesto_hospedaje
-    ?? totales.ish
-    ?? impuestos.ish?.a_cargo,
+  const ish = primerImporte(
+    ivaDetalle.ish,
+    ivaDetalle.impuesto_hospedaje,
+    totales.ish,
+    impuestos.ish?.a_cargo,
   );
 
   const porClave = new Map(
@@ -295,12 +332,18 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
   const retSug = porClave.get('retenciones');
   const favorSug = porClave.get('iva_favor');
 
-  const ivaMonto = ivaSug
-      ? toNumber(ivaSug.monto)
-      : (ivaACargo || toNumber(impuestos.iva_por_pagar));
-    const isrMonto = isrSug
-      ? toNumber(isrSug.monto)
-      : (isrProvisional || toNumber(impuestos.isr_provisional));
+  // Las sugerencias de pago pueden venir en ceros si el backend desplegado
+  // calculó con importes nulos; se prefiere cualquier importe positivo disponible.
+  const ivaMonto = primerImporte(
+    ivaSug ? toNumber(ivaSug.monto) : null,
+    ivaACargo,
+    toNumber(impuestos.iva_por_pagar) || null,
+  );
+  const isrMonto = primerImporte(
+    isrSug ? toNumber(isrSug.monto) : null,
+    isrProvisional,
+    toNumber(impuestos.isr_provisional) || null,
+  );
     const ivaAcreditableMonto = ivaAcreditable
       || toNumber(impuestos.iva_acreditable)
       || toNumber(
@@ -350,9 +393,11 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
     });
   }
 
-  const retencionesMonto = retSug
-      ? toNumber(retSug.monto)
-      : (retenciones || (typeof impuestos.retenciones === 'number' ? impuestos.retenciones : 0));
+  const retencionesMonto = primerImporte(
+    retSug ? toNumber(retSug.monto) : null,
+    retenciones,
+    typeof impuestos.retenciones === 'number' ? impuestos.retenciones : null,
+  );
     pushItem({
       id: 'retenciones',
       label: 'Retenciones',
@@ -373,7 +418,9 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
   });
 
   (resumenSat.sugerencias_pago || []).forEach((s) => {
-    if (['iva', 'isr', 'retenciones', 'iva_favor'].includes(s.clave)) return;
+    // 'iva', 'isr', 'retenciones', 'iva_favor' e 'ish' ya se agregaron
+    // explícitamente como conceptos propios; incluirlos aquí los duplicaría.
+    if (['iva', 'isr', 'retenciones', 'iva_favor', 'ish'].includes(s.clave)) return;
     if (s.accion !== 'pagar') return;
     pushItem({
       id: s.clave || s.concepto,
@@ -521,11 +568,15 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
     });
   });
 
+  // El total del backend es la fuente primaria, pero si llega en ceros se usa el
+  // total calculado con los conceptos pagables (evita un $0.00 falso).
+  const totalPagarCalculado = items.some((i) => i.accion === 'pagar') ? totalPagar : null;
+
   return {
     items,
     totalPagar: totales.total_a_pagar != null
-      ? toNumber(totales.total_a_pagar)
-      : (items.some((i) => i.accion === 'pagar') ? totalPagar : null),
+      ? primerImporte(totales.total_a_pagar, totalPagarCalculado)
+      : totalPagarCalculado,
     ivaTrasladado: ivaTrasladado || null,
     ivaAcreditable: ivaAcreditable || null,
     ivaACargo: ivaACargo || null,
@@ -715,9 +766,13 @@ export const buildExecutiveSnapshot = ({
 
   const bancoPeriodo = resumirBancoPeriodo(movimientosBanco, mes, anio);
 
-  const totalesSat = resumenSat?.totales;
-  const impuestosPendientes = totalesSat ? toNumber(totalesSat.total_a_pagar) : null;
   const ivaNeto = paquete?.sugerencias?.iva_neto_periodo ?? null;
+  const totalesSat = resumenSat?.totales;
+  const impuestosDetalle = construirImpuestosDetalle(resumenSat);
+  // `totales` es la fuente primaria; el detalle cubre totales entregados en ceros.
+  const impuestosPendientes = totalesSat
+    ? primerImporte(totalesSat.total_a_pagar, impuestosDetalle.totalPagar)
+    : null;
 
   const salud = indicadores?.salud || null;
   const cumplimiento = indicadores
@@ -728,7 +783,6 @@ export const buildExecutiveSnapshot = ({
     ]) ?? 0)
     : null;
 
-  const impuestosDetalle = construirImpuestosDetalle(resumenSat);
   if (!Array.isArray(impuestosDetalle.desgloseRegimen)) {
     impuestosDetalle.desgloseRegimen = [];
   }
