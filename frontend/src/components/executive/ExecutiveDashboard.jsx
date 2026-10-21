@@ -29,6 +29,7 @@ import { periodoAnterior } from '../../utils/financialHealth';
 const SHOW_PRIORIDAD_PAGO = false;
 const SHOW_SCORE_FINANCIERO = false;
 const SHOW_AHORRO_PRODUCTIVIDAD = false;
+const SHOW_RESUMEN_EJECUTIVO = false;
 
 /** Dashboard ejecutivo: el estado del negocio en menos de 30 segundos. */
 export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
@@ -50,36 +51,38 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
 
   return (
     <div className="sc-stack">
-      <section className="sc-gradient flex flex-col gap-4 rounded-2xl p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-80">
-            Resumen · {etiquetaPeriodo(mes, anio)}
-          </p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-            {loading ? 'Analizando tu negocio…' : mensajeEjecutivo(s, score, totalImpuestos)}
-          </h2>
-          {!loading && totalImpuestos != null && totalImpuestos > 0 ? (
-            <p className="mt-2 text-sm font-medium opacity-90">
-              Impuestos por pagar: {formatMoney(totalImpuestos)}
-              {s.impuestosDetalle?.vencimientoPrincipal
-                ? ` · vence ${s.impuestosDetalle.vencimientoPrincipal}`
-                : ''}
+      {SHOW_RESUMEN_EJECUTIVO ? (
+        <section className="sc-gradient flex flex-col gap-4 rounded-2xl p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-80">
+              Resumen · {etiquetaPeriodo(mes, anio)}
             </p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 gap-8 text-center">
-          <div>
-            <p className="text-3xl font-semibold tabular-nums tracking-tight">{score.score ?? '—'}</p>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">Salud financiera</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+              {loading ? 'Analizando tu negocio…' : mensajeEjecutivo(s, score, totalImpuestos)}
+            </h2>
+            {!loading && totalImpuestos != null && totalImpuestos > 0 ? (
+              <p className="mt-2 text-sm font-medium opacity-90">
+                Impuestos por pagar: {formatMoney(totalImpuestos)}
+                {s.impuestosDetalle?.vencimientoPrincipal
+                  ? ` · vence ${s.impuestosDetalle.vencimientoPrincipal}`
+                  : ''}
+              </p>
+            ) : null}
           </div>
-          <div>
-            <p className="text-3xl font-semibold tabular-nums tracking-tight">{s.scoreFiscal ?? '—'}</p>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
-              Riesgo fiscal {s.riesgoFiscal ? `· ${s.riesgoFiscal}` : ''}
-            </p>
+          <div className="flex shrink-0 gap-8 text-center">
+            <div>
+              <p className="text-3xl font-semibold tabular-nums tracking-tight">{score.score ?? '—'}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">Salud financiera</p>
+            </div>
+            <div>
+              <p className="text-3xl font-semibold tabular-nums tracking-tight">{s.scoreFiscal ?? '—'}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
+                Riesgo fiscal {s.riesgoFiscal ? `· ${s.riesgoFiscal}` : ''}
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {fallidos.length > 0 ? (
         <p className="sc-alert sc-alert--warning rounded-xl p-3.5 text-xs font-medium sc-text">

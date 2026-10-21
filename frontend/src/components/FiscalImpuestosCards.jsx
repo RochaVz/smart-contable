@@ -30,11 +30,21 @@ export const SourceCard = ({ title, badge, rows }) => (
 
 /**
  * Widgets fiscales ISR provisional / IVA del periodo / Retenciones.
- * Fuente única: `impuestos` y `obligaciones` de /fiscal/resumen-sat.
+ * Fuente única: `impuestos`, `totales` y `obligaciones` de /fiscal/resumen-sat.
+ *
+ * `totales` es la fuente primaria (misma precedencia que `construirImpuestosDetalle`
+ * en utils/financialHealth.js) para que las tarjetas coincidan exactamente con los
+ * importes que ya calcula el dashboard ejecutivo.
  */
-export default function FiscalImpuestosCards({ impuestos, obligaciones }) {
+export default function FiscalImpuestosCards({ impuestos, obligaciones, totales }) {
   const imp = impuestos || {};
+  const tot = totales || {};
   const metodo = formatMetodo(obligaciones?.calculo_isr_tipo);
+
+  const getValor = (...valores) => {
+    const encontrado = valores.find((v) => v != null);
+    return Number(encontrado ?? 0);
+  };
 
   return (
     <div className="grid gap-3 lg:grid-cols-3">
@@ -43,24 +53,24 @@ export default function FiscalImpuestosCards({ impuestos, obligaciones }) {
         badge={metodo}
         rows={[
           ['Método', metodo || '—'],
-          ['A cargo', money(imp.isr?.a_cargo)],
+          ['A cargo', money(getValor(tot.isr_a_cargo, imp.isr?.a_cargo))],
           ['Resumen', imp.isr?.resumen || '—'],
         ]}
       />
       <SourceCard
         title="IVA del periodo"
         rows={[
-          ['A cargo', money(imp.iva?.a_cargo)],
-          ['A favor', money(imp.iva?.a_favor)],
+          ['A cargo', money(getValor(tot.iva_a_cargo, imp.iva?.a_cargo))],
+          ['A favor', money(getValor(tot.iva_a_favor, imp.iva?.a_favor))],
           ['Resumen', imp.iva?.resumen || '—'],
         ]}
       />
       <SourceCard
         title="Retenciones"
         rows={[
-          ['ISR retenido', money(imp.retenciones?.isr)],
-          ['IVA retenido', money(imp.retenciones?.iva)],
-          ['Total retenciones', money(imp.retenciones?.total)],
+          ['ISR retenido', money(getValor(imp.retenciones?.isr))],
+          ['IVA retenido', money(getValor(imp.retenciones?.iva))],
+          ['Total retenciones', money(getValor(tot.retenciones, imp.retenciones?.total))],
         ]}
       />
     </div>

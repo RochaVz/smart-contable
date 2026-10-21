@@ -1314,6 +1314,9 @@ const CompanyDetail = ({ vista = null }) => {
             empresa={empresa}
             onUpdated={handleRefresh}
             initialTab={tabSolicitado || 'resumen'}
+            mes={mesFiltro}
+            anio={anioFiltro}
+            onPeriodoChange={handlePeriodoChange}
           />
         );
       default:

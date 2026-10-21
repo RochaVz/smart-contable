@@ -112,6 +112,7 @@ export default function ImpuestosPorPagarPanel({ snapshot, loading, disponible, 
         <FiscalImpuestosCards
           impuestos={snapshot.impuestosSat}
           obligaciones={snapshot.obligacionesRegimen}
+          totales={snapshot.totalesSat}
         />
       ) : null}
     </section>

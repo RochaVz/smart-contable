@@ -158,6 +158,30 @@ test('impuestos detalle expone IVA/ISR con vencimiento', () => {
   assert.ok(s.kpiAhorro.cfdiAnalizados >= 3);
 });
 
+test('el snapshot expone totales SAT para las tarjetas de impuestos', () => {
+  const s = buildExecutiveSnapshot({
+    facturas,
+    mes: 9,
+    anio: 2026,
+    resumenSat: {
+      totales: { iva_a_cargo: 12000, iva_a_favor: 1500, isr_a_cargo: 8450, retenciones: 500, total_a_pagar: 20950 },
+      impuestos: {
+        isr: { a_cargo: 8450, resumen: 'Pago provisional estimado' },
+        iva: { a_cargo: 12000, a_favor: 1500, resumen: 'IVA del periodo' },
+        retenciones: { isr: 300, iva: 200, total: 500 },
+      },
+    },
+  });
+
+  // Las tarjetas fiscales se alimentan de `totalesSat` (misma precedencia que el dashboard).
+  assert.equal(s.totalesSat.iva_a_cargo, 12000);
+  assert.equal(s.totalesSat.isr_a_cargo, 8450);
+  assert.equal(s.totalesSat.retenciones, 500);
+  assert.equal(s.impuestosSat.iva.a_cargo, 12000);
+  assert.equal(s.impuestosDetalle.ivaACargo, 12000);
+  assert.equal(s.impuestosDetalle.isrProvisional, 8450);
+});
+
 test('desgloseRegimen desglosa ISR, IVA y retenciones según régimen fiscal', async () => {
   const { construirImpuestosDetalle } = await import('./financialHealth.js');
   const detalleResico = construirImpuestosDetalle({

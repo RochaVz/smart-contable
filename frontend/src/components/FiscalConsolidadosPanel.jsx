@@ -16,10 +16,15 @@ const money = (v) =>
     minimumFractionDigits: 2,
   });
 
-const FiscalConsolidadosPanel = ({ empresa }) => {
+const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeriodoChange }) => {
   const now = useMemo(() => new Date(), []);
-  const [mes, setMes] = useState(now.getMonth() + 1);
-  const [anio, setAnio] = useState(now.getFullYear());
+  // Periodo controlado por el padre (CompanyDetail) con respaldo local si no llega.
+  // Patrón equivalente al de DiotPanel: evita el efecto de sincronización prop -> state.
+  const controlled = mesProp != null && anioProp != null && typeof onPeriodoChange === 'function';
+  const [mesLocal, setMesLocal] = useState(mesProp ?? now.getMonth() + 1);
+  const [anioLocal, setAnioLocal] = useState(anioProp ?? now.getFullYear());
+  const mes = controlled ? mesProp : mesLocal;
+  const anio = controlled ? anioProp : anioLocal;
   const [resumenSat, setResumenSat] = useState(null);
   const [loadingResumen, setLoadingResumen] = useState(false);
   const [bloquesAbiertos, setBloquesAbiertos] = useState({
@@ -52,6 +57,18 @@ const FiscalConsolidadosPanel = ({ empresa }) => {
     if (!empresa?.id) return;
     queueMicrotask(cargarResumenSat);
   }, [cargarResumenSat, empresa?.id]);
+
+  // El motor SAT analiza el mismo periodo que el dashboard ejecutivo.
+  // El periodo es controlado por el padre, por lo que no hace falta sincronizarlo aquí.
+  const cambiarMes = useCallback((valor) => {
+    if (controlled) onPeriodoChange?.(valor, anio);
+    else setMesLocal(valor);
+  }, [anio, controlled, onPeriodoChange]);
+
+  const cambiarAnio = useCallback((valor) => {
+    if (controlled) onPeriodoChange?.(mes, valor);
+    else setAnioLocal(valor);
+  }, [mes, controlled, onPeriodoChange]);
 
   const regimenClave = resumenSat?.regimen?.clave
     || resumenSat?.empresa?.regimen_fiscal
@@ -93,7 +110,7 @@ const FiscalConsolidadosPanel = ({ empresa }) => {
             </label>
             <select
               value={mes}
-              onChange={(e) => setMes(Number(e.target.value))}
+              onChange={(e) => cambiarMes(Number(e.target.value))}
               className="rounded-lg border border-[color:var(--sc-border)] bg-[color:var(--sc-card)] px-2.5 py-1.5 text-xs font-semibold text-slate-900 dark:text-white"
             >
               {MESES.map((nombre, idx) => (
@@ -109,7 +126,7 @@ const FiscalConsolidadosPanel = ({ empresa }) => {
             <input
               type="number"
               value={anio}
-              onChange={(e) => setAnio(Number(e.target.value) || now.getFullYear())}
+              onChange={(e) => cambiarAnio(Number(e.target.value) || now.getFullYear())}
               className="w-20 rounded-lg border border-[color:var(--sc-border)] bg-[color:var(--sc-card)] px-2.5 py-1.5 text-xs font-semibold text-slate-900 dark:text-white"
             />
           </div>
@@ -203,7 +220,7 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
         open={abiertos?.impuestos ?? true}
         onToggle={() => onToggleBloque('impuestos')}
       >
-        <FiscalImpuestosCards impuestos={impuestos} obligaciones={obligaciones} />
+        <FiscalImpuestosCards impuestos={impuestos} obligaciones={obligaciones} totales={totales} />
       </ExpandBlock>
 
       {/* 2. Declaraciones y periodicidad */}
