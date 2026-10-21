@@ -205,15 +205,16 @@ def parsear_xml_sat(contenido_xml: str) -> dict:
                         }
                     )
 
-        implocal_ns = NAMESPACES.get("implocal")
-        complemento_local = root.find(f"{{{ns}}}Complemento")
-        if complemento_local is not None:
-            implocal = complemento_local.find(f"{{{implocal_ns}}}ImpuestosLocales")
-            if implocal is not None:
-                total_locales = Decimal("0.0")
-                for traslado in implocal.findall(f"{{{implocal_ns}}}TrasladosLocales"):
-                    total_locales += _to_decimal(traslado.get("Importe", 0))
-                datos["impuestos_locales"] = total_locales
+    # El complemento de impuestos locales es independiente del nodo Impuestos.
+    implocal_ns = NAMESPACES["implocal"]
+    complemento_local = root.find(f"{{{ns}}}Complemento")
+    if complemento_local is not None:
+        implocal = complemento_local.find(f"{{{implocal_ns}}}ImpuestosLocales")
+        if implocal is not None:
+            total_locales = Decimal("0.0")
+            for traslado in implocal.findall(f"{{{implocal_ns}}}TrasladosLocales"):
+                total_locales += _to_decimal(traslado.get("Importe", 0))
+            datos["impuestos_locales"] = total_locales
 
     tfd_ns = NAMESPACES["tfd"]
     complemento = root.find(f"{{{ns}}}Complemento")

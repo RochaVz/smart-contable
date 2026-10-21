@@ -1,4 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
+from typing import cast
 
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
@@ -13,7 +14,6 @@ from app.models.ajustes_fiscales import (
 from app.models.empresa import Empresa
 from app.models.factura import Factura
 from app.models.fiscal import OperacionFiscal, PeriodoFiscal
-from app.services.cfdi_helpers import es_venta
 
 
 CENTAVOS = Decimal("0.01")
@@ -199,7 +199,8 @@ def _perdidas_aplicables(
     aplicadas = []
     total = Decimal("0")
     for fila in filas:
-        if fila.ejercicio_limite is not None and ejercicio > int(fila.ejercicio_limite):
+        ejercicio_limite = cast(int | None, fila.ejercicio_limite)
+        if ejercicio_limite is not None and ejercicio > ejercicio_limite:
             continue
         if restante <= 0:
             break
@@ -380,10 +381,13 @@ def calcular_isr_provisional(
     if regimen in {SatRegimenEnum.general_de_ley, SatRegimenEnum.personas_morales_no_lucrativas} and coeficiente_utilidad is None:
         parametros_faltantes.append("coeficiente_utilidad")
     elif regimen in {SatRegimenEnum.general_de_ley, SatRegimenEnum.personas_morales_no_lucrativas}:
-        base_gravable = (
-            resumen["ingresos_acumulados"] * coeficiente_utilidad
-        ).quantize(CENTAVOS)
-        deducciones_aplicadas = max(resumen["ingresos_acumulados"] - base_gravable, Decimal("0"))
+        if coeficiente_utilidad is not None:
+            base_gravable = (
+                resumen["ingresos_acumulados"] * coeficiente_utilidad
+            ).quantize(CENTAVOS)
+            deducciones_aplicadas = max(
+                resumen["ingresos_acumulados"] - base_gravable, Decimal("0")
+            )
 
     usa_tarifa = calculo_tipo == CalculoIsrTipo.tarifa_progresiva.value
     tarifa_info = None
@@ -451,7 +455,8 @@ def calcular_ieps_provisional(
         )
         .all()
     )
-    periodo_ids = [p.id for p in periodos]
+    periodo_por_id = {cast(int, periodo.id): periodo for periodo in periodos}
+    periodo_ids = list(periodo_por_id)
     ops = []
     if periodo_ids:
         ops = (
@@ -467,18 +472,18 @@ def calcular_ieps_provisional(
     ieps_acumulado = Decimal("0")
     detalle = []
     for op in ops:
-        periodo = next((p for p in periodos if p.id == op.periodo_id), None)
-        monto = _moneda(getattr(op, "ieps", 0))
+        periodo = periodo_por_id.get(cast(int, op.periodo_id))
+        monto = _moneda(cast(Decimal | int | float | None, getattr(op, "ieps", 0)))
         if monto == 0:
             continue
-        mes_op = periodo.mes if periodo and periodo.mes else None
+        mes_op = cast(int | None, periodo.mes) if periodo is not None else None
         if mes_op is not None and mes_op <= mes:
             ieps_acumulado += monto
         if mes_op == mes:
             ieps_periodo += monto
             detalle.append(
                 {
-                    "operacion_id": op.id,
+                    "operacion_id": cast(int, op.id),
                     "periodo_id": op.periodo_id,
                     "mes": mes_op,
                     "ieps": float(monto),

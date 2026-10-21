@@ -5,6 +5,7 @@ from __future__ import annotations
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
+from typing import cast
 
 from sqlalchemy.orm import Session
 
@@ -38,9 +39,11 @@ def _periodo_siguiente(mes: int, anio: int) -> tuple[int, int]:
 
 def _regimen_clave(empresa: Empresa | None) -> str:
     """Normaliza la clave SAT del regimen (soporta Enum ORM o string crudo)."""
-    if not empresa or not empresa.regimen_fiscal:
+    if empresa is None:
         return ""
-    raw = empresa.regimen_fiscal
+    raw = cast(SatRegimenEnum | str | None, empresa.regimen_fiscal)
+    if raw is None or raw == "":
+        return ""
     if hasattr(raw, "value"):
         return str(raw.value).strip()
     text = str(raw).strip()
@@ -63,7 +66,9 @@ def _regimen_rules(empresa: Empresa | None) -> dict:
     except ValueError:
         # soportar 626 sin sufijo
         if clave == "626":
-            if (empresa.tipo_persona or "").lower() == "moral":
+            tipo_persona = getattr(empresa, "tipo_persona", "")
+            tipo_persona = getattr(tipo_persona, "value", tipo_persona)
+            if str(tipo_persona or "").lower() == "moral":
                 return SAT_REGIMEN_RULES.get(SatRegimenEnum.resico_pm, {})
             return SAT_REGIMEN_RULES.get(SatRegimenEnum.resico_pf, {})
         return {}
@@ -302,6 +307,8 @@ def construir_resumen_fiscal_sat(
         2,
     )
 
+    calculo_isr_tipo = rules.get("calculo_isr_tipo")
+
     return {
         "aviso": (
             "Este resumen es solo informativo y no sustituye el cálculo oficial del SAT. "
@@ -359,9 +366,7 @@ def construir_resumen_fiscal_sat(
         "declaraciones": declaraciones,
         "sugerencias_pago": sugerencias_pago,
         "obligaciones_regimen": {
-            "calculo_isr_tipo": rules.get("calculo_isr_tipo").value
-            if hasattr(rules.get("calculo_isr_tipo"), "value")
-            else rules.get("calculo_isr_tipo"),
+            "calculo_isr_tipo": getattr(calculo_isr_tipo, "value", calculo_isr_tipo),
             "exige_diot": bool(rules.get("exige_diot")),
             "exige_contabilidad_electronica": bool(rules.get("exige_contabilidad_electronica")),
             "permite_deducciones_isr": bool(rules.get("permite_deducciones_isr")),
