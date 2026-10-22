@@ -13,6 +13,7 @@ from app.models.ajustes_fiscales import (
 )
 from app.models.empresa import Empresa
 from app.models.factura import Factura
+from app.services.cfdi_helpers import filtro_sin_canceladas
 from app.models.fiscal import OperacionFiscal, PeriodoFiscal
 
 
@@ -43,6 +44,7 @@ def _facturas_hasta_periodo(
             Factura.empresa_id == empresa_id,
             extract("year", Factura.fecha_emision) == anio,
             extract("month", Factura.fecha_emision) <= mes,
+            filtro_sin_canceladas(),
         )
         .all()
     )
@@ -57,6 +59,7 @@ def _facturas_del_periodo(
             Factura.empresa_id == empresa_id,
             extract("year", Factura.fecha_emision) == anio,
             extract("month", Factura.fecha_emision) == mes,
+            filtro_sin_canceladas(),
         )
         .all()
     )
@@ -68,6 +71,7 @@ def _facturas_ejercicio(db: Session, empresa_id: int, anio: int) -> list[Factura
         .filter(
             Factura.empresa_id == empresa_id,
             extract("year", Factura.fecha_emision) == anio,
+            filtro_sin_canceladas(),
         )
         .all()
     )

@@ -19,3 +19,16 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Playwright (E2E)
+frontend/node_modules/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.playwright/
+frontend/blob-report/
+frontend/playwright/.cache/
+
+# Artefactos locales de despliegue (AWS/CloudFormation/SSM)
+_cfn.json
+_deploy_log.txt
+_ssm_out.json

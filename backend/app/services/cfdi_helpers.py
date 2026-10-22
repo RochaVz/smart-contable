@@ -3,7 +3,7 @@
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.models.factura import Factura
+from app.models.factura import EstatusFactura, Factura
 from app.services.file_storage import FileStorageError, get_file_storage
 from app.services.sat_parser import parsear_xml_sat
 
@@ -127,6 +127,38 @@ def es_venta(factura, empresa_rfc: str) -> bool:
     return (
         str(tipo_comprobante or "").upper() == "I"
         and normalizar_rfc(factura.rfc_emisor) == normalizar_rfc(empresa_rfc)
+    )
+
+
+def es_nota_credito(factura) -> bool:
+    """True si el CFDI es una nota de crédito (comprobante tipo E)."""
+    tipo_comprobante = getattr(factura, "tipo_comprobante", None)
+    tipo_comprobante = getattr(tipo_comprobante, "value", tipo_comprobante)
+    return str(tipo_comprobante or "").upper() == "E"
+
+
+def es_emitido_por_empresa(factura, empresa_rfc: str) -> bool:
+    """True si la empresa es la emisora del CFDI, sin importar el tipo."""
+    return normalizar_rfc(getattr(factura, "rfc_emisor", None)) == normalizar_rfc(empresa_rfc)
+
+
+def es_factura_cancelada(factura) -> bool:
+    """True si el CFDI está marcado como cancelado."""
+    estatus = getattr(factura, "estatus", None)
+    valor = getattr(estatus, "value", estatus)
+    return str(valor or "").strip().lower() == EstatusFactura.cancelada.value
+
+
+def filtro_sin_canceladas():
+    """
+    Filtro SQL que excluye los CFDI cancelados de las consultas de cálculo.
+
+    Tolera `estatus` NULL (filas heredadas de importaciones anteriores) para
+    no descartar CFDI vigentes: sólo se excluye la cancelación explícita.
+    """
+    return or_(
+        Factura.estatus.is_(None),
+        Factura.estatus != EstatusFactura.cancelada,
     )
 
 

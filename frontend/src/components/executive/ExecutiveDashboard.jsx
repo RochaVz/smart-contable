@@ -26,10 +26,10 @@ import { etiquetaPeriodo, formatMoney, formatPct } from './format';
 import { periodoAnterior } from '../../utils/financialHealth';
 
 // Visibilidad temporal de widgets: cambiar a true para volver a mostrarlos.
-const SHOW_PRIORIDAD_PAGO = false;
-const SHOW_SCORE_FINANCIERO = false;
+const SHOW_PRIORIDAD_PAGO = true;
+const SHOW_SCORE_FINANCIERO = true;
 const SHOW_AHORRO_PRODUCTIVIDAD = false;
-const SHOW_RESUMEN_EJECUTIVO = false;
+const SHOW_RESUMEN_EJECUTIVO = true;
 
 /** Dashboard ejecutivo: el estado del negocio en menos de 30 segundos. */
 export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {

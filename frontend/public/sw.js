@@ -1,4 +1,4 @@
-const APP_VERSION = '2026.10.20.04';
+const APP_VERSION = '2026.10.21.01';
 const CACHE_NAME = `smartcontable-app-${APP_VERSION}`;
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg?v=2026.10.12.01'];
 

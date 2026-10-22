@@ -7,7 +7,13 @@ from app.models.poliza import Poliza, MovimientoPoliza
 from app.models.mapeo_cuenta import MapeoCuenta
 from app.models.empresa import Empresa
 from app.core.sat_fiscal import SAT_REGIMEN_RULES, SatRegimenEnum
-from app.services.cfdi_helpers import es_venta, extraer_datos_xml
+from app.services.cfdi_helpers import (
+    es_emitido_por_empresa,
+    es_nota_credito,
+    es_venta,
+    extraer_datos_xml,
+    filtro_sin_canceladas,
+)
 
 
 def _facturas_periodo(db: Session, empresa_id: int, mes: int, anio: int) -> list[Factura]:
@@ -17,6 +23,7 @@ def _facturas_periodo(db: Session, empresa_id: int, mes: int, anio: int) -> list
             Factura.empresa_id == empresa_id,
             extract("month", Factura.fecha_emision) == mes,
             extract("year", Factura.fecha_emision) == anio,
+            filtro_sin_canceladas(),
         )
         .all()
     )
@@ -41,22 +48,52 @@ def _regimen_info(db: Session, empresa_id: int) -> tuple[str, bool]:
 def generar_resumen_ingresos_egresos(
     db: Session, empresa_id: int, mes: int, anio: int
 ) -> dict:
+    """
+    Resumen de ingresos y egresos del periodo.
+
+    Reglas contables aplicadas:
+    - Las notas de crédito (tipo E) se registran con signo negativo: las
+      emitidas por la empresa reducen los ingresos y las recibidas reducen los
+      egresos. Antes se acumulaban en positivo, inflando los egresos y
+      sobrestimando los ingresos.
+    - Los CFDI cancelados quedan excluidos (ver `filtro_sin_canceladas`).
+    - `total` es siempre el importe neto sin IVA; `total_con_iva` conserva el
+      importe con IVA trasladado.
+    """
     rfc = _rfc_empresa(db, empresa_id)
     facturas = _facturas_periodo(db, empresa_id, mes, anio)
 
     ingresos = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0, "total_con_iva": 0.0}
     egresos = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0, "total_con_iva": 0.0}
+    notas_credito = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0, "total_con_iva": 0.0}
 
     for f in facturas:
-        venta = es_venta(f, rfc)
-        bucket = ingresos if venta else egresos
-        bucket["cantidad"] += 1
-        bucket["subtotal"] += float(f.subtotal or 0)
-        bucket["iva"] += float(f.iva_trasladado or 0)
-        bucket["total_con_iva"] += float(f.total or 0)
-        bucket["total"] += float(f.subtotal or 0)
+        subtotal = float(f.subtotal or 0)
+        iva = float(f.iva_trasladado or 0)
+        total = float(f.total or 0)
 
-    for b in (ingresos, egresos):
+        if es_nota_credito(f):
+            # La nota de crédito reduce el bucket donde impacta:
+            # emitida por la empresa -> ingresos; recibida del proveedor -> egresos.
+            emitida = es_emitido_por_empresa(f, rfc)
+            bucket = ingresos if emitida else egresos
+            signo = -1
+            notas_credito["cantidad"] += 1
+            notas_credito["subtotal"] += subtotal
+            notas_credito["iva"] += iva
+            notas_credito["total"] += subtotal
+            notas_credito["total_con_iva"] += total
+        else:
+            bucket = ingresos if es_venta(f, rfc) else egresos
+            signo = 1
+            bucket["cantidad"] += 1
+
+        bucket["subtotal"] += signo * subtotal
+        bucket["iva"] += signo * iva
+        bucket["total"] += signo * subtotal
+        bucket["total_con_iva"] += signo * total
+
+    for b in (ingresos, egresos, notas_credito):
         for k in ("subtotal", "iva", "total", "total_con_iva"):
             b[k] = round(b[k], 2)
 
@@ -64,6 +101,7 @@ def generar_resumen_ingresos_egresos(
     return {
         "ingresos": ingresos,
         "egresos": egresos,
+        "notas_credito": notas_credito,
         "utilidad_neta": utilidad,
         "margen_pct": round((utilidad / ingresos["total"]) * 100, 2) if ingresos["total"] else 0,
     }
