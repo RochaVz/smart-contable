@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from pydantic import field_validator
+from pydantic import Field
 from typing import Annotated, List
 
 
@@ -7,13 +8,13 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
+        env_none_behavior="ignore",
         case_sensitive=True,
     )
 
-    DATABASE_URL: str
-    SECRET_KEY: str
+    DATABASE_URL: str = Field(default='mysql+pymysql://sat_app:Admin1234!@localhost:3306/sat_contabilidad')
+    SECRET_KEY: str = Field(default='fe8f070d9fc50a93642aa0f3bb73fd1a88fcfe7d655341871345cbb7bc8091a2')
     LOCAL_PASSWORD_RESET_KEY: str = "local-recovery-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
