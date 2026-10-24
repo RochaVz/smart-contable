@@ -1,3 +1,4 @@
+/* global process */
 /**
  * Configuración Playwright E2E.
  *

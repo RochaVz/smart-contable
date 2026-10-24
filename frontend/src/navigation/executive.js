@@ -94,7 +94,7 @@ export const INFORMES = {
   contables: [
     { id: 'balance-general', label: 'Balance General', desc: 'Activo, pasivo y capital del periodo', fuente: { tipo: 'balance', modo: 'balance' } },
     { id: 'estado-resultados', label: 'Estado de Resultados', desc: 'Ingresos, gastos y utilidad', fuente: { tipo: 'informes', tab: 'estado' } },
-    { id: 'flujo-efectivo', label: 'Flujo de Efectivo', desc: 'Cobros contra pagos del periodo', disponible: false },
+    { id: 'metodos-cobro', label: 'Métodos de Cobro', desc: 'Cobros por método de pago desde estados de cuenta', fuente: { tipo: 'bancos' } },
     { id: 'balanza', label: 'Balanza de Comprobación', desc: 'Cargos y abonos por familia de cuenta', fuente: { tipo: 'balance', modo: 'balanza' } },
     { id: 'libro-diario', label: 'Libro Diario', desc: 'Pólizas de diario, ingresos y egresos', fuente: { tipo: 'polizas' } },
     { id: 'libro-mayor', label: 'Libro Mayor', desc: 'Cuentas T con cargos, abonos y saldo', fuente: { tipo: 'informes', tab: 'estado' } },
@@ -113,4 +113,13 @@ export const INFORMES = {
 
 export const INFORMES_PLANOS = [...INFORMES.contables, ...INFORMES.fiscales];
 
-export const getInforme = (id) => INFORMES_PLANOS.find((item) => item.id === id) || null;
+const INFORME_ALIASES = {
+  'flujo-efectivo': 'metodos-cobro',
+  'metodos-de-cobro': 'metodos-cobro',
+  'payment-methods': 'metodos-cobro',
+};
+
+export const getInforme = (id) => {
+  const resolved = INFORME_ALIASES[id] || id;
+  return INFORMES_PLANOS.find((item) => item.id === resolved) || null;
+};

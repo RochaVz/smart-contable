@@ -233,6 +233,50 @@ export const resumirBancoPeriodo = (movimientos, mes, anio) => {
   };
 };
 
+export const construirMetodosCobro = (movimientos = [], mes = null, anio = null) => {
+  if (!Array.isArray(movimientos)) return { total: 0, cantidad: 0, items: [] };
+  const periodo = (mes != null && anio != null)
+    ? `${anio}-${String(mes).padStart(2, '0')}`
+    : null;
+  const delPeriodo = movimientos.filter((m) => {
+    if (m?.tipo !== 'abono') return false;
+    if (!periodo) return true;
+    return String(m.fecha || '').slice(0, 7) === periodo;
+  });
+  const inferirMetodo = (m) => {
+    const texto = `${m?.descripcion || ''} ${m?.referencia || ''}`.toLowerCase();
+    if (/spei|transferencia/.test(texto)) return 'Transferencia SPEI';
+    if (/cheque/.test(texto)) return 'Cheque';
+    if (/tarjeta|tpv|pos|terminal/.test(texto)) return 'Tarjeta';
+    if (/efectivo/.test(texto)) return 'Efectivo';
+    if (/deposito|depósito/.test(texto)) return 'Depósito';
+    return 'Otros';
+  };
+  const mapa = new Map();
+  let total = 0;
+  delPeriodo.forEach((m) => {
+    const metodo = inferirMetodo(m);
+    const monto = toNumber(m?.monto);
+    total += monto;
+    const prev = mapa.get(metodo) || { id: metodo, label: metodo, monto: 0, cantidad: 0 };
+    prev.monto += monto;
+    prev.cantidad += 1;
+    mapa.set(metodo, prev);
+  });
+  const items = [...mapa.values()]
+    .map((item) => ({
+      ...item,
+      monto: round(item.monto, 2),
+      pct: total > 0 ? round((item.monto / total) * 100, 1) : 0,
+    }))
+    .sort((a, b) => b.monto - a.monto);
+  return { total: round(total, 2), cantidad: delPeriodo.length, items };
+};
+
+export const resumirMetodosCobro = construirMetodosCobro;
+export const agruparMetodosCobro = construirMetodosCobro;
+export const buildPaymentMethods = construirMetodosCobro;
+
 const ratioLabel = (nivel) => ({
   saludable: 'Bajo',
   aceptable: 'Moderado',
@@ -765,6 +809,7 @@ export const buildExecutiveSnapshot = ({
     : null;
 
   const bancoPeriodo = resumirBancoPeriodo(movimientosBanco, mes, anio);
+  const metodosCobro = construirMetodosCobro(movimientosBanco, mes, anio);
 
   const ivaNeto = paquete?.sugerencias?.iva_neto_periodo ?? null;
   const totalesSat = resumenSat?.totales;
@@ -817,6 +862,9 @@ export const buildExecutiveSnapshot = ({
     flujoBancario: bancoPeriodo?.flujo ?? null,
     saldoBancario: bancoPeriodo?.saldo ?? null,
     movimientosBanco: bancoPeriodo?.cantidad ?? null,
+    metodosCobro,
+    metodosDeCobro: metodosCobro,
+    paymentMethods: metodosCobro,
     impuestosPendientes,
     ivaNeto,
     scoreFiscal: salud?.score != null ? round(toNumber(salud.score)) : null,

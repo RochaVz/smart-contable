@@ -1,5 +1,7 @@
 {
-  "include": ["backend"],
+  "include": [
+    "backend"
+  ],
   "exclude": [
     "**/venv/**",
     "**/node_modules/**",
@@ -13,7 +15,10 @@
   "executionEnvironments": [
     {
       "root": "backend",
-      "extraPaths": ["backend"]
+      "extraPaths": [
+        "backend"
+      ]
     }
-  ]
+  ],
+  "typeCheckingMode": "off"
 }

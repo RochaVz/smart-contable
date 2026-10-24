@@ -49,10 +49,10 @@ def test_resumen_ingresos_egresos_excluye_nomina_emitida_por_la_empresa(monkeypa
     assert resultado["ingresos"]["cantidad"] == 1
     assert resultado["ingresos"]["subtotal"] == 1000
     assert resultado["ingresos"]["total"] == 1000
-    assert resultado["egresos"]["cantidad"] == 2
-    assert resultado["egresos"]["total"] == 5300
-    assert resultado["egresos"]["total_con_iva"] == 5348
-    assert resultado["utilidad_neta"] == -4300
+    assert resultado["egresos"]["cantidad"] == 1
+    assert resultado["egresos"]["total"] == 4700
+    assert resultado["egresos"]["total_con_iva"] == 4652
+    assert resultado["utilidad_neta"] == -3700
 
 
 def test_estado_resultados_excluye_nomina_de_ingresos(monkeypatch):

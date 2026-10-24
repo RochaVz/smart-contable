@@ -94,7 +94,7 @@ test('cada informe tiene fuente o está marcado como no disponible', () => {
   });
   assert.deepEqual(
     INFORMES_PLANOS.filter((i) => i.disponible === false).map((i) => i.id).sort(),
-    ['auxiliares', 'flujo-efectivo'],
+    ['auxiliares'],
   );
 });
 

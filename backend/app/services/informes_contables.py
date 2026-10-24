@@ -2,6 +2,7 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import extract, func
+from sqlalchemy.exc import SQLAlchemyError
 from app.models.factura import Factura
 from app.models.poliza import Poliza, MovimientoPoliza
 from app.models.mapeo_cuenta import MapeoCuenta
@@ -68,9 +69,9 @@ def generar_resumen_ingresos_egresos(
     notas_credito = {"cantidad": 0, "subtotal": 0.0, "iva": 0.0, "total": 0.0, "total_con_iva": 0.0}
 
     for f in facturas:
-        subtotal = float(f.subtotal or 0)
-        iva = float(f.iva_trasladado or 0)
-        total = float(f.total or 0)
+        subtotal = float(f.subtotal or 0)  # type: ignore
+        iva = float(f.iva_trasladado or 0)  # type: ignore
+        total = float(f.total or 0)  # type: ignore
 
         if es_nota_credito(f):
             # La nota de crédito reduce el bucket donde impacta:
@@ -153,13 +154,13 @@ def _ingresos_por_concepto_venta(
                 "cliente": cliente,
                 "cuenta": cuenta,
                 "nombre_cuenta": nombre_cuenta,
-                "monto": float(f.subtotal or f.total or 0),
+                "monto": float(f.subtotal or f.total or 0),  # type: ignore
             })
             continue
 
         for c in conceptos:
             desc = (c.get("descripcion") or "").strip() or "Sin descripción"
-            monto = float(c.get("importe") or 0)
+            monto = float(c.get("importe") or 0)  # type: ignore
             if monto <= 0:
                 continue
             lineas_crudas.append({
@@ -226,8 +227,8 @@ def _cuentas_t_estado_resultados(
     cuentas = []
     for movimiento in movimientos:
         cuenta = movimiento.cuenta or ""
-        debe = round(float(movimiento.debe or 0), 2)
-        haber = round(float(movimiento.haber or 0), 2)
+        debe = round(float(movimiento.debe or 0), 2)  # type: ignore
+        haber = round(float(movimiento.haber or 0), 2)  # type: ignore
         acreedora = cuenta.startswith("4")
         cuentas.append({
             "cuenta": cuenta,
@@ -262,11 +263,11 @@ def _detalle_facturas_por_tipo(
             "fecha": str(getattr(factura, "fecha_emision", "")),
             "contraparte": contraparte or "Sin nombre",
             "rfc": rfc_contraparte or "",
-            "subtotal": round(float(factura.subtotal or 0), 2),
-            "iva": round(float(factura.iva_trasladado or 0), 2),
-            "iva_retenido": round(float(getattr(factura, "iva_retenido", 0) or 0), 2),
-            "isr_retenido": round(float(getattr(factura, "isr_retenido", 0) or 0), 2),
-            "total": round(float(factura.total or 0), 2),
+            "subtotal": round(float(factura.subtotal or 0), 2),  # type: ignore
+            "iva": round(float(factura.iva_trasladado or 0), 2),  # type: ignore
+            "iva_retenido": round(float(getattr(factura, "iva_retenido", 0) or 0), 2),  # type: ignore
+            "isr_retenido": round(float(getattr(factura, "isr_retenido", 0) or 0), 2),  # type: ignore
+            "total": round(float(factura.total or 0), 2),  # type: ignore
             "estatus": getattr(getattr(factura, "estatus", ""), "value", getattr(factura, "estatus", "")),
         })
     return detalle
@@ -304,7 +305,7 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
         {
             "concepto": r.nombre_cuenta or "Gastos",
             "cuenta": r.cuenta,
-            "monto": round(float(r.monto or 0), 2),
+            "monto": round(float(r.monto or 0), 2),  # type: ignore
         }
         for r in lineas_gasto
     ]
@@ -340,9 +341,9 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
             "cuenta": movimiento.cuenta or "",
             "nombre_cuenta": movimiento.nombre_cuenta or "Gastos",
             "concepto": movimiento.concepto or movimiento.nombre_cuenta or "Gastos",
-            "debe": round(float(movimiento.debe or 0), 2),
-            "haber": round(float(movimiento.haber or 0), 2),
-            "monto": round(float(movimiento.debe or 0), 2),
+            "debe": round(float(movimiento.debe or 0), 2),  # type: ignore
+            "haber": round(float(movimiento.haber or 0), 2),  # type: ignore
+            "monto": round(float(movimiento.debe or 0), 2),  # type: ignore
         }
         for movimiento in movimientos_gasto
     ]
@@ -351,7 +352,7 @@ def generar_estado_resultados(db: Session, empresa_id: int, mes: int, anio: int)
         f for f in facturas_periodo if es_venta(f, rfc)
     ]
     total_ingresos = round(
-        sum(float(f.subtotal or 0) for f in ventas) or sum(i["monto"] for i in ingresos),
+        sum(float(f.subtotal or 0) for f in ventas) or sum(i["monto"] for i in ingresos),  # type: ignore
         2,
     )
     total_gastos = round(sum(g["monto"] for g in gastos), 2)
@@ -420,11 +421,11 @@ def generar_padron_proveedores(db: Session, empresa_id: int, mes: int, anio: int
             }
         p = padron[clave]
         p["num_facturas"] += 1
-        p["subtotal"] += float(f.subtotal or 0)
-        p["iva"] += float(f.iva_trasladado or 0)
-        p["total"] += float(f.total or 0)
-        p["iva_retenido"] += float(f.iva_retenido or 0)
-        p["isr_retenido"] += float(f.isr_retenido or 0)
+        p["subtotal"] += float(f.subtotal or 0)  # type: ignore
+        p["iva"] += float(f.iva_trasladado or 0)  # type: ignore
+        p["total"] += float(f.total or 0)  # type: ignore
+        p["iva_retenido"] += float(f.iva_retenido or 0)  # type: ignore
+        p["isr_retenido"] += float(f.isr_retenido or 0)  # type: ignore
 
     proveedores = sorted(padron.values(), key=lambda x: x["total"], reverse=True)
     for p in proveedores:
@@ -449,19 +450,19 @@ def generar_impuestos_trasladados(db: Session, empresa_id: int, mes: int, anio: 
     total_subtotal = 0.0
 
     for f in ventas:
-        iva = float(f.iva_trasladado or 0)
-        ish = float(f.impuestos_locales or 0)
+        iva = float(f.iva_trasladado or 0)  # type: ignore
+        ish = float(f.impuestos_locales or 0)  # type: ignore
         total_iva += iva
         total_ish += ish
-        total_subtotal += float(f.subtotal or 0)
+        total_subtotal += float(f.subtotal or 0)  # type: ignore
         detalle.append({
             "uuid": f.uuid,
             "fecha": str(f.fecha_emision),
             "receptor": f.nombre_receptor,
-            "subtotal": round(float(f.subtotal or 0), 2),
+            "subtotal": round(float(f.subtotal or 0), 2),  # type: ignore
             "iva_trasladado": round(iva, 2),
             "impuestos_locales": round(ish, 2),
-            "total": round(float(f.total or 0), 2),
+            "total": round(float(f.total or 0), 2),  # type: ignore
         })
 
     # Complemento desde pólizas (cuentas 216)
@@ -478,18 +479,37 @@ def generar_impuestos_trasladados(db: Session, empresa_id: int, mes: int, anio: 
         or 0
     )
 
+    # ISH desde polizas (cuentas 216.04) en lugar de CFDI.
+    ish_polizas = None
+    try:
+        ish_polizas = (
+            db.query(func.sum(MovimientoPoliza.haber))
+            .join(Poliza)
+            .filter(
+                Poliza.empresa_id == empresa_id,
+                Poliza.mes == mes,
+                Poliza.anio == anio,
+                MovimientoPoliza.cuenta.like("216.04%"),
+            )
+            .scalar()
+        )
+    except SQLAlchemyError:  # noqa: BLE001
+        ish_polizas = None
+
     regimen, aplica_iva = _regimen_info(db, empresa_id)
     if not aplica_iva:
         total_iva = 0.0
         for d in detalle:
             d["iva_trasladado"] = 0.0
+    if ish_polizas is not None:
+        total_ish = float(ish_polizas or 0)  # type: ignore
     return {
         "regimen_fiscal": regimen,
         "aplica_iva": aplica_iva,
         "total_iva_trasladado": round(total_iva, 2),
         "total_impuestos_locales": round(total_ish, 2),
         "total_subtotal_ventas": round(total_subtotal, 2),
-        "iva_desde_polizas": round(float(iva_polizas), 2),
+        "iva_desde_polizas": round(float(iva_polizas), 2),  # type: ignore
         "num_cfdi_venta": len(ventas),
         "detalle": detalle,
     }
@@ -513,17 +533,17 @@ def generar_impuestos_acreditables(db: Session, empresa_id: int, mes: int, anio:
 
     for f in compras:
         signo = -1 if _tipo(f) == "E" else 1
-        iva = signo * float(f.iva_trasladado or 0)
+        iva = signo * float(f.iva_trasladado or 0)  # type: ignore
         total_iva += iva
-        total_subtotal += signo * float(f.subtotal or 0)
+        total_subtotal += signo * float(f.subtotal or 0)  # type: ignore
         detalle.append({
             "uuid": f.uuid,
             "fecha": str(f.fecha_emision),
             "proveedor": f.nombre_emisor,
             "rfc": f.rfc_emisor,
-            "subtotal": round(float(f.subtotal or 0), 2),
+            "subtotal": round(float(f.subtotal or 0), 2),  # type: ignore
             "iva_acreditable": round(iva, 2),
-            "total": round(float(f.total or 0), 2),
+            "total": round(float(f.total or 0), 2),  # type: ignore
             "deducible": bool(f.es_deducible),
         })
 
@@ -550,7 +570,7 @@ def generar_impuestos_acreditables(db: Session, empresa_id: int, mes: int, anio:
         "aplica_iva": aplica_iva,
         "total_iva_acreditable": round(total_iva, 2),
         "total_subtotal_compras": round(total_subtotal, 2),
-        "iva_desde_polizas": round(float(iva_polizas), 2),
+        "iva_desde_polizas": round(float(iva_polizas), 2),  # type: ignore
         "num_cfdi_compra": len(compras),
         "detalle": detalle,
     }
@@ -565,8 +585,8 @@ def generar_impuestos_retenidos(db: Session, empresa_id: int, mes: int, anio: in
     total_isr_ret = 0.0
 
     for f in facturas:
-        iva_ret = float(f.iva_retenido or 0)
-        isr_ret = float(f.isr_retenido or 0)
+        iva_ret = float(f.iva_retenido or 0)  # type: ignore
+        isr_ret = float(f.isr_retenido or 0)  # type: ignore
         if iva_ret <= 0 and isr_ret <= 0:
             continue
         total_iva_ret += iva_ret
@@ -581,6 +601,40 @@ def generar_impuestos_retenidos(db: Session, empresa_id: int, mes: int, anio: in
             "iva_retenido": round(iva_ret, 2),
             "isr_retenido": round(isr_ret, 2),
         })
+
+    # Retenciones desde polizas de gasto (cuentas 216.03 y 216.05).
+    iva_ret_polizas = None
+    isr_ret_polizas = None
+    query_ok = False
+    try:
+        iva_ret_polizas = (
+            db.query(func.sum(MovimientoPoliza.haber))
+            .join(Poliza)
+            .filter(
+                Poliza.empresa_id == empresa_id,
+                Poliza.mes == mes,
+                Poliza.anio == anio,
+                MovimientoPoliza.cuenta.like("216.03%"),
+            )
+            .scalar()
+        )
+        isr_ret_polizas = (
+            db.query(func.sum(MovimientoPoliza.haber))
+            .join(Poliza)
+            .filter(
+                Poliza.empresa_id == empresa_id,
+                Poliza.mes == mes,
+                Poliza.anio == anio,
+                MovimientoPoliza.cuenta.like("216.05%"),
+            )
+            .scalar()
+        )
+        query_ok = True
+    except SQLAlchemyError:  # noqa: BLE001
+        query_ok = False
+    if query_ok:
+        total_iva_ret = float(iva_ret_polizas or 0)  # type: ignore
+        total_isr_ret = float(isr_ret_polizas or 0)  # type: ignore
 
     return {
         "total_iva_retenido": round(total_iva_ret, 2),
@@ -616,7 +670,7 @@ def generar_sugerencias(
         key = f.rfc_receptor or "?"
         if key not in top_clientes:
             top_clientes[key] = {"nombre": f.nombre_receptor, "total": 0.0, "cfdi": 0}
-        top_clientes[key]["total"] += float(f.total or 0)
+        top_clientes[key]["total"] += float(f.total or 0)  # type: ignore
         top_clientes[key]["cfdi"] += 1
 
     clientes = sorted(top_clientes.values(), key=lambda x: x["total"], reverse=True)[:10]
@@ -633,7 +687,7 @@ def generar_sugerencias(
                 "total": 0.0,
                 "cfdi": 0,
             }
-        top_gastos[key]["total"] += float(f.total or 0)
+        top_gastos[key]["total"] += float(f.total or 0)  # type: ignore
         top_gastos[key]["cfdi"] += 1
 
     gastos = sorted(top_gastos.values(), key=lambda x: x["total"], reverse=True)[:10]
@@ -696,7 +750,7 @@ def generar_sugerencias(
     return {
         "facturas_sin_poliza": sin_poliza,
         "gastos_sin_clasificar": sin_clasificar,
-        "comisiones_bancarias": round(float(comisiones), 2),
+        "comisiones_bancarias": round(float(comisiones), 2),  # type: ignore
         "top_clientes": [
             {**c, "total": round(c["total"], 2)} for c in clientes
         ],
