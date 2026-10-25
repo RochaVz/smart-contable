@@ -31,6 +31,12 @@ from app.services.calculos_fiscales import (
 from app.services.resumen_fiscal_sat import construir_resumen_fiscal_sat
 from app.services.diot import construir_diot, exportar_diot
 from app.services.fiscal_diferencias import comparar_fuentes_fiscales
+from app.services.fiscal_detalle import (
+    construir_detalle_ish,
+    construir_detalle_isr,
+    construir_detalle_iva,
+    construir_detalle_retenciones,
+)
 from app.services.fiscal_indicadores import (
     construir_indicadores_fiscales,
     registrar_revision_contable,
@@ -670,6 +676,62 @@ def exportar_diot_periodo(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/iva/detalle")
+def obtener_iva_detalle(
+    empresa_id: int,
+    mes: int,
+    anio: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Detalle documental (solo lectura) del IVA del periodo."""
+    validar_empresa_pertenece_usuario(empresa_id, current_user.id, db)
+    _validar_periodo_mes_anio(mes, anio)
+    return construir_detalle_iva(db, empresa_id, mes, anio)
+
+
+@router.get("/isr/detalle")
+def obtener_isr_detalle(
+    empresa_id: int,
+    mes: int,
+    anio: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Detalle documental (solo lectura) del ISR provisional del periodo."""
+    validar_empresa_pertenece_usuario(empresa_id, current_user.id, db)
+    _validar_periodo_mes_anio(mes, anio)
+    return construir_detalle_isr(db, empresa_id, mes, anio)
+
+
+@router.get("/retenciones/detalle")
+def obtener_retenciones_detalle(
+    empresa_id: int,
+    mes: int,
+    anio: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Detalle documental (solo lectura) de las retenciones del periodo."""
+    validar_empresa_pertenece_usuario(empresa_id, current_user.id, db)
+    _validar_periodo_mes_anio(mes, anio)
+    return construir_detalle_retenciones(db, empresa_id, mes, anio)
+
+
+@router.get("/ish/detalle")
+def obtener_ish_detalle(
+    empresa_id: int,
+    mes: int,
+    anio: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Detalle documental (solo lectura) del ISH cobrado en CFDI del periodo."""
+    validar_empresa_pertenece_usuario(empresa_id, current_user.id, db)
+    _validar_periodo_mes_anio(mes, anio)
+    return construir_detalle_ish(db, empresa_id, mes, anio)
 
 
 @router.get("/diferencias")

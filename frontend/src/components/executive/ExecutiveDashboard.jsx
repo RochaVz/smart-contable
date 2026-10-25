@@ -27,9 +27,10 @@ import { periodoAnterior } from '../../utils/financialHealth';
 
 // Visibilidad temporal de widgets: cambiar a true para volver a mostrarlos.
 const SHOW_PRIORIDAD_PAGO = false;
-const SHOW_SCORE_FINANCIERO = true;
+const SHOW_SCORE_FINANCIERO = false;
 const SHOW_AHORRO_PRODUCTIVIDAD = false;
-const SHOW_RESUMEN_EJECUTIVO = true;
+const SHOW_RESUMEN_EJECUTIVO = false;
+const SHOW_CUMPLIMIENTO_FISCAL = false;
 
 /** Dashboard ejecutivo: el estado del negocio en menos de 30 segundos. */
 export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
@@ -153,6 +154,7 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
             </div>
           )}
         </KpiCard>
+{SHOW_CUMPLIMIENTO_FISCAL ? (
         <KpiCard
           label="Cumplimiento fiscal"
           value={s.cumplimientoFiscal == null ? '—' : formatPct(s.cumplimientoFiscal, 0)}
@@ -161,8 +163,8 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
           hint={s.riesgoFiscal ? `Riesgo ${s.riesgoFiscal.toLowerCase()}` : 'Sin datos fiscales'}
           loading={loading}
           onClick={() => onNavigate('indicadores')}
-          className={SHOW_SCORE_FINANCIERO ? '' : 'sm:col-span-2'}
         />
+      ) : null}
         {SHOW_SCORE_FINANCIERO ? (
           <KpiCard
             label="Score financiero"

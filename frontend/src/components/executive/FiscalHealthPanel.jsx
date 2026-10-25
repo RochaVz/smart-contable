@@ -23,8 +23,10 @@ const formatFecha = (iso) => {
     .toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
 };
 
+// Visibilidad temporal: ocultar indicadores abstractos no auditables.
+const SHOW_RIESGO_FISCAL_BLOQUE = false;
+
 /**
- * Motor fiscal accionable: riesgo + checklist + próximos vencimientos.
  * Sin ruido; solo lo que el usuario debe hacer.
  */
 export default function FiscalHealthPanel({ snapshot, loading, disponible, onOpenSat, onNavigate }) {
@@ -56,6 +58,7 @@ export default function FiscalHealthPanel({ snapshot, loading, disponible, onOpe
         </div>
       ) : (
         <>
+{SHOW_RIESGO_FISCAL_BLOQUE ? (
           <div className="rounded-xl border border-[color:var(--sc-border)]/50 bg-[color:var(--sc-bg)] p-4">
             <p className="sc-label">Riesgo fiscal</p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -73,6 +76,7 @@ export default function FiscalHealthPanel({ snapshot, loading, disponible, onOpe
               ) : null}
             </div>
           </div>
+        ) : null}
 
           <div>
             <h4 className="sc-label mb-2">Checklist del periodo</h4>

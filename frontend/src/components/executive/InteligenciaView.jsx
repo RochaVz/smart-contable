@@ -5,6 +5,10 @@ import FiscalHealthPanel from './FiscalHealthPanel';
 import { INTELIGENCIA_CATEGORIAS } from '../../navigation/executive';
 import { formatMoney, formatPct } from './format';
 
+// Visibilidad temporal: ocultar indicadores abstractos no auditables.
+const SHOW_SALUD_FINANCIERA = false;
+const SHOW_INDICADORES_METRICA = false;
+
 const metricaCategoria = (id, s) => {
   switch (id) {
     case 'ingresos': return formatMoney(s.ingresos, { compact: true });
@@ -17,7 +21,7 @@ const metricaCategoria = (id, s) => {
       return base == null ? '—' : formatMoney(base, { compact: true });
     }
     case 'impuestos': return s.impuestosPendientes == null ? '—' : formatMoney(s.impuestosPendientes, { compact: true });
-    case 'indicadores': return s.scoreFiscal == null ? '—' : `${s.scoreFiscal}/100`;
+    case 'indicadores': return SHOW_INDICADORES_METRICA ? (s.scoreFiscal == null ? '—' : `${s.scoreFiscal}/100`) : '';
     default: return '';
   }
 };
@@ -86,7 +90,9 @@ export default function InteligenciaView({ lectura, categoriaId, onSelect, onNav
               onOpenSat={() => onNavigate('sat')}
               onNavigate={onNavigate}
             />
+{SHOW_SALUD_FINANCIERA ? (
             <FinancialHealthPanel score={lectura.score} recomendaciones={lectura.recomendaciones} loading={lectura.loading} />
+          ) : null}
           </div>
 
           <AlertsList alertas={lectura.alertas} onNavigate={onNavigate} />

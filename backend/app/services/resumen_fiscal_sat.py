@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 from typing import cast
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.sat_fiscal import (
@@ -161,7 +162,7 @@ def construir_resumen_fiscal_sat(
                 )
                 .all()
             )
-    except Exception:
+    except SQLAlchemyError:
         poliza_records = []
 
     has_poliza_data = (
@@ -208,7 +209,7 @@ def construir_resumen_fiscal_sat(
                 "iva_retenido": iva_retenido_total,
                 "iva_a_cargo": max(iva_a_cargo_val, 0.0),
                 "saldo_a_favor": max(-iva_a_cargo_val, 0.0),
-                "ish": 0.0,
+                "ish": float(Decimal(str(calcular_iva_provisional(db, empresa_id, mes, anio).get("periodo_actual", {}).get("ish", 0.0) or 0))),
             },
             "acumulado_anual": {},
         }
