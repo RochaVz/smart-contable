@@ -16,7 +16,7 @@ from app.core.sat_fiscal import (
     impuestos_aplicables_regimen,
 )
 from app.models.empresa import Empresa
-from app.models.fiscal import OperacionFiscal, OrigenOperacionFiscal, PeriodoFiscal
+from app.models.poliza import Poliza, MovimientoPoliza
 from app.services.calculos_fiscales import calcular_isr_provisional, calcular_iva_provisional
 
 
@@ -137,57 +137,67 @@ def construir_resumen_fiscal_sat(
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     rules = _regimen_rules(empresa)
 
-    # Intentar recuperar datos fiscales desde operaciones basadas en pólizas
-    # (OperacionFiscal con origen="poliza") antes de recurrir a los cálculos
-    # basados en CFDI.
-    poliza_records: list = []
+    # Extraer los valores fiscales directamente de las pólizas ya generadas.
+    # Las pólizas son la única fuente de verdad para el Motor Fiscal SAT.
+    movimientos_poliza: list = []
     try:
-        periodo = db.query(PeriodoFiscal).filter(
-            PeriodoFiscal.empresa_id == empresa_id,
-            PeriodoFiscal.anio == anio,
-            PeriodoFiscal.mes == mes,
-        ).first()
-        # Verificar que obtuvimos un PeriodoFiscal real (no un mock ni otro objeto)
-        if (
-            periodo is not None
-            and hasattr(periodo, "id")
-            and hasattr(periodo, "mes")
-            and hasattr(periodo, "anio")
-        ):
-            poliza_records = (
-                db.query(OperacionFiscal)
+        movimientos_poliza = (
+            db.query(MovimientoPoliza)
+            .join(Poliza)
+            .filter(
+                Poliza.empresa_id == empresa_id,
+                Poliza.mes == mes,
+                Poliza.anio == anio,
+            )
+            .all()
+        )
+    except SQLAlchemyError:
+        movimientos_poliza = []
+
+    if not isinstance(movimientos_poliza, list):
+        movimientos_poliza = []
+
+    # Compatibilidad: si no hay movimientos directos, intentar desde las pólizas.
+    if not movimientos_poliza:
+        try:
+            polizas_periodo = (
+                db.query(Poliza)
                 .filter(
-                    OperacionFiscal.periodo_id == periodo.id,
-                    OperacionFiscal.origen == OrigenOperacionFiscal.poliza,
+                    Poliza.empresa_id == empresa_id,
+                    Poliza.mes == mes,
+                    Poliza.anio == anio,
                 )
                 .all()
             )
-    except SQLAlchemyError:
-        poliza_records = []
+        except SQLAlchemyError:
+            polizas_periodo = []
+        if isinstance(polizas_periodo, list):
+            for poliza in polizas_periodo:
+                movs = getattr(poliza, "movimientos", None)
+                if isinstance(movs, list):
+                    movimientos_poliza.extend(movs)
 
-    has_poliza_data = (
-        isinstance(poliza_records, list)
-        and len(poliza_records) > 0
-        and all(hasattr(r, "origen") for r in poliza_records)
-    )
+    def _sumar_movimientos(prefijo: str, lado: str) -> float:
+        total = 0.0
+        for mov in movimientos_poliza:
+            cuenta = getattr(mov, "cuenta", None)
+            if not isinstance(cuenta, str) or not cuenta.startswith(prefijo):
+                continue
+            valor = getattr(mov, lado, 0)
+            try:
+                total += float(valor or 0)
+            except (TypeError, ValueError):
+                continue
+        return total
+
+    has_poliza_data = len(movimientos_poliza) > 0
 
     if has_poliza_data:
-        isr_retenido_total = sum(
-            float(Decimal(str(r.isr_retenido if r.isr_retenido is not None else 0)))
-            for r in poliza_records
-        )
-        iva_trasladado_total = sum(
-            float(Decimal(str(r.iva_trasladado if r.iva_trasladado is not None else 0)))
-            for r in poliza_records
-        )
-        iva_acreditable_total = sum(
-            float(Decimal(str(r.iva_acreditable if r.iva_acreditable is not None else 0)))
-            for r in poliza_records
-        )
-        iva_retenido_total = sum(
-            float(Decimal(str(r.iva_retenido if r.iva_retenido is not None else 0)))
-            for r in poliza_records
-        )
+        iva_trasladado_total = _sumar_movimientos("216.01", "haber")
+        iva_acreditable_total = _sumar_movimientos("118.01", "debe")
+        iva_retenido_total = _sumar_movimientos("216.03", "haber")
+        ish_total = _sumar_movimientos("216.04", "haber")
+        isr_retenido_total = _sumar_movimientos("216.05", "haber")
 
         isr = {
             "isr_estimado": isr_retenido_total,
@@ -209,7 +219,7 @@ def construir_resumen_fiscal_sat(
                 "iva_retenido": iva_retenido_total,
                 "iva_a_cargo": max(iva_a_cargo_val, 0.0),
                 "saldo_a_favor": max(-iva_a_cargo_val, 0.0),
-                "ish": float(Decimal(str(calcular_iva_provisional(db, empresa_id, mes, anio).get("periodo_actual", {}).get("ish", 0.0) or 0))),
+                "ish": ish_total,
             },
             "acumulado_anual": {},
         }
