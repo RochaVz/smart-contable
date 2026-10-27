@@ -7,7 +7,6 @@ from datetime import date
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.sat_fiscal import (
@@ -16,7 +15,6 @@ from app.core.sat_fiscal import (
     impuestos_aplicables_regimen,
 )
 from app.models.empresa import Empresa
-from app.models.poliza import Poliza, MovimientoPoliza
 from app.services.calculos_fiscales import calcular_isr_provisional, calcular_iva_provisional
 
 
@@ -137,95 +135,11 @@ def construir_resumen_fiscal_sat(
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     rules = _regimen_rules(empresa)
 
-    # Extraer los valores fiscales directamente de las pólizas ya generadas.
-    # Las pólizas son la única fuente de verdad para el Motor Fiscal SAT.
-    movimientos_poliza: list = []
-    try:
-        movimientos_poliza = (
-            db.query(MovimientoPoliza)
-            .join(Poliza)
-            .filter(
-                Poliza.empresa_id == empresa_id,
-                Poliza.mes == mes,
-                Poliza.anio == anio,
-            )
-            .all()
-        )
-    except SQLAlchemyError:
-        movimientos_poliza = []
-
-    if not isinstance(movimientos_poliza, list):
-        movimientos_poliza = []
-
-    # Compatibilidad: si no hay movimientos directos, intentar desde las pólizas.
-    if not movimientos_poliza:
-        try:
-            polizas_periodo = (
-                db.query(Poliza)
-                .filter(
-                    Poliza.empresa_id == empresa_id,
-                    Poliza.mes == mes,
-                    Poliza.anio == anio,
-                )
-                .all()
-            )
-        except SQLAlchemyError:
-            polizas_periodo = []
-        if isinstance(polizas_periodo, list):
-            for poliza in polizas_periodo:
-                movs = getattr(poliza, "movimientos", None)
-                if isinstance(movs, list):
-                    movimientos_poliza.extend(movs)
-
-    def _sumar_movimientos(prefijo: str, lado: str) -> float:
-        total = 0.0
-        for mov in movimientos_poliza:
-            cuenta = getattr(mov, "cuenta", None)
-            if not isinstance(cuenta, str) or not cuenta.startswith(prefijo):
-                continue
-            valor = getattr(mov, lado, 0)
-            try:
-                total += float(valor or 0)
-            except (TypeError, ValueError):
-                continue
-        return total
-
-    has_poliza_data = len(movimientos_poliza) > 0
-
-    if has_poliza_data:
-        iva_trasladado_total = _sumar_movimientos("216.01", "haber")
-        iva_acreditable_total = _sumar_movimientos("118.01", "debe")
-        iva_retenido_total = _sumar_movimientos("216.03", "haber")
-        ish_total = _sumar_movimientos("216.04", "haber")
-        isr_retenido_total = _sumar_movimientos("216.05", "haber")
-
-        isr = {
-            "isr_estimado": isr_retenido_total,
-            "retenciones_isr": isr_retenido_total,
-            "saldo": {
-                "isr_causado": isr_retenido_total,
-                "pagos_provisionales_anteriores": 0.0,
-                "retenciones_isr": isr_retenido_total,
-                "isr_a_cargo": isr_retenido_total,
-                "saldo_a_favor": 0.0,
-            },
-            "parametros_faltantes": [],
-        }
-        iva_a_cargo_val = iva_trasladado_total - iva_acreditable_total - iva_retenido_total
-        iva = {
-            "periodo_actual": {
-                "iva_trasladado": iva_trasladado_total,
-                "iva_acreditable": iva_acreditable_total,
-                "iva_retenido": iva_retenido_total,
-                "iva_a_cargo": max(iva_a_cargo_val, 0.0),
-                "saldo_a_favor": max(-iva_a_cargo_val, 0.0),
-                "ish": ish_total,
-            },
-            "acumulado_anual": {},
-        }
-    else:
-        isr = calcular_isr_provisional(db, empresa_id, mes, anio)
-        iva = calcular_iva_provisional(db, empresa_id, mes, anio)
+    # El Motor Fiscal SAT consume los cálculos fiscales ya existentes (CFDI),
+    # que son la fuente probada de los importes. Las pólizas se conservan como
+    # respaldo contable pero no sobrescriben estos resultados.
+    isr = calcular_isr_provisional(db, empresa_id, mes, anio)
+    iva = calcular_iva_provisional(db, empresa_id, mes, anio)
 
     mes_venc, anio_venc = _periodo_siguiente(mes, anio)
     vencimiento = _ultimo_dia_habil_aproximado(anio_venc, mes_venc, 17)
