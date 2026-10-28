@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import {
   Building2, PlusCircle, LogOut, Search, ArrowRight, ShieldCheck,
@@ -15,6 +15,7 @@ import { getNavigationCache, setNavigationCache } from '../services/navigationCa
 
 const Dashboard = ({ onLogout }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const fileImportRef = useRef(null);
   const empresasCacheKey = 'dashboard:empresas';
   const [empresas, setEmpresas] = useState(() => getNavigationCache(empresasCacheKey) || []);
@@ -47,6 +48,12 @@ const Dashboard = ({ onLogout }) => {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('shared') === '1') {
+      toast.success('Archivo compartido recibido. Selecciona un negocio y usa "Cargar CFDI" para importarlo.');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!hasLoaded.current) {
