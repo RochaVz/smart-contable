@@ -184,7 +184,7 @@ def construir_resumen_fiscal_sat(
         )
     except SQLAlchemyError:
         ish_polizas = None
-    if ish_polizas is not None and isinstance(ish_polizas, (int, float, Decimal)):
+    if ish_polizas is not None and isinstance(ish_polizas, (int, float, Decimal)) and float(ish_polizas or 0) > 0:
         ish = float(ish_polizas or 0)
 
     impuestos_reg = impuestos_aplicables_regimen(rules)
