@@ -16,6 +16,9 @@ const money = (v) =>
     minimumFractionDigits: 2,
   });
 
+// Visibilidad temporal: ocultar bloques no auditables.
+const SHOW_SUGERENCIAS_PAGO = false;
+
 const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeriodoChange }) => {
   const now = useMemo(() => new Date(), []);
   // Periodo controlado por el padre (CompanyDetail) con respaldo local si no llega.
@@ -216,7 +219,7 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
       <ExpandBlock
         id="impuestos"
         title="Cómo se calculan los impuestos"
-        subtitle="ISR · IVA · retenciones (informativo según régimen)"
+        subtitle={`ISR ${money(totales?.isr_a_cargo ?? impuestos?.isr?.a_cargo ?? 0)} · IVA ${money(totales?.iva_a_cargo ?? impuestos?.iva?.a_cargo ?? 0)} · Retenciones ${money(totales?.retenciones ?? impuestos?.retenciones?.total ?? 0)} (informativo según régimen)`}
         open={abiertos?.impuestos ?? true}
         onToggle={() => onToggleBloque('impuestos')}
       >
@@ -260,49 +263,53 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
         )}
       </ExpandBlock>
 
-      {/* 3. Sugerencias de pago */}
-      <ExpandBlock
-        id="pagos"
-        title="Sugerencias de pago"
-        subtitle={`Total estimado a pagar: ${money(totalPagar)}`}
-        open={abiertos?.pagos ?? true}
-        onToggle={() => onToggleBloque('pagos')}
-      >
-        {sugerencias.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">No hay montos a cargo estimados en este periodo.</p>
-        ) : (
-          <div className="space-y-2.5">
-            {sugerencias.map((s) => (
-              <div key={s.concepto} className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">{s.concepto}</p>
-                  <p className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">{money(s.monto ?? s.monto_estimado)}</p>
+      {SHOW_SUGERENCIAS_PAGO && (
+        <>
+          {/* 3. Sugerencias de pago */}
+          <ExpandBlock
+            id="pagos"
+            title="Sugerencias de pago"
+            subtitle={`Total estimado a pagar: ${money(totalPagar)}`}
+            open={abiertos?.pagos ?? true}
+            onToggle={() => onToggleBloque('pagos')}
+          >
+            {sugerencias.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">No hay montos a cargo estimados en este periodo.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {sugerencias.map((s) => (
+                  <div key={s.concepto} className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">{s.concepto}</p>
+                      <p className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">{money(s.monto ?? s.monto_estimado)}</p>
+                    </div>
+                    {s.nota && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{s.nota}</p>}
+                    {s.vencimiento && (
+                      <p className="mt-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">Vencimiento estimado: {s.vencimiento}</p>
+                    )}
+                  </div>
+                ))}
+                <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
+                  <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Total a pagar (estimado)</p>
+                  <p className="font-mono text-base font-black text-emerald-700 dark:text-emerald-300">{money(totalPagar)}</p>
                 </div>
-                {s.nota && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{s.nota}</p>}
-                {s.vencimiento && (
-                  <p className="mt-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">Vencimiento estimado: {s.vencimiento}</p>
-                )}
               </div>
-            ))}
-            <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
-              <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Total a pagar (estimado)</p>
-              <p className="font-mono text-base font-black text-emerald-700 dark:text-emerald-300">{money(totalPagar)}</p>
-            </div>
-          </div>
-        )}
-        {acciones.length > 0 && (
-          <div className="mt-4 space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Acciones recomendadas</p>
-            {acciones.map((a) => (
-              <div key={a.tipo} className="rounded-lg border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
-                <span className="font-bold text-slate-900 dark:text-white">{a.titulo}</span>
-                {a.monto > 0 && <span className="ml-2 font-mono font-bold text-emerald-600 dark:text-emerald-400">{money(a.monto)}</span>}
-                {a.vencimiento && <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">· vence {a.vencimiento}</span>}
+            )}
+            {acciones.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Acciones recomendadas</p>
+                {acciones.map((a) => (
+                  <div key={a.tipo} className="rounded-lg border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
+                    <span className="font-bold text-slate-900 dark:text-white">{a.titulo}</span>
+                    {a.monto > 0 && <span className="ml-2 font-mono font-bold text-emerald-600 dark:text-emerald-400">{money(a.monto)}</span>}
+                    {a.vencimiento && <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">· vence {a.vencimiento}</span>}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-      </ExpandBlock>
+            )}
+          </ExpandBlock>
+        </>
+      )}
     </div>
   );
 };

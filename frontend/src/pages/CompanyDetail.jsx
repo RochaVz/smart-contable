@@ -504,13 +504,6 @@ const CompanyDetail = ({ vista = null }) => {
         }
       };
 
-  const statsIva = useMemo(() => facturasPeriodo.reduce((acc, f) => {
-    const total = toNumber(f.total);
-    const iva = toNumber(f.iva ?? f.iva_trasladado);
-    acc.ivaEstimado += iva || total * 0.16;
-    return acc;
-  }, { ivaEstimado: 0 }), [facturasPeriodo]);
-
   const chartData = useMemo(() => {
     const meses = MESES.map((nombre, index) => ({
       name: nombre.slice(0, 3).toUpperCase(),
@@ -809,7 +802,7 @@ const CompanyDetail = ({ vista = null }) => {
         >
           <p className="text-[10px] font-black uppercase text-slate-500">IVA del periodo</p>
           <h2 className="mt-1 text-2xl font-black text-blue-400">
-            ${statsIva.ivaEstimado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            ${(ivaComparativo.causado - ivaComparativo.acreditable).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </h2>
           <p className="mt-1 text-xs text-slate-500">Toca para ver acreditable vs causado</p>
         </button>
