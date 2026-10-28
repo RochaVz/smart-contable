@@ -5,6 +5,7 @@ import {
   FileText, UploadCloud,
   Loader2, BrainCircuit, ChevronUp, ChevronDown, Download, Calendar,
   BookOpen, Settings2, Trash2, MoreHorizontal, FileBarChart,
+  MessageCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
@@ -430,6 +431,20 @@ const CompanyDetail = ({ vista = null }) => {
     return acc;
   }, { causado: 0, acreditable: 0 }), [facturasPeriodo]);
 
+  const ishPeriodo = useMemo(() => facturasPeriodo.reduce((acc, factura) => {
+    if (esIngreso(factura)) acc += toNumber(factura.impuestos_locales ?? factura.impuestosLocales ?? 0);
+    return acc;
+  }, 0), [facturasPeriodo]);
+
+  const isrProvisional = lectura?.snapshot?.totalesSat?.isr_a_cargo
+    ?? lectura?.snapshot?.impuestosSat?.isr?.a_cargo
+    ?? 0;
+  const aplicaIsrProvisional = Boolean(
+    lectura?.snapshot?.obligacionesRegimen?.aplica_isr
+    ?? lectura?.snapshot?.impuestosSat?.isr?.aplica
+    ?? false,
+  );
+
   const totalesMovimiento = useMemo(() => {
     const sumar = (lista) => lista.reduce((acc, f) => {
       acc.total += esIngreso(f) ? toNumber(f.subtotal) : toNumber(f.total);
@@ -741,6 +756,18 @@ const CompanyDetail = ({ vista = null }) => {
                 <td className="p-4 text-right font-black text-blue-400">{formatMoney(ivaComparativo.causado)}</td>
                 <td className="p-4 text-right text-slate-400">{facturasIngresos.length}</td>
               </tr>
+              <tr>
+                <td className="p-4 font-bold text-amber-400">ISH / impuestos locales</td>
+                <td className="p-4 text-right font-black text-amber-400">{formatMoney(ishPeriodo)}</td>
+                <td className="p-4 text-right text-slate-400">{facturasPeriodo.filter(esIngreso).filter((f) => toNumber(f.impuestos_locales ?? f.impuestosLocales ?? 0) !== 0).length}</td>
+              </tr>
+              {aplicaIsrProvisional || Number(isrProvisional || 0) > 0 ? (
+                <tr>
+                  <td className="p-4 font-bold text-violet-400">ISR provisional</td>
+                  <td className="p-4 text-right font-black text-violet-400">{formatMoney(Number(isrProvisional || 0))}</td>
+                  <td className="p-4 text-right text-slate-400">—</td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
@@ -806,6 +833,22 @@ const CompanyDetail = ({ vista = null }) => {
           </h2>
           <p className="mt-1 text-xs text-slate-500">Toca para ver acreditable vs causado</p>
         </button>
+        <div className="kpi-resumen-card rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <p className="text-[10px] font-black uppercase text-slate-500">ISH / impuestos locales</p>
+          <h2 className="mt-1 text-2xl font-black text-amber-400">
+            ${ishPeriodo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">{facturasPeriodo.filter(esIngreso).filter((f) => toNumber(f.impuestos_locales ?? f.impuestosLocales ?? 0) !== 0).length} CFDI con ISH</p>
+        </div>
+        {aplicaIsrProvisional || Number(isrProvisional || 0) > 0 ? (
+          <div className="kpi-resumen-card rounded-2xl border border-slate-800 bg-slate-900 p-6">
+            <p className="text-[10px] font-black uppercase text-slate-500">ISR provisional</p>
+            <h2 className="mt-1 text-2xl font-black text-violet-400">
+              ${Number(isrProvisional || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">Si aplica en el régimen fiscal</p>
+          </div>
+        ) : null}
       </div>
 
       {!loading && (
@@ -1449,6 +1492,15 @@ const CompanyDetail = ({ vista = null }) => {
       >
         <UploadCloud className="h-4 w-4" />
         <span>Cargar CFDI</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setIsModalOpen(true)}
+        className="btn-ui btn-ui--success btn-ui--sm font-display"
+        title="Importa los CFDI que recibiste por WhatsApp (XML o ZIP)"
+      >
+        <MessageCircle className="h-4 w-4" />
+        <span>Desde WhatsApp</span>
       </button>
     </>
   );

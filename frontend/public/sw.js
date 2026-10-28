@@ -1,4 +1,4 @@
-const APP_VERSION = '2026.10.27.01';
+const APP_VERSION = '2026.10.27.02';
 const CACHE_NAME = `smartcontable-app-${APP_VERSION}`;
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg?v=2026.10.12.01'];
 
@@ -30,6 +30,23 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
+
+  // Soporte básico para Web Share Target: recibe archivos compartidos y abre la app.
+  if (requestUrl.pathname === '/share-target' && event.request.method === 'POST') {
+    event.respondWith((async () => {
+      try {
+        const formData = await event.request.formData();
+        const files = formData.getAll('files');
+        // Guarda temporalmente en cache para que la app los procese si es posible.
+        const cache = await caches.open('smartcontable-shared');
+        await cache.put('/shared-files', new Response(JSON.stringify({ count: files.length }), { headers: { 'Content-Type': 'application/json' } }));
+      } catch (e) {
+        // Ignora errores de procesamiento del share target.
+      }
+      return Response.redirect('/dashboard?shared=1', 303);
+    })());
+    return;
+  }
 
   if (
     requestUrl.pathname.startsWith('/src/')
