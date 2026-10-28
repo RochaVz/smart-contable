@@ -744,6 +744,7 @@ def listar_facturas(
                 "iva": float(f.iva_trasladado),
                 "iva_retenido": float(f.iva_retenido),
                 "isr_retenido": float(f.isr_retenido),
+                "impuestos_locales": float(f.impuestos_locales or 0),
                 "total": float(f.total),
                 "cuenta_contable": cuenta_nombre,
                 "tiene_poliza": tiene_poliza,
