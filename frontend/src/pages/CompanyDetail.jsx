@@ -430,12 +430,10 @@ const CompanyDetail = ({ vista = null }) => {
     return acc;
   }, { causado: 0, acreditable: 0 }), [facturasPeriodo]);
 
-  const ishCfdi = facturasPeriodo.reduce((acc, factura) => {
+  const ishPeriodo = facturasPeriodo.reduce((acc, factura) => {
     if (esIngreso(factura)) acc += toNumber(factura.impuestos_locales ?? factura.impuestosLocales ?? 0);
     return acc;
   }, 0);
-  const ishBackend = lectura?.snapshot?.totalesSat?.ish ?? lectura?.snapshot?.impuestosSat?.ish?.a_cargo ?? 0;
-  const ishPeriodo = Number(ishBackend) > 0 ? Number(ishBackend) : ishCfdi;
 
   const isrProvisional = lectura?.snapshot?.totalesSat?.isr_a_cargo
     ?? lectura?.snapshot?.impuestosSat?.isr?.a_cargo

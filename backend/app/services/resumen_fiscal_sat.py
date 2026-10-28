@@ -7,8 +7,6 @@ from datetime import date
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import func
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.sat_fiscal import (
@@ -17,7 +15,6 @@ from app.core.sat_fiscal import (
     impuestos_aplicables_regimen,
 )
 from app.models.empresa import Empresa
-from app.models.poliza import Poliza, MovimientoPoliza
 from app.services.calculos_fiscales import calcular_isr_provisional, calcular_iva_provisional
 
 
@@ -167,25 +164,6 @@ def construir_resumen_fiscal_sat(
     ret_isr = float(Decimal(str(ret_isr_raw or 0)))
     ret_iva = float(Decimal(str(iva_periodo.get("iva_retenido") or iva.get("iva_retenido") or 0)))
     ish = float(Decimal(str(iva_periodo.get("ish") or 0)))
-
-    # ISH desde pólizas de diario (cuentas 216.04) cuando existan.
-    ish_polizas = None
-    try:
-        ish_polizas = (
-            db.query(func.sum(MovimientoPoliza.haber))
-            .join(Poliza)
-            .filter(
-                Poliza.empresa_id == empresa_id,
-                Poliza.mes == mes,
-                Poliza.anio == anio,
-                MovimientoPoliza.cuenta.like("216.04%"),
-            )
-            .scalar()
-        )
-    except SQLAlchemyError:
-        ish_polizas = None
-    if ish_polizas is not None and isinstance(ish_polizas, (int, float, Decimal)) and float(ish_polizas or 0) > 0:
-        ish = float(ish_polizas or 0)
 
     impuestos_reg = impuestos_aplicables_regimen(rules)
     flags = impuestos_reg["flags"]
