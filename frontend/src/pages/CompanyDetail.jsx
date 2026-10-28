@@ -5,7 +5,6 @@ import {
   FileText, UploadCloud,
   Loader2, BrainCircuit, ChevronUp, ChevronDown, Download, Calendar,
   BookOpen, Settings2, Trash2, MoreHorizontal, FileBarChart,
-  MessageCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FileUploadModal from '../components/FileUploadModal';
@@ -1492,15 +1491,6 @@ const CompanyDetail = ({ vista = null }) => {
       >
         <UploadCloud className="h-4 w-4" />
         <span>Cargar CFDI</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => setIsModalOpen(true)}
-        className="btn-ui btn-ui--success btn-ui--sm font-display"
-        title="Importa los CFDI que recibiste por WhatsApp (XML o ZIP)"
-      >
-        <MessageCircle className="h-4 w-4" />
-        <span>Desde WhatsApp</span>
       </button>
     </>
   );
