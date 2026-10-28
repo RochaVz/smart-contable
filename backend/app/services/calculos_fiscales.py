@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 from typing import cast
 
-from sqlalchemy import extract
+from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from app.core.sat_fiscal import SAT_REGIMEN_RULES, CalculoIsrTipo, SatRegimenEnum
@@ -13,6 +13,7 @@ from app.models.ajustes_fiscales import (
 )
 from app.models.empresa import Empresa
 from app.models.factura import Factura
+from app.models.poliza import Poliza
 from app.services.cfdi_helpers import filtro_sin_canceladas
 from app.models.fiscal import OperacionFiscal, PeriodoFiscal
 
@@ -271,11 +272,33 @@ def _isr_resico_pf(
     regimen_valor, calculo_tipo, resumen_acumulado: dict,
 ) -> dict:
     """RESICO PF: ISR mensual sobre ingresos cobrados del mes (sin deducciones), menos retenciones."""
+    # Ingresos desde pólizas de ingreso cuando existan; respaldo en CFDI.
+    ingresos_polizas = None
+    try:
+        ingresos_polizas = (
+            db.query(func.sum(Poliza.total))
+            .filter(
+                Poliza.empresa_id == empresa_id,
+                Poliza.tipo == "ingreso",
+                Poliza.mes == mes,
+                Poliza.anio == anio,
+            )
+            .scalar()
+        )
+    except Exception:  # noqa: BLE001
+        ingresos_polizas = None
+
     mensual = _resumen_isr(_facturas_del_periodo(db, empresa_id, mes, anio), rfc_empresa)
-    ingresos = mensual["ingresos_acumulados"]
+    if isinstance(ingresos_polizas, (int, float)) and float(ingresos_polizas or 0) > 0:
+        ingresos = Decimal(str(ingresos_polizas)).quantize(CENTAVOS)
+        retenciones_mes = mensual["retenciones_isr"]
+    else:
+        ingresos = mensual["ingresos_acumulados"]
+        retenciones_mes = mensual["retenciones_isr"]
+
     tasa = next((t for limite, t in _TABLA_RESICO_PF if ingresos <= limite), _TABLA_RESICO_PF[-1][1])
     isr_causado = (ingresos * tasa / Decimal("100")).quantize(CENTAVOS)
-    neto = isr_causado - mensual["retenciones_isr"]
+    neto = isr_causado - retenciones_mes
     a_cargo = max(neto, Decimal("0")).quantize(CENTAVOS)
     return {
         "empresa_id": empresa_id,
@@ -287,18 +310,18 @@ def _isr_resico_pf(
         "deducciones_aplicadas": 0.0,
         "base_gravable": float(ingresos),
         "tasa_isr_aplicada": float(tasa),
-        "retenciones_isr_mes": float(mensual["retenciones_isr"]),
+        "retenciones_isr_mes": float(retenciones_mes),
         "isr_estimado": float(a_cargo),
         "saldo": {
             "isr_causado": float(isr_causado),
             "pagos_provisionales_anteriores": 0.0,
-            "retenciones_isr": float(mensual["retenciones_isr"]),
+            "retenciones_isr": float(retenciones_mes),
             "isr_a_cargo": float(a_cargo),
             "saldo_a_favor": float(max(-neto, Decimal("0")).quantize(CENTAVOS)),
         },
         "parametros_faltantes": [],
         "estatus": "estimado",
-        "criterio": "RESICO PF: tasa 1.00%–2.50% según ingresos cobrados del mes, sin deducciones.",
+        "criterio": "RESICO PF: tasa 1.00%–2.50% sobre ingresos cobrados (pólizas de ingreso), sin deducciones.",
     }
 
 
