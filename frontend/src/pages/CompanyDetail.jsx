@@ -430,10 +430,12 @@ const CompanyDetail = ({ vista = null }) => {
     return acc;
   }, { causado: 0, acreditable: 0 }), [facturasPeriodo]);
 
-  const ishPeriodo = useMemo(() => facturasPeriodo.reduce((acc, factura) => {
-    if (esIngreso(factura)) acc += toNumber(factura.impuestos_locales ?? factura.impuestosLocales ?? 0);
-    return acc;
-  }, 0), [facturasPeriodo]);
+  const ishPeriodo = lectura?.snapshot?.totalesSat?.ish
+    ?? lectura?.snapshot?.impuestosSat?.ish?.a_cargo
+    ?? facturasPeriodo.reduce((acc, factura) => {
+      if (esIngreso(factura)) acc += toNumber(factura.impuestos_locales ?? factura.impuestosLocales ?? 0);
+      return acc;
+    }, 0);
 
   const isrProvisional = lectura?.snapshot?.totalesSat?.isr_a_cargo
     ?? lectura?.snapshot?.impuestosSat?.isr?.a_cargo
