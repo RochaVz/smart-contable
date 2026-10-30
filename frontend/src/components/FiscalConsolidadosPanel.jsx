@@ -17,7 +17,7 @@ const money = (v) =>
   });
 
 // Visibilidad temporal: ocultar bloques no auditables.
-const SHOW_SUGERENCIAS_PAGO = false;
+const SHOW_SUGERENCIAS_PAGO = true;
 
 const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeriodoChange }) => {
   const now = useMemo(() => new Date(), []);

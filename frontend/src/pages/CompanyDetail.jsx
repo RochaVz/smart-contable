@@ -853,7 +853,7 @@ const CompanyDetail = ({ vista = null }) => {
         >
           <p className="text-[10px] font-black uppercase text-slate-500">IVA del periodo</p>
           <h2 className="mt-1 text-2xl font-black text-blue-400">
-            ${(ivaComparativo.acreditable - ivaComparativo.causado).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            ${(ivaComparativo.causado - ivaComparativo.acreditable).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </h2>
           <p className="mt-1 text-xs text-slate-500">Toca para ver acreditable vs causado</p>
         </button>

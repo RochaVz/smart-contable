@@ -103,7 +103,7 @@ export default function FiscalImpuestosCards({ impuestos, obligaciones, totales 
       <SourceCard
         title="ISH (hospedaje)"
         rows={[
-          ['A cargo', money(imp.ish?.a_cargo ?? tot.ish ?? 0)],
+          ['A cargo', money(getValor(tot.ish, imp.ish?.a_cargo))],
           ['Resumen', imp.ish?.resumen || 'Impuesto local cobrado en los CFDI emitidos.'],
         ]}
       />
