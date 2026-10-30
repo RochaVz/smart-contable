@@ -1,7 +1,7 @@
 import { CalendarClock, Receipt } from 'lucide-react';
 import { formatMoney } from './format';
 import { diasHasta } from '../../utils/financialHealth';
-import FiscalImpuestosCards from '../FiscalImpuestosCards';
+import ImpuestosSatCards from '../ImpuestosSatCards';
 
 const formatFecha = (iso) => {
   const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -10,11 +10,11 @@ const formatFecha = (iso) => {
     .toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
 };
 
-/** Bloque prioritario: qué pagar, cuánto y cuándo. */
-export default function ImpuestosPorPagarPanel({ snapshot, loading, disponible, onOpenSat }) {
-  const detalle = snapshot.impuestosDetalle || { items: [], totalPagar: null };
-  const pagables = detalle.items.filter((i) => i.accion === 'pagar');
-  const informativos = detalle.items.filter((i) => i.accion !== 'pagar');
+/** Bloque prioritario: qué pagar, cuánto y cuándo. Reingeniería del contenedor de impuestos. */
+export default function ImpuestosDashboardPanel({ snapshot, loading, disponible, onOpenSat }) {
+  const detalle = snapshot?.impuestosDetalle || { items: [], totalPagar: null };
+  const pagables = (detalle.items || []).filter((i) => i.accion === 'pagar');
+  const informativos = (detalle.items || []).filter((i) => i.accion !== 'pagar');
   const total = detalle.totalPagar;
 
   return (
@@ -108,8 +108,8 @@ export default function ImpuestosPorPagarPanel({ snapshot, loading, disponible, 
         </>
       )}
 
-      {disponible && !loading && snapshot.impuestosSat ? (
-        <FiscalImpuestosCards
+      {disponible && !loading && snapshot?.impuestosSat ? (
+        <ImpuestosSatCards
           impuestos={snapshot.impuestosSat}
           obligaciones={snapshot.obligacionesRegimen}
           totales={snapshot.totalesSat}

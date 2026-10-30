@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Receipt, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
-import FiscalImpuestosCards from './FiscalImpuestosCards';
+import ImpuestosSatCards from './ImpuestosSatCards';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -223,7 +223,7 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
         open={abiertos?.impuestos ?? true}
         onToggle={() => onToggleBloque('impuestos')}
       >
-        <FiscalImpuestosCards impuestos={impuestos} obligaciones={obligaciones} totales={totales} />
+        <ImpuestosSatCards impuestos={impuestos} obligaciones={obligaciones} totales={totales} />
       </ExpandBlock>
 
       {/* 2. Declaraciones y periodicidad */}

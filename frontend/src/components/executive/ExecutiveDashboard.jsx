@@ -19,7 +19,7 @@ import {
   YAxis,
 } from 'recharts';
 import KpiCard from './KpiCard';
-import ImpuestosPorPagarPanel from './ImpuestosPorPagarPanel';
+import ImpuestosDashboardPanel from './ImpuestosDashboardPanel';
 import IngresosEgresosBreakdown from './IngresosEgresosBreakdown';
 import KpiAhorroPanel from './KpiAhorroPanel';
 import { etiquetaPeriodo, formatMoney, formatPct } from './format';
@@ -178,7 +178,7 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
       </section>
 
       {SHOW_PRIORIDAD_PAGO ? (
-        <ImpuestosPorPagarPanel
+        <ImpuestosDashboardPanel
           snapshot={s}
           loading={loading}
           disponible={!esLocal}

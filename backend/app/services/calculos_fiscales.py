@@ -94,6 +94,7 @@ def _resumen_iva(facturas: list[Factura], rfc_empresa: str) -> dict[str, Decimal
             ish += _moneda(getattr(factura, "impuestos_locales", 0))
         elif tipo == "E" and emitido:
             trasladado -= _moneda(factura.iva_trasladado)
+            retenido -= _moneda(factura.iva_retenido)
             ish -= _moneda(getattr(factura, "impuestos_locales", 0))
         elif tipo == "I":
             acreditable += _moneda(factura.iva_trasladado)
@@ -161,6 +162,7 @@ def _resumen_isr(facturas: list[Factura], rfc_empresa: str) -> dict[str, Decimal
             retenciones += _moneda(getattr(factura, "isr_retenido", 0))
         elif tipo == "E" and emitido:
             ingresos -= _moneda(factura.subtotal)
+            retenciones -= _moneda(getattr(factura, "isr_retenido", 0))
         elif tipo in _TIPOS_COMPRA and not emitido and getattr(factura, "es_deducible", True):
             deducciones += _moneda(factura.subtotal) * (1 if tipo == "I" else -1)
 
