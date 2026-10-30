@@ -435,12 +435,37 @@ const CompanyDetail = ({ vista = null }) => {
     return acc;
   }, 0);
 
-  const isrProvisional = lectura?.snapshot?.totalesSat?.isr_a_cargo
+  const esRegimenResico = String(empresa?.regimen_fiscal || '').toLowerCase().includes('resico');
+
+  // ISR provisional RESICO (solo PF RESICO): tasa sobre ingresos cobrados del mes
+  // (facturas emitidas), sin deducciones, menos retenciones ISR.
+  const isrResicoLocal = useMemo(() => {
+    if (!esRegimenResico) return 0;
+    const ingresos = facturasPeriodo
+      .filter(esIngreso)
+      .reduce((sum, f) => sum + toNumber(f.subtotal), 0);
+    let tasa = 2.5;
+    if (ingresos <= 25000) tasa = 1.0;
+    else if (ingresos <= 50000) tasa = 1.1;
+    else if (ingresos <= 83333.33) tasa = 1.5;
+    else if (ingresos <= 208333.33) tasa = 2.0;
+    const isrCausado = ingresos * tasa / 100;
+    const retenciones = facturasPeriodo
+      .filter(esIngreso)
+      .reduce((sum, f) => sum + toNumber(f.isr_retenido), 0);
+    return Math.max(0, isrCausado - retenciones);
+  }, [esRegimenResico, facturasPeriodo]);
+
+  const isrBackend = lectura?.snapshot?.totalesSat?.isr_a_cargo
     ?? lectura?.snapshot?.impuestosSat?.isr?.a_cargo
-    ?? 0;
+    ?? null;
+  const isrProvisional = (isrBackend != null && Number(isrBackend) > 0)
+    ? isrBackend
+    : (esRegimenResico ? isrResicoLocal : (isrBackend ?? 0));
   const aplicaIsrProvisional = Boolean(
     lectura?.snapshot?.obligacionesRegimen?.aplica_isr
     ?? lectura?.snapshot?.impuestosSat?.isr?.aplica
+    ?? esRegimenResico
     ?? false,
   );
 
@@ -828,7 +853,7 @@ const CompanyDetail = ({ vista = null }) => {
         >
           <p className="text-[10px] font-black uppercase text-slate-500">IVA del periodo</p>
           <h2 className="mt-1 text-2xl font-black text-blue-400">
-            ${(ivaComparativo.causado - ivaComparativo.acreditable).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            ${(ivaComparativo.acreditable - ivaComparativo.causado).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </h2>
           <p className="mt-1 text-xs text-slate-500">Toca para ver acreditable vs causado</p>
         </button>
@@ -1296,7 +1321,7 @@ const CompanyDetail = ({ vista = null }) => {
               <Settings2 className="w-4 h-4" />
               Configura comisiones por banco antes de generar pólizas con tarjeta.
             </div>
-            <ComisionesBancoPanel empresaId={id} />
+            {/* Temporalmente oculto: Comisiones bancarias */}
             <PolizasPanel
               empresaId={id}
               mes={mesFiltro}

@@ -1,4 +1,4 @@
-const APP_VERSION = '2026.10.27.03';
+const APP_VERSION = '2026.10.27.04';
 const CACHE_NAME = `smartcontable-app-${APP_VERSION}`;
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg?v=2026.10.12.01'];
 
@@ -40,7 +40,7 @@ self.addEventListener('fetch', (event) => {
         // Guarda temporalmente en cache para que la app los procese si es posible.
         const cache = await caches.open('smartcontable-shared');
         await cache.put('/shared-files', new Response(JSON.stringify({ count: files.length }), { headers: { 'Content-Type': 'application/json' } }));
-      } catch (e) {
+      } catch {
         // Ignora errores de procesamiento del share target.
       }
       return Response.redirect('/dashboard?shared=1', 303);

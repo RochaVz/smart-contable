@@ -39,7 +39,8 @@ export default function ConfiguracionView({ empresa, empresaId, esLocal, renderF
         {renderFuente({ tipo: 'fiscal', tab: 'config' })}
       </Seccion>
 
-      {esLocal ? null : (
+      {/* Temporalmente oculto: Comisiones bancarias */}
+      {false && (
         <Seccion icono={Landmark} titulo="Comisiones bancarias" descripcion="Configura las comisiones por banco antes de generar pólizas con tarjeta">
           <ComisionesBancoPanel empresaId={empresaId} />
         </Seccion>
