@@ -19,14 +19,12 @@ import {
   YAxis,
 } from 'recharts';
 import KpiCard from './KpiCard';
-import ImpuestosDashboardPanel from './ImpuestosDashboardPanel';
 import IngresosEgresosBreakdown from './IngresosEgresosBreakdown';
 import KpiAhorroPanel from './KpiAhorroPanel';
 import { etiquetaPeriodo, formatMoney, formatPct } from './format';
 import { periodoAnterior } from '../../utils/financialHealth';
 
 // Visibilidad temporal de widgets: cambiar a true para volver a mostrarlos.
-const SHOW_PRIORIDAD_PAGO = true;
 const SHOW_SCORE_FINANCIERO = false;
 const SHOW_AHORRO_PRODUCTIVIDAD = false;
 const SHOW_RESUMEN_EJECUTIVO = false;
@@ -130,10 +128,7 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
                 </span>
               </div>
               <div className="flex flex-col gap-1">
-                {(desglose.length > 0 ? desglose : [
-                  { id: 'iva', label: 'IVA estimado', monto: s.ivaNeto || 0, tipo: 'cargo' },
-                  { id: 'isr', label: 'ISR provisional', monto: 0, tipo: 'cargo' },
-                ]).map((imp) => (
+                {(desglose || []).map((imp) => (
                   <div key={imp.id} className="flex items-center justify-between gap-2">
                     <span className="text-slate-700 dark:text-slate-300 font-medium truncate text-xs" title={imp.label}>
                       {imp.label}
@@ -177,14 +172,6 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
         ) : null}
       </section>
 
-      {SHOW_PRIORIDAD_PAGO ? (
-        <ImpuestosDashboardPanel
-          snapshot={s}
-          loading={loading}
-          disponible={!esLocal}
-          onOpenSat={() => onNavigate('sat')}
-        />
-      ) : null}
       <IngresosEgresosBreakdown snapshot={s} loading={loading} />
 
       <div className={`grid gap-6 ${SHOW_AHORRO_PRODUCTIVIDAD ? 'xl:grid-cols-[1.2fr_1fr]' : ''}`}>

@@ -342,8 +342,7 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
   const mesPeriodo = resumenSat.periodo?.mes || 1;
   const isrAnualEstimado = toNumber(
     isrDetalle.isr_anual_estimado
-    ?? isrDetalle.estimado_anual
-    ?? (isrProvisional > 0 ? isrProvisional * (13 - mesPeriodo + 1) : 0),
+    ?? isrDetalle.estimado_anual,
   );
   const ish = primerImporte(
     ivaDetalle.ish,
@@ -830,18 +829,6 @@ export const buildExecutiveSnapshot = ({
 
   if (!Array.isArray(impuestosDetalle.desgloseRegimen)) {
     impuestosDetalle.desgloseRegimen = [];
-  }
-  if (impuestosDetalle.desgloseRegimen.length === 0 && (ivaNeto != null || actualCfdi.ivaNeto != null)) {
-    const ivaVal = ivaNeto ?? actualCfdi.ivaNeto;
-    if (ivaVal != null && ivaVal !== 0) {
-      impuestosDetalle.desgloseRegimen.push({
-        id: 'iva',
-        label: ivaVal < 0 ? 'IVA a favor (CFDI)' : 'IVA por pagar (CFDI)',
-        monto: round(Math.abs(ivaVal), 2),
-        tipo: ivaVal < 0 ? 'favor' : 'cargo',
-        detalle: 'Estimación basada en CFDI',
-      });
-    }
   }
   const kpiAhorro = construirKpiAhorro(facturas, mes, anio, indicadores);
 
