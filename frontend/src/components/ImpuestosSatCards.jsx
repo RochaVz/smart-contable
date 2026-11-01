@@ -1,20 +1,13 @@
-const money = (v) =>
-  Number(v || 0).toLocaleString('es-MX', {
+const money = (v) => {
+  if (v == null) return 'Sin registro';
+  return Number(v).toLocaleString('es-MX', {
     style: 'currency',
     currency: 'MXN',
     minimumFractionDigits: 2,
   });
+};
 
 const formatMetodo = (tipo) => (tipo ? String(tipo).replaceAll('_', ' ') : null);
-
-const pick = (...valores) => {
-  const candidatos = valores
-    .filter((v) => v != null)
-    .map((v) => Number(v))
-    .filter((v) => Number.isFinite(v));
-  const positivo = candidatos.find((v) => v > 0);
-  return positivo ?? candidatos[0] ?? 0;
-};
 
 export const SourceCard = ({ title, badge, rows }) => (
   <div className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-4">
@@ -46,36 +39,11 @@ export default function ImpuestosSatCards({ impuestos, obligaciones, totales }) 
   const tot = totales || {};
   const metodo = formatMetodo(obligaciones?.calculo_isr_tipo);
 
-  const ivaDetalle = imp.iva?.detalle?.periodo_actual || imp.iva?.detalle || {};
-  const isrDetalle = imp.isr?.detalle || {};
-  const isrSaldo = isrDetalle.saldo || {};
-
-  const isr = pick(
-    tot.isr_a_cargo,
-    imp.isr?.a_cargo,
-    isrSaldo.isr_a_cargo,
-    isrDetalle.isr_estimado,
-  );
-  const ivaCargo = pick(
-    tot.iva_a_cargo,
-    imp.iva?.a_cargo,
-    ivaDetalle.iva_a_cargo,
-  );
-  const ivaFavor = pick(
-    tot.iva_a_favor,
-    imp.iva?.a_favor,
-    ivaDetalle.saldo_a_favor,
-  );
-  const retenciones = pick(
-    tot.retenciones,
-    imp.retenciones?.total,
-    (Number(imp.retenciones?.isr) || 0) + (Number(imp.retenciones?.iva) || 0) || null,
-  );
-  const ish = pick(
-    tot.ish,
-    imp.ish?.a_cargo,
-    ivaDetalle.ish,
-  );
+  const isr = tot.isr_a_cargo;
+  const ivaCargo = tot.iva_a_cargo;
+  const ivaFavor = tot.iva_a_favor;
+  const retenciones = tot.retenciones;
+  const ish = tot.ish;
 
   return (
     <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
@@ -99,16 +67,16 @@ export default function ImpuestosSatCards({ impuestos, obligaciones, totales }) 
       <SourceCard
         title="Retenciones"
         rows={[
-          ['ISR retenido', money(pick(imp.retenciones?.isr))],
-          ['IVA retenido', money(pick(imp.retenciones?.iva))],
+          ['ISR retenido', money(imp.retenciones?.isr)],
+          ['IVA retenido', money(imp.retenciones?.iva)],
           ['Total retenciones', money(retenciones)],
         ]}
       />
       <SourceCard
         title="ISH (hospedaje)"
         rows={[
-          ['A cargo', money(ish)],
-          ['Resumen', imp.ish?.resumen || 'Impuesto local cobrado en los CFDI emitidos.'],
+          ['En facturas de ingreso', money(ish)],
+          ['Origen', imp.ish?.resumen || 'Impuesto local persistido en CFDI de ingreso.'],
         ]}
       />
     </div>

@@ -51,21 +51,12 @@ const moneyPlain = (value) => Number(value || 0).toLocaleString('es-MX', {
   maximumFractionDigits: 0,
 });
 
-/**
- * Selecciona el primer importe positivo disponible entre varias fuentes del mismo
- * concepto. El motor fiscal entrega el mismo dato en `totales` y dentro de
- * `impuestos.*.detalle`; cuando la versión desplegada del backend todavía no
- * anida los cálculos en `saldo`/`periodo_actual`, `totales` llega en ceros
- * mientras `detalle` conserva el cálculo real. Si ninguna fuente tiene un valor
- * positivo se conserva el cero, para no inventar importes.
- */
+/** Lee el primer campo disponible y conserva los ceros explícitos del origen. */
 const primerImporte = (...valores) => {
-  const candidatos = valores
-    .filter((valor) => valor !== null && valor !== undefined && valor !== '')
-    .map((valor) => toNumber(valor))
-    .filter((valor) => Number.isFinite(valor));
-  const positivo = candidatos.find((valor) => valor > 0);
-  return positivo ?? candidatos[0] ?? 0;
+  const valor = valores.find((candidato) => candidato !== null && candidato !== undefined && candidato !== '');
+  if (valor === undefined) return null;
+  const importe = toNumber(valor);
+  return Number.isFinite(importe) ? importe : null;
 };
 
 /** Normaliza la descripción de un concepto CFDI para agrupar. */
@@ -284,7 +275,7 @@ const ratioLabel = (nivel) => ({
   critico: 'Crítico',
 }[nivel] || '—');
 
-/** Desglose de impuestos por pagar a partir del resumen SAT. */
+/** Adapta importes persistidos del resumen SAT sin completar ni estimar valores. */
 export const construirImpuestosDetalle = (resumenSat = null) => {
   if (!resumenSat) {
     return {
@@ -305,103 +296,41 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
 
   const totales = resumenSat.totales || {};
   const impuestos = resumenSat.impuestos || {};
-  const ivaDetalleRaw = impuestos.iva?.detalle || {};
-  const ivaDetalle = { ...ivaDetalleRaw, ...(ivaDetalleRaw.periodo_actual || {}) };
-  const isrDetalle = impuestos.isr?.detalle || {};
-  const isrSaldo = isrDetalle.saldo || {};
+  const ivaDetalle = impuestos.iva?.detalle || {};
 
   const ivaTrasladado = toNumber(
-    ivaDetalle.iva_trasladado ?? ivaDetalle.trasladado ?? ivaDetalle.iva_cobrado,
+    ivaDetalle.trasladado,
   );
   const ivaAcreditable = toNumber(
-    ivaDetalle.iva_acreditable ?? ivaDetalle.acreditable ?? ivaDetalle.iva_pagado,
+    ivaDetalle.acreditable,
   );
-  // `totales` es la fuente primaria; `detalle` es el respaldo cuando el backend
-  // desplegado entrega los totales en ceros por versión desfasada.
-  const ivaACargo = primerImporte(
-    totales.iva_a_cargo,
-    impuestos.iva?.a_cargo,
-    ivaDetalle.iva_a_cargo,
-  );
-  const ivaAFavor = primerImporte(
-    totales.iva_a_favor,
-    impuestos.iva?.a_favor,
-    ivaDetalle.saldo_a_favor,
-  );
-  const isrProvisional = primerImporte(
-    totales.isr_a_cargo,
-    impuestos.isr?.a_cargo,
-    isrSaldo.isr_a_cargo,
-    isrDetalle.isr_estimado,
-  );
-  const retenciones = primerImporte(
-    totales.retenciones,
-    impuestos.retenciones?.total,
-    (toNumber(impuestos.retenciones?.isr) + toNumber(impuestos.retenciones?.iva)) || null,
-  );
-  const mesPeriodo = resumenSat.periodo?.mes || 1;
-  const isrAnualEstimado = toNumber(
-    isrDetalle.isr_anual_estimado
-    ?? isrDetalle.estimado_anual,
-  );
-  const ish = primerImporte(
-    ivaDetalle.ish,
-    ivaDetalle.impuesto_hospedaje,
-    totales.ish,
-    impuestos.ish?.a_cargo,
-  );
-
-  const porClave = new Map(
-    (resumenSat.sugerencias_pago || []).map((s) => [s.clave, s]),
-  );
+  const ivaACargo = primerImporte(totales.iva_a_cargo);
+  const ivaAFavor = primerImporte(totales.iva_a_favor);
+  const isrProvisional = primerImporte(totales.isr_a_cargo);
+  const retenciones = primerImporte(totales.retenciones);
+  const retencionesMonto = retenciones;
+  const isrAnualEstimado = null;
+  const ish = primerImporte(totales.ish);
 
   const items = [];
-  const pushItem = ({ id, label, monto, vencimiento, accion = 'pagar', nota = null, prioridad = 2 }) => {
+  const pushItem = ({ id, label, monto, accion = 'pagar' }) => {
     if (!Number.isFinite(monto) || monto <= 0) return;
     items.push({
       id,
       label,
       monto: round(monto, 2),
-      vencimiento: vencimiento || null,
       accion,
-      nota,
-      prioridad,
-      dias: diasHasta(vencimiento),
     });
   };
 
-  const ivaSug = porClave.get('iva');
-  const isrSug = porClave.get('isr');
-  const retSug = porClave.get('retenciones');
-  const favorSug = porClave.get('iva_favor');
-
-  // Las sugerencias de pago pueden venir en ceros si el backend desplegado
-  // calculó con importes nulos; se prefiere cualquier importe positivo disponible.
-  const ivaMonto = primerImporte(
-    ivaSug ? toNumber(ivaSug.monto) : null,
-    ivaACargo,
-    toNumber(impuestos.iva_por_pagar) || null,
-  );
-  const isrMonto = primerImporte(
-    isrSug ? toNumber(isrSug.monto) : null,
-    isrProvisional,
-    toNumber(impuestos.isr_provisional) || null,
-  );
-    const ivaAcreditableMonto = ivaAcreditable
-      || toNumber(impuestos.iva_acreditable)
-      || toNumber(
-        (resumenSat.sugerencias_pago || []).find((s) => s.clave === 'iva_acreditable' || s.accion === 'acreditar')?.monto,
-      );
+  const ivaMonto = ivaACargo;
+  const isrMonto = isrProvisional;
+  const ivaAcreditableMonto = ivaAcreditable;
 
     pushItem({
       id: 'iva',
-      label: 'IVA por pagar',
+      label: 'IVA a cargo registrado',
       monto: ivaMonto,
-      vencimiento: ivaSug?.vencimiento,
-      prioridad: 1,
-      nota: ivaTrasladado || ivaAcreditableMonto
-        ? `Trasladado ${moneyPlain(ivaTrasladado)} − Acreditable ${moneyPlain(ivaAcreditableMonto)}`
-        : null,
     });
 
     if (ivaAcreditableMonto > 0) {
@@ -409,97 +338,41 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
         id: 'iva-acreditable',
         label: 'IVA acreditable',
         monto: ivaAcreditableMonto,
-        vencimiento: null,
         accion: 'informativo',
-        prioridad: 4,
-        nota: 'Crédito fiscal del periodo',
       });
     }
 
     pushItem({
       id: 'isr',
-      label: 'ISR provisional',
+      label: 'ISR a cargo registrado',
       monto: isrMonto,
-      vencimiento: isrSug?.vencimiento,
-      prioridad: 1,
     });
 
-  if (isrAnualEstimado > isrProvisional) {
-    pushItem({
-      id: 'isr-anual',
-      label: 'ISR anual estimado',
-      monto: isrAnualEstimado,
-      vencimiento: null,
-      accion: 'informativo',
-      prioridad: 5,
-      nota: 'Proyección del ejercicio con base en provisionales',
-    });
-  }
-
-  const retencionesMonto = primerImporte(
-    retSug ? toNumber(retSug.monto) : null,
-    retenciones,
-    typeof impuestos.retenciones === 'number' ? impuestos.retenciones : null,
-  );
     pushItem({
       id: 'retenciones',
-      label: 'Retenciones',
-      monto: retencionesMonto,
-      vencimiento: retSug?.vencimiento,
-      prioridad: 1,
-      nota: impuestos.retenciones && typeof impuestos.retenciones === 'object'
-        ? `ISR ${moneyPlain(impuestos.retenciones.isr)} + IVA ${moneyPlain(impuestos.retenciones.iva)}`
-        : null,
+      label: 'Retenciones registradas',
+      monto: retenciones,
     });
 
   pushItem({
     id: 'ish',
-    label: 'Impuesto sobre hospedaje',
+    label: 'ISH de CFDI de ingreso',
     monto: ish,
-    vencimiento: ivaSug?.vencimiento || isrSug?.vencimiento,
-    prioridad: 2,
   });
 
-  (resumenSat.sugerencias_pago || []).forEach((s) => {
-    // 'iva', 'isr', 'retenciones', 'iva_favor' e 'ish' ya se agregaron
-    // explícitamente como conceptos propios; incluirlos aquí los duplicaría.
-    if (['iva', 'isr', 'retenciones', 'iva_favor', 'ish'].includes(s.clave)) return;
-    if (s.accion !== 'pagar') return;
+  if (ivaAFavor != null && ivaAFavor > 0) {
     pushItem({
-      id: s.clave || s.concepto,
-      label: s.concepto || s.clave,
-      monto: toNumber(s.monto),
-      vencimiento: s.vencimiento,
-      nota: s.nota || null,
-      prioridad: 3,
-    });
-  });
-
-  if (favorSug || ivaAFavor > 0) {
-    items.push({
       id: 'iva_favor',
-      label: 'IVA a favor',
-      monto: round(favorSug ? toNumber(favorSug.monto) : ivaAFavor, 2),
-      vencimiento: null,
+      label: 'IVA a favor registrado',
+      monto: ivaAFavor,
       accion: 'acreditar',
-      nota: 'Saldo a favor estimable; acreditable en periodos siguientes',
-      prioridad: 4,
-      dias: null,
     });
   }
-
-  items.sort((a, b) => a.prioridad - b.prioridad || (a.dias ?? 999) - (b.dias ?? 999));
-
-  const totalPagar = round(
-    items.filter((i) => i.accion === 'pagar').reduce((acc, i) => acc + i.monto, 0),
-    2,
-  );
 
   // Desglose de impuestos de acuerdo al régimen fiscal
   const obligaciones = resumenSat.obligaciones_regimen || {};
   const regimen = resumenSat.regimen || {};
   const empresaData = resumenSat.empresa || {};
-  const aplicables = resumenSat.impuestos_aplicables || [];
 
   const regimenClave = regimen.clave
     || empresaData.regimen_fiscal
@@ -514,8 +387,7 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
   const desgloseRegimen = [];
 
   // 1. ISR provisional / definitivo según régimen
-  const aplicaIsr = obligaciones.aplica_isr ?? (impuestos.isr?.aplica !== false);
-  if (aplicaIsr) {
+  if (isrMonto != null) {
     const isResico = obligaciones.calculo_isr_tipo === 'tasa_directa_ingresos'
       || obligaciones.calculo_isr_tipo === 'resico_pf_tasa_directa'
       || regimenClave === '626';
@@ -523,9 +395,9 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
     desgloseRegimen.push({
       id: 'isr',
       label: labelIsr,
-      monto: round(isrMonto || 0, 2),
+      monto: isrMonto,
       tipo: 'cargo',
-      vencimiento: isrSug?.vencimiento || null,
+      vencimiento: null,
       tasa: impuestos.isr?.tasa_efectiva || impuestos.isr?.tasa || null,
       detalle: obligaciones.calculo_isr_tipo
         ? String(obligaciones.calculo_isr_tipo).replaceAll('_', ' ')
@@ -534,13 +406,12 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
   }
 
   // 2. IVA según régimen
-  const aplicaIva = obligaciones.aplica_iva ?? (impuestos.iva?.aplica !== false);
-  if (aplicaIva) {
-    if (ivaAFavor > 0 && ivaMonto <= 0) {
+  if (ivaMonto != null || ivaAFavor != null) {
+    if (ivaAFavor > 0 && (ivaMonto == null || ivaMonto <= 0)) {
       desgloseRegimen.push({
         id: 'iva',
         label: 'IVA a favor',
-        monto: round(ivaAFavor, 2),
+        monto: ivaAFavor,
         tipo: 'favor',
         vencimiento: null,
         detalle: 'Saldo a favor del periodo',
@@ -549,9 +420,9 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
       desgloseRegimen.push({
         id: 'iva',
         label: 'IVA a cargo',
-        monto: round(ivaMonto || 0, 2),
+        monto: ivaMonto,
         tipo: 'cargo',
-        vencimiento: ivaSug?.vencimiento || null,
+        vencimiento: null,
         detalle: 'Trasladado menos acreditable',
       });
     }
@@ -567,108 +438,47 @@ export const construirImpuestosDetalle = (resumenSat = null) => {
       label: 'Retenciones',
       monto: round(retencionesMonto || 0, 2),
       tipo: 'cargo',
-      vencimiento: retSug?.vencimiento || null,
+      vencimiento: null,
       detalle: 'Retenciones por enterar',
     });
   }
 
   // 4. ISH estatal si aplica
-  if (ish > 0 || obligaciones.aplica_ish || aplicables.some((a) => a.clave === 'ish')) {
+  if (ish != null) {
     desgloseRegimen.push({
       id: 'ish',
       label: 'Imp. s/ Hospedaje',
       monto: round(ish || 0, 2),
       tipo: 'cargo',
-      vencimiento: ivaSug?.vencimiento || isrSug?.vencimiento || null,
+      vencimiento: null,
       detalle: 'ISH estatal',
     });
   }
 
-  // 5. IEPS si aplica
-  if (obligaciones.aplica_ieps || aplicables.some((a) => a.clave === 'ieps')) {
-    const iepsMonto = toNumber(totales.ieps || impuestos.ieps?.a_cargo || 0);
-    desgloseRegimen.push({
-      id: 'ieps',
-      label: 'IEPS',
-      monto: round(iepsMonto, 2),
-      tipo: 'cargo',
-      vencimiento: ivaSug?.vencimiento || isrSug?.vencimiento || null,
-      detalle: 'Impuesto especial',
-    });
-  }
-
-  // 6. Otras sugerencias de pago específicas
-  (resumenSat.sugerencias_pago || []).forEach((s) => {
-    if (['iva', 'isr', 'retenciones', 'iva_favor', 'ish', 'ieps', 'iva_acreditable'].includes(s.clave)) return;
-    if (s.accion !== 'pagar') return;
-    desgloseRegimen.push({
-      id: s.clave || s.concepto,
-      label: s.concepto || s.clave,
-      monto: round(toNumber(s.monto || s.monto_estimado || 0), 2),
-      tipo: 'cargo',
-      vencimiento: s.vencimiento || null,
-      detalle: s.nota || 'A cargo',
-    });
-  });
-
-  // El total del backend es la fuente primaria, pero si llega en ceros se usa el
-  // total calculado con los conceptos pagables (evita un $0.00 falso).
-  const totalPagarCalculado = items.some((i) => i.accion === 'pagar') ? totalPagar : null;
-
   return {
     items,
-    totalPagar: totales.total_a_pagar != null
-      ? primerImporte(totales.total_a_pagar, totalPagarCalculado)
-      : totalPagarCalculado,
-    ivaTrasladado: ivaTrasladado || null,
-    ivaAcreditable: ivaAcreditable || null,
-    ivaACargo: ivaACargo || null,
-    ivaAFavor: ivaAFavor || null,
-    isrProvisional: isrProvisional || null,
-    isrAnualEstimado: isrAnualEstimado || null,
-    retenciones: retenciones || null,
-    ish: ish || null,
-    vencimientoPrincipal: items.find((i) => i.accion === 'pagar' && i.vencimiento)?.vencimiento || null,
+    totalPagar: primerImporte(totales.total_a_pagar),
+    ivaTrasladado,
+    ivaAcreditable,
+    ivaACargo,
+    ivaAFavor,
+    isrProvisional,
+    isrAnualEstimado,
+    retenciones,
+    ish,
+    vencimientoPrincipal: null,
     regimenNombre,
     regimenClave,
     desgloseRegimen,
   };
 };
 
-/**
- * Acciones prioritarias del motor fiscal (solo lo accionable).
- */
+/** Acciones informativas no relacionadas con prioridades de pago. */
 export const construirAccionesFiscales = (snapshot, hoy = new Date()) => {
   const acciones = [];
   const add = (id, titulo, detalle, estado = 'pendiente', destino = 'sat') => {
     acciones.push({ id, titulo, detalle, estado, destino });
   };
-
-  const impuestos = snapshot.impuestosDetalle || { items: [] };
-  const hayIva = impuestos.items.some((i) => i.id === 'iva' && i.accion === 'pagar');
-  const hayIsr = impuestos.items.some((i) => i.id === 'isr' && i.accion === 'pagar');
-  const hayRet = impuestos.items.some((i) => i.id === 'retenciones' && i.accion === 'pagar');
-
-  if (hayIva) {
-    const iva = impuestos.items.find((i) => i.id === 'iva');
-    add('declarar-iva', 'Declarar / pagar IVA', `${moneyPlain(iva.monto)}${iva.vencimiento ? ` · vence ${iva.vencimiento}` : ''}`, 'urgente');
-  } else if (impuestos.ivaAFavor > 0) {
-    add('revisar-iva-favor', 'Revisar IVA a favor', `${moneyPlain(impuestos.ivaAFavor)} acreditable`, 'info');
-  } else if (snapshot.impuestosPendientes != null || snapshot.scoreFiscal != null) {
-    add('declarar-iva', 'Declarar IVA', 'Sin saldo a cargo en el periodo', 'hecho');
-  }
-
-  if (hayIsr) {
-    const isr = impuestos.items.find((i) => i.id === 'isr');
-    add('declarar-isr', 'Declarar / pagar ISR provisional', `${moneyPlain(isr.monto)}${isr.vencimiento ? ` · vence ${isr.vencimiento}` : ''}`, 'urgente');
-  } else if (snapshot.impuestosPendientes != null || snapshot.scoreFiscal != null) {
-    add('declarar-isr', 'Declarar ISR provisional', 'Sin ISR a cargo estimado', 'hecho');
-  }
-
-  if (hayRet) {
-    const ret = impuestos.items.find((i) => i.id === 'retenciones');
-    add('enterar-retenciones', 'Enterar retenciones', moneyPlain(ret.monto), 'urgente');
-  }
 
   const totalCfdi = (snapshot.cfdiIngresos || 0) + (snapshot.cfdiEgresos || 0);
   const clasificados = snapshot.kpiAhorro?.cfdiClasificados || 0;
@@ -698,9 +508,6 @@ export const construirAccionesFiscales = (snapshot, hoy = new Date()) => {
   }
 
   const vencimientos = [
-    ...impuestos.items
-      .filter((i) => i.accion === 'pagar' && i.vencimiento)
-      .map((i) => ({ id: i.id, titulo: i.label, fecha: i.vencimiento, monto: i.monto })),
     ...(snapshot.declaraciones || [])
       .filter((d) => d.proximo_vencimiento && /^\d{4}-\d{2}-\d{2}/.test(String(d.proximo_vencimiento)))
       .map((d, i) => ({
@@ -811,12 +618,8 @@ export const buildExecutiveSnapshot = ({
   const metodosCobro = construirMetodosCobro(movimientosBanco, mes, anio);
 
   const ivaNeto = paquete?.sugerencias?.iva_neto_periodo ?? null;
-  const totalesSat = resumenSat?.totales;
   const impuestosDetalle = construirImpuestosDetalle(resumenSat);
-  // `totales` es la fuente primaria; el detalle cubre totales entregados en ceros.
-  const impuestosPendientes = totalesSat
-    ? primerImporte(totalesSat.total_a_pagar, impuestosDetalle.totalPagar)
-    : null;
+  const impuestosPendientes = impuestosDetalle.totalPagar;
 
   const salud = indicadores?.salud || null;
   const cumplimiento = indicadores
@@ -858,7 +661,6 @@ export const buildExecutiveSnapshot = ({
     nivelFiscal: salud?.nivel || null,
     riesgoFiscal: salud?.nivel ? ratioLabel(salud.nivel) : null,
     cumplimientoFiscal: cumplimiento,
-    sugerenciasPago: resumenSat?.sugerencias_pago || [],
     declaraciones: resumenSat?.declaraciones || [],
     alertasSat: indicadores?.diferencias?.alertas || [],
     diferenciasPendientes: indicadores?.diferencias?.pendientes || [],
@@ -1182,19 +984,6 @@ export const detectarAlertas = (s, hoy = new Date()) => {
     }
   });
 
-  (s.sugerenciasPago || [])
-    .filter((p) => p.accion === 'pagar' && toNumber(p.monto) > 0)
-    .forEach((p) => {
-      const dias = diasHasta(p.vencimiento, hoy);
-      const severity = dias != null && dias <= 3
-        ? SEVERITY.CRITICAL
-        : dias != null && dias <= 10 ? SEVERITY.WARNING : SEVERITY.INFO;
-      const cuando = dias == null
-        ? ''
-        : dias < 0 ? ` (venció hace ${Math.abs(dias)} día(s))` : ` (vence en ${dias} día(s))`;
-      add(severity, `pago-${p.clave}`, `${p.concepto} próximo`, `${money(p.monto)}${cuando}.`, 'sat');
-    });
-
   (s.declaraciones || []).forEach((d, index) => {
     const dias = diasHasta(d.proximo_vencimiento, hoy);
     if (dias == null || dias > 10) return;
@@ -1283,17 +1072,6 @@ export const generarRecomendaciones = (scoreInfo, alertas, snapshot = null) => {
       `${s.concentracionProveedores.topNombre} concentra ${s.concentracionProveedores.topPct}% de egresos (${money(expuesto)}). Cotizar 2 proveedores alternos sobre el 30% de ese gasto podría bajar ~5% = ${money(expuesto * 0.3 * 0.05)} mensuales.`,
       money(expuesto * 0.3 * 0.05),
       'proveedores',
-    );
-  }
-
-  if ([...ids].some((id) => id.startsWith('pago-') || id.startsWith('declaracion-'))) {
-    const total = s.impuestosDetalle?.totalPagar ?? s.impuestosPendientes ?? 0;
-    const venc = s.impuestosDetalle?.vencimientoPrincipal;
-    push(
-      'pagar-impuestos',
-      `Tienes ${money(total)} de impuestos por pagar${venc ? ` con vencimiento ${venc}` : ''}. Prioriza IVA e ISR antes de la fecha límite; el recargo estimado es ~1.47%/mes (${money(total * 0.0147)}).`,
-      money(total * 0.0147),
-      'sat',
     );
   }
 

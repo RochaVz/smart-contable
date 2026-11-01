@@ -9,15 +9,14 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
-const money = (v) =>
-  Number(v || 0).toLocaleString('es-MX', {
+const money = (v) => {
+  if (v == null) return 'Sin registro';
+  return Number(v).toLocaleString('es-MX', {
     style: 'currency',
     currency: 'MXN',
     minimumFractionDigits: 2,
   });
-
-// Visibilidad temporal: ocultar bloques no auditables.
-const SHOW_SUGERENCIAS_PAGO = true;
+};
 
 const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeriodoChange }) => {
   const now = useMemo(() => new Date(), []);
@@ -33,7 +32,7 @@ const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeri
   const [bloquesAbiertos, setBloquesAbiertos] = useState({
     impuestos: true,
     declaraciones: true,
-    pagos: true,
+    resultados: true,
   });
 
   const toggleBloque = (id) => {
@@ -95,7 +94,7 @@ const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeri
             </h2>
           </div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Cálculo informativo y proyección de impuestos según el régimen fiscal ({MESES[mes - 1]} {anio})
+            Consulta de importes registrados para {MESES[mes - 1]} {anio}
           </p>
           {regimenNombre && (
             <div className="mt-2 flex items-center gap-2">
@@ -147,9 +146,9 @@ const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeri
       </div>
 
       {/* Contenedores exclusivos del Motor Fiscal SAT:
-          1. Cómo se calculan los impuestos
-          2. Declaraciones y periodicidad
-          3. Sugerencias de pago */}
+          1. Importes consultados
+          2. Declaraciones registradas
+          3. Obligaciones del régimen */}
       <ResumenSatPanel
         data={resumenSat}
         loading={loadingResumen}
@@ -205,32 +204,55 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
 
   const impuestos = data.impuestos || {};
   const declaraciones = data.declaraciones || [];
-  const sugerencias = data.sugerencias_pago || [];
+  const declaracionesRegistradas = data.declaraciones_registradas || [];
   const obligaciones = data.obligaciones_regimen || {};
   const totales = data.totales || {};
-  const acciones = data.acciones || [];
-  const totalPagar = totales.total_a_pagar ?? sugerencias
-    .filter((s) => (s.accion || 'pagar') === 'pagar')
-    .reduce((acc, s) => acc + Number(s.monto ?? s.monto_estimado ?? 0), 0);
 
   return (
     <div className="space-y-4">
-      {/* 1. Cómo se calculan los impuestos */}
+      {/* Importes existentes consultados de declaraciones, CFDI y pólizas */}
       <ExpandBlock
         id="impuestos"
-        title="Cómo se calculan los impuestos"
-        subtitle={`ISR ${money(totales?.isr_a_cargo ?? impuestos?.isr?.a_cargo ?? 0)} · IVA ${money(totales?.iva_a_cargo ?? impuestos?.iva?.a_cargo ?? 0)} · Retenciones ${money(totales?.retenciones ?? impuestos?.retenciones?.total ?? 0)} (informativo según régimen)`}
+        title="Importes fiscales consultados"
+        subtitle={`ISR ${money(totales.isr_a_cargo)} · IVA ${money(totales.iva_a_cargo)} · Retenciones ${money(totales.retenciones)} · ISH ${money(totales.ish)}`}
         open={abiertos?.impuestos ?? true}
         onToggle={() => onToggleBloque('impuestos')}
       >
         <ImpuestosSatCards impuestos={impuestos} obligaciones={obligaciones} totales={totales} />
       </ExpandBlock>
 
+      <ExpandBlock
+        id="resultados"
+        title="Declaraciones registradas"
+        subtitle="Importes guardados en el sistema, sin recálculo"
+        open={abiertos?.resultados ?? true}
+        onToggle={() => onToggleBloque('resultados')}
+      >
+        {declaracionesRegistradas.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">No hay importes declarados registrados para este periodo.</p>
+        ) : (
+          <div className="space-y-2">
+            {declaracionesRegistradas.map((d) => (
+              <div key={d.id} className="flex flex-col gap-2 rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{d.tipo.toUpperCase()}</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Estado: {d.estado} · versión {d.version}</p>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">A cargo: {money(d.monto_a_cargo)}</p>
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">A favor: {money(d.monto_a_favor)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </ExpandBlock>
+
       {/* 2. Declaraciones y periodicidad */}
       <ExpandBlock
         id="declaraciones"
         title="Declaraciones y periodicidad"
-        subtitle="Qué presentar y cuándo (mensual / bimestral / anual)"
+        subtitle="Obligaciones y periodicidad del régimen fiscal"
         open={abiertos?.declaraciones ?? true}
         onToggle={() => onToggleBloque('declaraciones')}
       >
@@ -255,7 +277,6 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
                 </div>
                 <div className="text-left sm:text-right shrink-0">
                   <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{d.periodo_corresponde || '—'}</p>
-                  <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Vence: {d.proximo_vencimiento || '—'}</p>
                 </div>
               </div>
             ))}
@@ -263,53 +284,6 @@ const ResumenSatPanel = ({ data, loading, abiertos, onToggleBloque }) => {
         )}
       </ExpandBlock>
 
-      {SHOW_SUGERENCIAS_PAGO && (
-        <>
-          {/* 3. Sugerencias de pago */}
-          <ExpandBlock
-            id="pagos"
-            title="Sugerencias de pago"
-            subtitle={`Total estimado a pagar: ${money(totalPagar)}`}
-            open={abiertos?.pagos ?? true}
-            onToggle={() => onToggleBloque('pagos')}
-          >
-            {sugerencias.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No hay montos a cargo estimados en este periodo.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {sugerencias.map((s) => (
-                  <div key={s.concepto} className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">{s.concepto}</p>
-                      <p className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">{money(s.monto ?? s.monto_estimado)}</p>
-                    </div>
-                    {s.nota && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{s.nota}</p>}
-                    {s.vencimiento && (
-                      <p className="mt-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">Vencimiento estimado: {s.vencimiento}</p>
-                    )}
-                  </div>
-                ))}
-                <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
-                  <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Total a pagar (estimado)</p>
-                  <p className="font-mono text-base font-black text-emerald-700 dark:text-emerald-300">{money(totalPagar)}</p>
-                </div>
-              </div>
-            )}
-            {acciones.length > 0 && (
-              <div className="mt-4 space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Acciones recomendadas</p>
-                {acciones.map((a) => (
-                  <div key={a.tipo} className="rounded-lg border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
-                    <span className="font-bold text-slate-900 dark:text-white">{a.titulo}</span>
-                    {a.monto > 0 && <span className="ml-2 font-mono font-bold text-emerald-600 dark:text-emerald-400">{money(a.monto)}</span>}
-                    {a.vencimiento && <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">· vence {a.vencimiento}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </ExpandBlock>
-        </>
-      )}
     </div>
   );
 };

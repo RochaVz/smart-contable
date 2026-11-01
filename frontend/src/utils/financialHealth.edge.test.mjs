@@ -26,7 +26,6 @@ const snapshot = (parcial = {}) => ({
   saldoBancario: null,
   impuestosPendientes: null,
   scoreFiscal: null,
-  sugerenciasPago: [],
   declaraciones: [],
   alertasSat: [],
   concentracionClientes: sinConcentracion,
@@ -246,17 +245,14 @@ test('alertas: la concentración requiere más de una contraparte', () => {
   assert.equal(w.severity, 'warning');
 });
 
-test('alertas: pagos próximos, vencidos y lejanos', () => {
+test('alertas: ignoran sugerencias de pago fiscales heredadas', () => {
   const pago = (vencimiento, extra = {}) => snapshot({
     sugerenciasPago: [{ clave: 'iva', concepto: 'IVA', monto: 100, accion: 'pagar', vencimiento, ...extra }],
   });
-  const sev = (s) => detectarAlertas(s, HOY).find((a) => a.id === 'pago-iva');
-  assert.equal(sev(pago('2026-10-20')).severity, 'info');
-  assert.equal(sev(pago('2026-10-17')).severity, 'warning');
-  assert.equal(sev(pago('2026-10-10')).severity, 'critical');
-  assert.match(sev(pago('2026-10-01')).detalle, /venció hace 6/);
-  assert.equal(sev(pago('2026-10-10', { accion: 'acreditar' })), undefined);
-  assert.equal(sev(pago('2026-10-10', { monto: 0 })), undefined);
+  ['2026-10-20', '2026-10-17', '2026-10-10', '2026-10-01'].forEach((fecha) => {
+    assert.ok(!detectarAlertas(pago(fecha), HOY).some((alerta) => alerta.id === 'pago-iva'));
+  });
+  assert.ok(!detectarAlertas(pago('2026-10-10', { monto: 100000 }), HOY).some((alerta) => alerta.id === 'pago-iva'));
 });
 
 test('alertas: declaraciones solo dentro de 10 días y sin fecha se ignoran', () => {
@@ -284,7 +280,7 @@ test('alertas: se ordenan de más a menos grave', () => {
   const orden = alertas.map((a) => a.severity);
   assert.deepEqual(orden, [...orden].sort((a, b) => ({ critical: 0, warning: 1, info: 2 }[a] - { critical: 0, warning: 1, info: 2 }[b])));
   assert.equal(orden[0], 'critical');
-  assert.equal(orden.at(-1), 'info');
+  assert.ok(!alertas.some((alerta) => alerta.id.startsWith('pago-')));
 });
 
 test('recomendaciones: mensaje por defecto con score y vacío sin datos', () => {
@@ -295,7 +291,7 @@ test('recomendaciones: mensaje por defecto con score y vacío sin datos', () => 
   assert.deepEqual(generarRecomendaciones({ score: null }, []), []);
 });
 
-test('recomendaciones: una por cada tipo de alerta relevante, sin duplicar pagos', () => {
+test('recomendaciones omite prioridades de pago y conserva alertas no fiscales', () => {
   const alertas = [
     { id: 'pago-iva' },
     { id: 'pago-isr' },
@@ -308,7 +304,7 @@ test('recomendaciones: una por cada tipo de alerta relevante, sin duplicar pagos
     impuestosDetalle: { totalPagar: 1000 },
     alertasSat: [{}, {}],
   }));
-  assert.equal(recs.filter((r) => r.id === 'pagar-impuestos').length, 1);
-  assert.equal(recs.length, 3);
+  assert.equal(recs.filter((r) => r.id === 'pagar-impuestos').length, 0);
+  assert.equal(recs.length, 2);
   assert.ok(recs.every((r) => r.id && r.texto));
 });

@@ -7,6 +7,7 @@ import { clearNavigationCache } from './services/navigationCache';
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const CompanyDetail = lazy(() => import('./pages/CompanyDetail'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('token'));
@@ -27,6 +28,7 @@ function App() {
         <Routes>
           <Route path="/login" element={!isAuthenticated ? <Login onLoginSuccess={() => setIsAuthenticated(true)} /> : <Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={isAuthenticated ? <Dashboard onLogout={handleLogout} /> : <Navigate to="/login" />} />
+          <Route path="/admin" element={isAuthenticated ? <AdminPanel /> : <Navigate to="/login" />} />
           <Route path="/empresa/:id" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />
           <Route path="/empresa/:id/modulos/:moduloId" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />
           <Route path="/empresa/:id/reportes/:reporteId" element={isAuthenticated ? <CompanyDetail /> : <Navigate to="/login" />} />

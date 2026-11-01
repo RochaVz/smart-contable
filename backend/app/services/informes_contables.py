@@ -501,6 +501,7 @@ def generar_impuestos_trasladados(db: Session, empresa_id: int, mes: int, anio: 
         total_iva = 0.0
         for d in detalle:
             d["iva_trasladado"] = 0.0
+    total_ish_cfdi = round(total_ish, 2)
     if ish_polizas is not None:
         total_ish = float(ish_polizas or 0)  # type: ignore
     return {
@@ -508,6 +509,7 @@ def generar_impuestos_trasladados(db: Session, empresa_id: int, mes: int, anio: 
         "aplica_iva": aplica_iva,
         "total_iva_trasladado": round(total_iva, 2),
         "total_impuestos_locales": round(total_ish, 2),
+        "total_impuestos_locales_cfdi": total_ish_cfdi,
         "total_subtotal_ventas": round(total_subtotal, 2),
         "iva_desde_polizas": round(float(iva_polizas), 2),  # type: ignore
         "num_cfdi_venta": len(ventas),

@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
+    admin,
     cfdi_complementos,
     auth,
     conciliacion,
@@ -16,6 +17,7 @@ api_router = APIRouter()
 # Al agregar prefix, ya no necesitas escribir "/auth" dentro de cada archivo de endpoint
 # Al agregar tags, Swagger agrupa los endpoints por categorías
 api_router.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
+api_router.include_router(admin.router, prefix="/admin", tags=["Administración"])
 api_router.include_router(conciliacion.router, prefix="/conciliacion", tags=["Conciliación bancaria"])
 api_router.include_router(configuracion.router, prefix="/configuracion", tags=["Configuración"])
 api_router.include_router(empresas.router, prefix="/empresas", tags=["Empresas"])

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from calendar import monthrange
-from datetime import date
 from decimal import Decimal
 from typing import cast
 
@@ -15,26 +13,24 @@ from app.core.sat_fiscal import (
     impuestos_aplicables_regimen,
 )
 from app.models.empresa import Empresa
-from app.services.calculos_fiscales import calcular_isr_provisional, calcular_iva_provisional
+from app.models.fiscal import (
+    DeclaracionFiscal,
+    EstadoDeclaracionFiscal,
+    PeriodoFiscal,
+    TipoDeclaracionFiscal,
+    TipoPeriodoFiscal,
+)
+from app.services.informes_contables import (
+    generar_impuestos_acreditables,
+    generar_impuestos_retenidos,
+    generar_impuestos_trasladados,
+)
 
 
 MESES = [
     "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ]
-
-
-def _ultimo_dia_habil_aproximado(anio: int, mes: int, dia_limite: int = 17) -> date:
-    """Aproxima el día de vencimiento (sin calendario oficial de días inhábiles SAT)."""
-    ultimo = monthrange(anio, mes)[1]
-    dia = min(dia_limite, ultimo)
-    return date(anio, mes, dia)
-
-
-def _periodo_siguiente(mes: int, anio: int) -> tuple[int, int]:
-    if mes == 12:
-        return 1, anio + 1
-    return mes + 1, anio
 
 
 def _regimen_clave(empresa: Empresa | None) -> str:
@@ -126,6 +122,41 @@ def _periodicidad_declaraciones(empresa: Empresa | None, rules: dict) -> list[di
     return items
 
 
+def _declaraciones_registradas(
+    db: Session,
+    empresa_id: int,
+    mes: int,
+    anio: int,
+) -> dict[str, DeclaracionFiscal]:
+    filas = (
+        db.query(DeclaracionFiscal)
+        .join(PeriodoFiscal, DeclaracionFiscal.periodo_id == PeriodoFiscal.id)
+        .filter(
+            DeclaracionFiscal.empresa_id == empresa_id,
+            DeclaracionFiscal.es_vigente.is_(True),
+            DeclaracionFiscal.estado != EstadoDeclaracionFiscal.cancelada,
+            PeriodoFiscal.empresa_id == empresa_id,
+            PeriodoFiscal.tipo == TipoPeriodoFiscal.mensual,
+            PeriodoFiscal.mes == mes,
+            PeriodoFiscal.anio == anio,
+        )
+        .order_by(DeclaracionFiscal.version.desc(), DeclaracionFiscal.id.desc())
+        .all()
+    )
+    resultado: dict[str, DeclaracionFiscal] = {}
+    for declaracion in filas:
+        tipo = getattr(declaracion.tipo, "value", declaracion.tipo)
+        resultado.setdefault(str(tipo), declaracion)
+    return resultado
+
+
+def _monto_declarado(declaracion: DeclaracionFiscal | None, campo: str) -> float | None:
+    if declaracion is None:
+        return None
+    valor = getattr(declaracion, campo)
+    return round(float(Decimal(str(valor or 0))), 2)
+
+
 def construir_resumen_fiscal_sat(
     db: Session,
     empresa_id: int,
@@ -134,188 +165,40 @@ def construir_resumen_fiscal_sat(
 ) -> dict:
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     rules = _regimen_rules(empresa)
+    declaraciones_registradas = _declaraciones_registradas(db, empresa_id, mes, anio)
+    isr_declarado = declaraciones_registradas.get(TipoDeclaracionFiscal.isr.value)
+    iva_declarado = declaraciones_registradas.get(TipoDeclaracionFiscal.iva.value)
 
-    # El Motor Fiscal SAT consume los cálculos fiscales ya existentes (CFDI),
-    # que son la fuente probada de los importes. Las pólizas se conservan como
-    # respaldo contable pero no sobrescriben estos resultados.
-    isr = calcular_isr_provisional(db, empresa_id, mes, anio)
-    iva = calcular_iva_provisional(db, empresa_id, mes, anio)
+    trasladados = generar_impuestos_trasladados(db, empresa_id, mes, anio)
+    acreditables = generar_impuestos_acreditables(db, empresa_id, mes, anio)
+    retenciones = generar_impuestos_retenidos(db, empresa_id, mes, anio)
 
-    mes_venc, anio_venc = _periodo_siguiente(mes, anio)
-    vencimiento = _ultimo_dia_habil_aproximado(anio_venc, mes_venc, 17)
-
-    saldo_isr = isr.get("saldo") or {}
-    iva_periodo = iva.get("periodo_actual") or {}
-
-    isr_a_cargo = float(Decimal(str(
-        saldo_isr.get("isr_a_cargo") or isr.get("isr_a_cargo") or isr.get("isr_estimado") or 0
-    )))
-    iva_a_cargo = float(Decimal(str(
-        max(float(iva_periodo.get("iva_a_cargo") or iva.get("iva_a_cargo") or 0), 0)
-    )))
-    iva_a_favor = float(Decimal(str(iva_periodo.get("saldo_a_favor") or iva.get("iva_a_favor") or 0)))
-    ret_isr_raw = saldo_isr.get("retenciones_isr")
-    if ret_isr_raw is None:
-        # Fallback para respuestas planas: el motor anida las retenciones en
-        # `saldo` y expone el acumulado solo en el nivel superior.
-        ret_isr_raw = isr.get("retenciones_isr")
-    if ret_isr_raw is None:
-        ret_isr_raw = isr.get("isr_retenido")
-    ret_isr = float(Decimal(str(ret_isr_raw or 0)))
-    ret_iva = float(Decimal(str(iva_periodo.get("iva_retenido") or iva.get("iva_retenido") or 0)))
-    ish = float(Decimal(str(iva_periodo.get("ish") or 0)))
+    isr_a_cargo = _monto_declarado(isr_declarado, "monto_a_cargo")
+    iva_a_cargo = _monto_declarado(iva_declarado, "monto_a_cargo")
+    iva_a_favor = _monto_declarado(iva_declarado, "monto_a_favor")
+    ret_isr = retenciones["total_isr_retenido"]
+    ret_iva = retenciones["total_iva_retenido"]
+    ish = trasladados["total_impuestos_locales_cfdi"]
 
     impuestos_reg = impuestos_aplicables_regimen(rules)
     flags = impuestos_reg["flags"]
 
-    if not flags.get("isr", True):
-        isr_a_cargo = 0.0
-    if not flags.get("iva", True):
-        iva_a_cargo = 0.0
-        iva_a_favor = 0.0
-    # El ISH no se anula por régimen: proviene del impuesto local efectivamente
-    # cobrado en los CFDI emitidos (dato autoritativo). El flag `aplica_ish`
-    # solo describe si la empresa está sujeta al impuesto estatal.
-
     declaraciones = _periodicidad_declaraciones(empresa, rules)
-    if not flags.get("iva", True):
-        declaraciones = [d for d in declaraciones if d.get("tipo") not in {"IVA", "ISR+IVA"}]
-    if not flags.get("isr", True):
-        declaraciones = [d for d in declaraciones if d.get("tipo") not in {"ISR", "ISR+IVA", "ISR anual"}]
-    if not flags.get("diot", False):
-        declaraciones = [d for d in declaraciones if d.get("tipo") != "DIOT"]
-
-    sugerencias_pago: list[dict] = []
-    acciones: list[dict] = []
-
-    if flags.get("isr", True) and isr_a_cargo > 0:
-        item = {
-            "concepto": "ISR provisional",
-            "clave": "isr",
-            "monto": round(isr_a_cargo, 2),
-            "monto_estimado": round(isr_a_cargo, 2),
-            "vencimiento": vencimiento.isoformat(),
-            "periodicidad": "mensual",
-            "accion": "pagar",
-            "nota": "Estimación con base en CFDIs y parámetros del régimen. Verifica en el portal del SAT.",
-        }
-        sugerencias_pago.append(item)
-        acciones.append({
-            "tipo": "pago_provisional_isr",
-            "titulo": "Registrar / pagar ISR provisional",
-            "monto": item["monto"],
-            "vencimiento": item["vencimiento"],
-        })
-    if flags.get("iva", True) and iva_a_cargo > 0:
-        item = {
-            "concepto": "IVA a cargo",
-            "clave": "iva",
-            "monto": round(iva_a_cargo, 2),
-            "monto_estimado": round(iva_a_cargo, 2),
-            "vencimiento": vencimiento.isoformat(),
-            "periodicidad": "mensual",
-            "accion": "pagar",
-            "nota": "IVA trasladado menos acreditable del periodo (informativo).",
-        }
-        sugerencias_pago.append(item)
-        acciones.append({
-            "tipo": "pago_iva",
-            "titulo": "Pagar IVA a cargo",
-            "monto": item["monto"],
-            "vencimiento": item["vencimiento"],
-        })
-    elif flags.get("iva", True) and iva_a_favor > 0:
-        item = {
-            "concepto": "IVA a favor",
-            "clave": "iva_favor",
-            "monto": round(iva_a_favor, 2),
-            "monto_estimado": round(iva_a_favor, 2),
-            "vencimiento": None,
-            "periodicidad": "mensual",
-            "accion": "acreditar",
-            "nota": "Saldo a favor estimado; puedes acreditarlo en periodos siguientes o solicitar devolución.",
-        }
-        sugerencias_pago.append(item)
-        acciones.append({
-            "tipo": "iva_a_favor",
-            "titulo": "Revisar IVA a favor",
-            "monto": item["monto"],
-            "vencimiento": None,
-        })
-
-    if ret_isr > 0 or ret_iva > 0:
-        item = {
-            "concepto": "Entero de retenciones",
-            "clave": "retenciones",
-            "monto": round(ret_isr + ret_iva, 2),
-            "monto_estimado": round(ret_isr + ret_iva, 2),
-            "vencimiento": vencimiento.isoformat(),
-            "periodicidad": "mensual",
-            "accion": "pagar",
-            "nota": f"ISR retenido ${ret_isr:,.2f} + IVA retenido ${ret_iva:,.2f} (informativo).",
-        }
-        sugerencias_pago.append(item)
-        acciones.append({
-            "tipo": "entero_retenciones",
-            "titulo": "Enterar retenciones",
-            "monto": item["monto"],
-            "vencimiento": item["vencimiento"],
-        })
-
-    if ish > 0:
-        item = {
-            "concepto": "Impuesto sobre hospedaje (ISH)",
-            "clave": "ish",
-            "monto": round(ish, 2),
-            "monto_estimado": round(ish, 2),
-            "vencimiento": vencimiento.isoformat(),
-            "periodicidad": "mensual",
-            "accion": "pagar",
-            "nota": "ISH estatal detectado en los CFDI emitidos del periodo (informativo).",
-        }
-        sugerencias_pago.append(item)
-        acciones.append({
-            "tipo": "pago_ish",
-            "titulo": "Pagar ISH del periodo",
-            "monto": item["monto"],
-            "vencimiento": item["vencimiento"],
-        })
-
-    if flags.get("aplica_diot") and any(d.get("tipo") == "DIOT" for d in declaraciones):
-        acciones.append({
-            "tipo": "presentar_diot",
-            "titulo": "Presentar DIOT del periodo",
-            "monto": 0,
-            "vencimiento": vencimiento.isoformat(),
-        })
-
     for decl in declaraciones:
         if decl["periodicidad"] == "mensual":
-            decl["proximo_vencimiento"] = vencimiento.isoformat()
             decl["periodo_corresponde"] = f"{MESES[mes]} {anio}"
         elif decl["periodicidad"] == "bimestral":
             bimestre = (mes + 1) // 2
-            decl["proximo_vencimiento"] = vencimiento.isoformat()
             decl["periodo_corresponde"] = f"Bimestre {bimestre} · {anio}"
         else:
-            decl["proximo_vencimiento"] = decl.get("mes_presentacion")
             decl["periodo_corresponde"] = f"Ejercicio {anio}"
-
-    total_a_pagar = round(
-        sum(
-            float(s.get("monto") or 0)
-            for s in sugerencias_pago
-            if s.get("accion") == "pagar"
-        ),
-        2,
-    )
 
     calculo_isr_tipo = rules.get("calculo_isr_tipo")
 
     return {
         "aviso": (
-            "Este resumen es solo informativo y no sustituye el cálculo oficial del SAT. "
-            "Valida montos, coeficientes y fechas exactas en el portal del SAT antes de pagar o presentar."
+            "Este resumen consulta importes fiscales persistidos en declaraciones, CFDI y pólizas. "
+            "Los importes netos no registrados se muestran como sin registro."
         ),
         "empresa": {
             "id": empresa_id,
@@ -326,29 +209,47 @@ def construir_resumen_fiscal_sat(
         },
         "periodo": {"mes": mes, "anio": anio, "etiqueta": f"{MESES[mes]} {anio}"},
         "totales": {
-            "isr_a_cargo": round(isr_a_cargo, 2),
-            "iva_a_cargo": round(iva_a_cargo, 2),
-            "iva_a_favor": round(iva_a_favor, 2),
+            "isr_a_cargo": isr_a_cargo,
+            "iva_a_cargo": iva_a_cargo,
+            "iva_a_favor": iva_a_favor,
             "retenciones": round(ret_isr + ret_iva, 2),
             "ish": round(ish, 2),
-            "total_a_pagar": total_a_pagar,
+            "total_a_pagar": None,
         },
         "impuestos": {
             "isr": {
-                "resumen": "Pago provisional estimado según régimen configurado.",
-                "a_cargo": round(isr_a_cargo, 2),
+                "resumen": "Importe a cargo de la declaración fiscal registrada.",
+                "a_cargo": isr_a_cargo,
                 "aplica": flags.get("isr", True),
-                "detalle": isr,
+                "detalle": (
+                    {
+                        "declaracion_id": isr_declarado.id,
+                        "estado": getattr(isr_declarado.estado, "value", isr_declarado.estado),
+                    }
+                    if isr_declarado
+                    else None
+                ),
             },
             "iva": {
-                "resumen": "IVA del periodo = trasladado − acreditable − retenciones (simplificado).",
-                "a_cargo": round(iva_a_cargo, 2),
-                "a_favor": round(iva_a_favor, 2),
+                "resumen": "Importe a cargo/a favor de la declaración fiscal registrada.",
+                "a_cargo": iva_a_cargo,
+                "a_favor": iva_a_favor,
                 "aplica": flags.get("iva", True),
-                "detalle": iva,
+                "detalle": {
+                    "trasladado": trasladados["total_iva_trasladado"],
+                    "acreditable": acreditables["total_iva_acreditable"],
+                    "trasladado_polizas": trasladados["iva_desde_polizas"],
+                    "acreditable_polizas": acreditables["iva_desde_polizas"],
+                    "declaracion_id": iva_declarado.id if iva_declarado else None,
+                    "estado": (
+                        getattr(iva_declarado.estado, "value", iva_declarado.estado)
+                        if iva_declarado
+                        else None
+                    ),
+                },
             },
             "retenciones": {
-                "resumen": "Retenciones de ISR/IVA detectadas en CFDIs del periodo.",
+                "resumen": "Retenciones registradas en las pólizas del periodo.",
                 "isr": round(ret_isr, 2),
                 "iva": round(ret_iva, 2),
                 "total": round(ret_isr + ret_iva, 2),
@@ -360,14 +261,25 @@ def construir_resumen_fiscal_sat(
                 ),
                 "a_cargo": round(ish, 2),
                 "aplica": flags.get("ish", False),
-                "detalle": {"ish": round(ish, 2)},
+                "detalle": {"origen": "cfdi_ingreso"},
             },
         },
+        "declaraciones_registradas": [
+            {
+                "id": declaracion.id,
+                "tipo": tipo,
+                "estado": getattr(declaracion.estado, "value", declaracion.estado),
+                "version": declaracion.version,
+                "monto_a_cargo": _monto_declarado(declaracion, "monto_a_cargo"),
+                "monto_a_favor": _monto_declarado(declaracion, "monto_a_favor"),
+            }
+            for tipo, declaracion in declaraciones_registradas.items()
+        ],
         "impuestos_aplicables": impuestos_reg["aplicables"],
         "impuestos_no_aplicables": impuestos_reg["no_aplicables"],
-        "acciones": acciones,
+        "acciones": [],
         "declaraciones": declaraciones,
-        "sugerencias_pago": sugerencias_pago,
+        "sugerencias_pago": [],
         "obligaciones_regimen": {
             "calculo_isr_tipo": getattr(calculo_isr_tipo, "value", calculo_isr_tipo),
             "exige_diot": bool(rules.get("exige_diot")),

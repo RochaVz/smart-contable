@@ -19,11 +19,14 @@ from app.core.exceptions import (
     DatabaseException,
 )
 
+from app.core.dependencies import get_current_user
+from app.core.permissions import es_admin_app
 from app.models.usuario import Usuario
 
 from app.schemas.usuario import (
     UsuarioCreate,
     PasswordResetRequest,
+    UsuarioActual,
     UsuarioResponse,
     Token
 )
@@ -170,6 +173,22 @@ def login(
     except Exception as e:
         logger.error("Error inesperado durante login", exc_info=True)
         raise DatabaseException("Error inesperado durante login") from e
+
+
+@router.get(
+    "/me",
+    response_model=UsuarioActual,
+    summary="Usuario autenticado",
+)
+def usuario_actual(current_user: Usuario = Depends(get_current_user)):
+    return UsuarioActual(
+        id=current_user.id,
+        nombre=current_user.nombre,
+        email=current_user.email,
+        rol=current_user.rol,
+        activo=bool(current_user.activo),
+        es_admin_app=es_admin_app(current_user),
+    )
 
 
 @router.post(

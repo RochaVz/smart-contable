@@ -91,7 +91,7 @@ test('score sin datos devuelve nivel sin-datos', () => {
   assert.equal(nivelDeScore(30).id, 'critica');
 });
 
-test('alertas detectan caída, concentración y vencimientos', () => {
+test('alertas detectan riesgos financieros y no priorizan pagos fiscales estimados', () => {
   const s = buildExecutiveSnapshot({
     facturas,
     mes: 9,
@@ -105,9 +105,8 @@ test('alertas detectan caída, concentración y vencimientos', () => {
   const ids = alertas.map((a) => a.id);
   assert.ok(ids.includes('caida-ingresos'));
   assert.ok(ids.includes('concentracion-clientes'));
-  assert.ok(ids.includes('pago-iva'));
+  assert.ok(!ids.includes('pago-iva'));
   assert.equal(alertas.find((a) => a.id === 'caida-ingresos').severity, 'critical');
-  assert.equal(alertas.find((a) => a.id === 'pago-iva').severity, 'warning');
   assert.equal(alertas[0].severity, 'critical');
 });
 
@@ -130,13 +129,18 @@ test('recomendaciones reflejan alertas', () => {
   assert.ok(recs.every((r) => typeof r === 'object' && r.texto));
 });
 
-test('impuestos detalle expone IVA/ISR con vencimiento', () => {
+test('el snapshot usa importes fiscales persistidos sin generar prioridades de pago', () => {
   const s = buildExecutiveSnapshot({
     facturas,
     mes: 9,
     anio: 2026,
     resumenSat: {
-      totales: { total_a_pagar: 20450 },
+      totales: {
+        isr_a_cargo: 8450,
+        iva_a_cargo: 12000,
+        retenciones: 500,
+        total_a_pagar: 20450,
+      },
       impuestos: {
         iva_por_pagar: 12000,
         iva_acreditable: 3000,
@@ -151,10 +155,10 @@ test('impuestos detalle expone IVA/ISR con vencimiento', () => {
     },
   });
   assert.equal(s.impuestosDetalle.totalPagar, 20450);
-  assert.ok(s.impuestosDetalle.items.some((i) => i.id.includes('iva') && i.accion === 'pagar'));
-  assert.ok(s.impuestosDetalle.items.some((i) => i.id.includes('isr') && i.accion === 'pagar'));
+  assert.ok(s.impuestosDetalle.items.some((i) => i.id === 'iva' && i.accion === 'pagar'));
+  assert.ok(s.impuestosDetalle.items.some((i) => i.id === 'isr' && i.accion === 'pagar'));
   assert.ok(s.impuestosDetalle.desgloseRegimen.length > 0);
-  assert.ok(s.accionesFiscales.length > 0);
+  assert.ok(!s.accionesFiscales.some((a) => ['declarar-iva', 'declarar-isr', 'enterar-retenciones'].includes(a.id)));
   assert.ok(s.kpiAhorro.cfdiAnalizados >= 3);
 });
 
@@ -182,12 +186,9 @@ test('el snapshot expone totales SAT para las tarjetas de impuestos', () => {
   assert.equal(s.impuestosDetalle.isrProvisional, 8450);
 });
 
-test('recupera los importes fiscales cuando el backend entrega totales en ceros', async () => {
+test('conserva los ceros autoritativos sin sustituirlos por valores del detalle', async () => {
   const { construirImpuestosDetalle } = await import('./financialHealth.js');
 
-  // Respuesta de un backend con versión anterior al anidamiento `saldo` /
-  // `periodo_actual`: `totales` y `sugerencias_pago` llegan en ceros, pero el
-  // bloque `detalle` conserva el cálculo real del motor fiscal.
   const detalle = construirImpuestosDetalle({
     regimen: { clave: '601', nombre: 'Sociedad Anónima' },
     periodo: { mes: 8, anio: 2026 },
@@ -226,15 +227,14 @@ test('recupera los importes fiscales cuando el backend entrega totales en ceros'
     obligaciones_regimen: { regimen: '601', aplica_isr: true, aplica_iva: true },
   });
 
-  assert.equal(detalle.ivaACargo, 9713.03);
-  assert.equal(detalle.isrProvisional, 8450.5);
-  assert.equal(detalle.retenciones, 500);
-  assert.ok(Math.abs(detalle.totalPagar - 18663.53) < 0.01, `totalPagar=${detalle.totalPagar}`);
-  assert.ok(detalle.desgloseRegimen.some((d) => d.id === 'iva' && d.monto === 9713.03));
-  assert.ok(detalle.desgloseRegimen.some((d) => d.id === 'isr' && d.monto === 8450.5));
+  assert.equal(detalle.ivaACargo, 0);
+  assert.equal(detalle.isrProvisional, 0);
+  assert.equal(detalle.retenciones, 0);
+  assert.equal(detalle.totalPagar, 0);
+  assert.ok(!detalle.items.some((item) => item.id === 'iva' || item.id === 'isr'));
 });
 
-test('el snapshot mantiene el total a pagar con totales del backend en ceros', () => {
+test('un total no registrado permanece nulo y no se suma en el snapshot', () => {
   const s = buildExecutiveSnapshot({
     facturas,
     mes: 8,
@@ -245,7 +245,7 @@ test('el snapshot mantiene el total a pagar con totales del backend en ceros', (
         iva_a_cargo: 0,
         iva_a_favor: 0,
         retenciones: 0,
-        total_a_pagar: 0,
+        total_a_pagar: null,
       },
       impuestos: {
         isr: { a_cargo: 0, detalle: { saldo: { isr_a_cargo: 8450.5 } } },
@@ -255,16 +255,16 @@ test('el snapshot mantiene el total a pagar con totales del backend en ceros', (
     },
   });
 
-  assert.equal(s.impuestosDetalle.ivaACargo, 9713.03);
-  assert.equal(s.impuestosDetalle.isrProvisional, 8450.5);
-  assert.ok(s.impuestosPendientes > 0, `impuestosPendientes=${s.impuestosPendientes}`);
+  assert.equal(s.impuestosDetalle.ivaACargo, 0);
+  assert.equal(s.impuestosDetalle.isrProvisional, 0);
+  assert.equal(s.impuestosPendientes, null);
 });
 
 test('desgloseRegimen desglosa ISR, IVA y retenciones según régimen fiscal', async () => {
   const { construirImpuestosDetalle } = await import('./financialHealth.js');
   const detalleResico = construirImpuestosDetalle({
     regimen: { clave: '626', nombre: 'Régimen Simplificado de Confianza' },
-    totales: { total_a_pagar: 15400 },
+    totales: { isr_a_cargo: 3400, iva_a_cargo: 12000, total_a_pagar: 15400 },
     impuestos: {
       isr: { a_cargo: 3400, tasa_efectiva: '2.0%', resumen: '1%-2.5% sobre ingresos cobrados' },
       iva: { a_cargo: 12000, a_favor: 0 },
@@ -398,4 +398,3 @@ test('sin ISH no se agrega el concepto al desglose ni al total a pagar', async (
   assert.ok(!detalle.desgloseRegimen.some((d) => d.id === 'ish'));
   assert.ok(Math.abs(detalle.totalPagar - 18663.53) < 0.01, `totalPagar=${detalle.totalPagar}`);
 });
-

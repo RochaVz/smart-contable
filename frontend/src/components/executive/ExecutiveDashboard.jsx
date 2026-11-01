@@ -42,7 +42,7 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
     { nombre: etiquetaPeriodo(mes, anio), Ingresos: s.ingresos, Gastos: s.gastos },
   ];
 
-  const totalImpuestos = s.impuestosDetalle?.totalPagar ?? s.impuestosPendientes;
+  const totalImpuestos = s.impuestosDetalle?.totalPagar;
   const desglose = s.impuestosDetalle?.desgloseRegimen || [];
   const regimenDesc = s.impuestosDetalle?.regimenNombre
     || s.obligacionesRegimen?.regimen
@@ -62,9 +62,6 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
             {!loading && totalImpuestos != null && totalImpuestos > 0 ? (
               <p className="mt-2 text-sm font-medium opacity-90">
                 Impuestos por pagar: {formatMoney(totalImpuestos)}
-                {s.impuestosDetalle?.vencimientoPrincipal
-                  ? ` · vence ${s.impuestosDetalle.vencimientoPrincipal}`
-                  : ''}
               </p>
             ) : null}
           </div>
@@ -113,7 +110,7 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
           value={totalImpuestos == null ? '—' : formatMoney(totalImpuestos, { compact: true })}
           icon={Receipt}
           tone={totalImpuestos > 0 ? 'warning' : 'success'}
-          hint={esLocal ? 'Requiere negocio sincronizado' : (s.impuestosDetalle?.vencimientoPrincipal ? `Vence ${s.impuestosDetalle.vencimientoPrincipal}` : 'IVA + ISR + retenciones')}
+          hint={esLocal ? 'Requiere negocio sincronizado' : (totalImpuestos == null ? 'Neto total no registrado' : 'Importe registrado')}
           loading={loading}
           onClick={() => onNavigate('impuestos')}
         >
@@ -128,7 +125,7 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
                 </span>
               </div>
               <div className="flex flex-col gap-1">
-                {(desglose || []).map((imp) => (
+                {desglose.map((imp) => (
                   <div key={imp.id} className="flex items-center justify-between gap-2">
                     <span className="text-slate-700 dark:text-slate-300 font-medium truncate text-xs" title={imp.label}>
                       {imp.label}
@@ -145,6 +142,11 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
                     </span>
                   </div>
                 ))}
+                {desglose.length === 0 && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    No hay importes netos registrados para este periodo.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -220,9 +222,8 @@ export default function ExecutiveDashboard({ lectura, mes, anio, onNavigate }) {
 
 function mensajeEjecutivo(s, score, totalImpuestos) {
   if (score.score == null) return 'Carga tus CFDI para ver el estado de tu negocio';
-  if (totalImpuestos > 0 && s.impuestosDetalle?.vencimientoPrincipal) {
-    const diasHint = s.impuestosDetalle.vencimientoPrincipal;
-    if (s.utilidad < 0) return `Pérdida en el periodo · ${formatMoney(totalImpuestos)} de impuestos (vence ${diasHint})`;
+  if (totalImpuestos > 0) {
+    if (s.utilidad < 0) return `Pérdida en el periodo · ${formatMoney(totalImpuestos)} de impuestos registrados`;
     return `A pagar ${formatMoney(totalImpuestos)} · salud ${score.nivel.label.toLowerCase()}`;
   }
   if (s.utilidad < 0) return 'Este periodo cierra con pérdida: revisa gastos y cobranza';

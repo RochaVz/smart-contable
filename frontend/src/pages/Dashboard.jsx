@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import {
   Building2, PlusCircle, LogOut, Search, ArrowRight, ShieldCheck,
-  Trash2, Loader2, ChevronRight, Upload,
+  Trash2, Loader2, ChevronRight, Upload, UserCog,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import NewCompanyModal from '../components/NewCompanyModal';
@@ -26,7 +26,16 @@ const Dashboard = ({ onLogout }) => {
   const [newCompanyModalKey, setNewCompanyModalKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingCompanyId, setDeletingCompanyId] = useState(null);
+  const [esAdminApp, setEsAdminApp] = useState(false);
   const hasLoaded = useRef(Boolean(getNavigationCache(empresasCacheKey)));
+
+  useEffect(() => {
+    let activo = true;
+    api.get('/auth/me')
+      .then(({ data }) => { if (activo) setEsAdminApp(Boolean(data.es_admin_app)); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
 
   const fetchEmpresas = useCallback(async () => {
     try {
@@ -369,12 +378,23 @@ const Dashboard = ({ onLogout }) => {
             <SmartContableMark size="sm" className="rounded-xl" />
             <span className="truncate text-lg font-black tracking-tight text-white sm:text-xl">SmartContable</span>
           </div>
-          <button 
-            onClick={onLogout} 
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-red-400 sm:text-base"
-          >
-            <LogOut className="w-5 h-5" /> <span>Salir</span>
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {esAdminApp ? (
+              <button
+                type="button"
+                onClick={() => navigate('/admin')}
+                className="flex min-h-11 items-center gap-2 rounded-xl border border-amber-500/40 px-3 text-sm font-bold text-amber-400 transition-colors hover:bg-amber-500/10"
+              >
+                <UserCog className="h-5 w-5" /> <span>Administrar</span>
+              </button>
+            ) : null}
+            <button
+              onClick={onLogout}
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-red-400 sm:text-base"
+            >
+              <LogOut className="w-5 h-5" /> <span>Salir</span>
+            </button>
+          </div>
         </div>
       </nav>
 

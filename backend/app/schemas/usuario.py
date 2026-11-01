@@ -38,6 +38,10 @@ class UsuarioResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UsuarioActual(UsuarioResponse):
+    es_admin_app: bool = False
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(default='mysql+pymysql://sat_app:Admin1234!@localhost:3306/sat_contabilidad')
     SECRET_KEY: str = Field(default='fe8f070d9fc50a93642aa0f3bb73fd1a88fcfe7d655341871345cbb7bc8091a2')
     LOCAL_PASSWORD_RESET_KEY: str = "local-recovery-key"
+    ADMIN_EMAIL: str = "roca_car.t@hotmail.com"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     REDIS_URL: str = "redis://localhost:6379/0"
