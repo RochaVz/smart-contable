@@ -73,7 +73,7 @@ $robocopyArgs += $excludeFiles
 if ($LASTEXITCODE -ge 8) { throw "Robocopy fallo con codigo $LASTEXITCODE al preparar el artefacto." }
 
 Write-Host "[2/4] Compresion del artefacto"
-Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $zipPath -CompressionLevel Optimize -Force
+Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $zipPath -CompressionLevel Optimal -Force
 $sizeMB = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 Write-Host "  $zipPath ($sizeMB MB)"
 
