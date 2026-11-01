@@ -3,12 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import {
   Building2, PlusCircle, LogOut, Search, ArrowRight, ShieldCheck,
-  Trash2, Loader2, ChevronRight, Upload, UserCog,
+  Trash2, Loader2, ChevronRight, Upload,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import NewCompanyModal from '../components/NewCompanyModal';
 import SmartContableMark from '../components/SmartContableMark';
 import DeviceBackupPanel from '../components/DeviceBackupPanel';
+import AdminUsersButton from '../components/AdminUsersButton';
 import { deleteLocalCompany, getLocalCompanies, importDeviceBackup } from '../services/localBackup';
 import { resetOnboardingForRfc } from '../services/resetOnboarding';
 import { getNavigationCache, setNavigationCache } from '../services/navigationCache';
@@ -26,16 +27,7 @@ const Dashboard = ({ onLogout }) => {
   const [newCompanyModalKey, setNewCompanyModalKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingCompanyId, setDeletingCompanyId] = useState(null);
-  const [esAdminApp, setEsAdminApp] = useState(false);
   const hasLoaded = useRef(Boolean(getNavigationCache(empresasCacheKey)));
-
-  useEffect(() => {
-    let activo = true;
-    api.get('/auth/me')
-      .then(({ data }) => { if (activo) setEsAdminApp(Boolean(data.es_admin_app)); })
-      .catch(() => {});
-    return () => { activo = false; };
-  }, []);
 
   const fetchEmpresas = useCallback(async () => {
     try {
@@ -379,15 +371,7 @@ const Dashboard = ({ onLogout }) => {
             <span className="truncate text-lg font-black tracking-tight text-white sm:text-xl">SmartContable</span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {esAdminApp ? (
-              <button
-                type="button"
-                onClick={() => navigate('/admin')}
-                className="flex min-h-11 items-center gap-2 rounded-xl border border-amber-500/40 px-3 text-sm font-bold text-amber-400 transition-colors hover:bg-amber-500/10"
-              >
-                <UserCog className="h-5 w-5" /> <span>Administrar</span>
-              </button>
-            ) : null}
+            <AdminUsersButton />
             <button
               onClick={onLogout}
               className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-red-400 sm:text-base"

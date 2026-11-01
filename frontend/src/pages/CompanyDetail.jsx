@@ -12,6 +12,7 @@ import ClassifyModal from '../components/ClassifyModal';
 import FacturaDetailModal from '../components/FacturaDetailModal';
 import ExportPreviewModal from '../components/ExportPreviewModal';
 import CompanyShell from '../components/executive/CompanyShell';
+import AdminUsersButton from '../components/AdminUsersButton';
 import ExecutiveDashboard from '../components/executive/ExecutiveDashboard';
 import InteligenciaView from '../components/executive/InteligenciaView';
 import InformesView from '../components/executive/InformesView';
@@ -1421,6 +1422,7 @@ const CompanyDetail = ({ vista = null }) => {
 
   const accionesTopbar = (
     <>
+      <AdminUsersButton />
       <div className="sc-field flex items-center gap-1.5 !py-1.5">
         <Calendar className="sc-primary h-4 w-4 shrink-0" />
         <select
