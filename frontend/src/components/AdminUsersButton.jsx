@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { UserCog } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 import api from '../services/api';
 
 export default function AdminUsersButton() {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => localStorage.getItem('es_admin_app') === '1');
 
   useEffect(() => {
     let active = true;
-    api.get('/auth/me')
-      .then(({ data }) => {
-        if (active) setVisible(Boolean(data.es_admin_app));
-      })
-      .catch(() => {
-        if (active) toast.error('No se pudo verificar el acceso de administrador');
-      });
+    const verificar = (intentos) =>
+      api.get('/auth/me')
+        .then(({ data }) => {
+          const esAdmin = Boolean(data.es_admin_app);
+          localStorage.setItem('es_admin_app', esAdmin ? '1' : '0');
+          if (active) setVisible(esAdmin);
+        })
+        .catch((error) => {
+          if (error?.response?.status === 401) return;
+          if (intentos > 0 && active) setTimeout(() => verificar(intentos - 1), 3000);
+        });
+    verificar(2);
 
     return () => {
       active = false;
