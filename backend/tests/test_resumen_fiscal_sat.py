@@ -23,7 +23,11 @@ def _declaracion(tipo, monto_a_cargo, monto_a_favor=0):
     )
 
 
-def _reportes(monkeypatch, ish_cfdi=0, iva=0, acreditable=0, ret_isr=0, ret_iva=0):
+def _reportes(monkeypatch, ish_cfdi=0, iva=0, acreditable=0, ret_isr=0, ret_iva=0, isr_estimado=None):
+    monkeypatch.setattr(
+        "app.services.resumen_fiscal_sat.calcular_isr_provisional",
+        lambda *_args: {"isr_estimado": isr_estimado},
+    )
     monkeypatch.setattr(
         "app.services.resumen_fiscal_sat.generar_impuestos_trasladados",
         lambda *_args: {
@@ -93,13 +97,15 @@ def test_resumen_no_infiere_importes_netos_sin_declaraciones(monkeypatch):
         "app.services.resumen_fiscal_sat._declaraciones_registradas",
         lambda *_args: {},
     )
-    _reportes(monkeypatch, ish_cfdi=250, iva=1000, acreditable=200, ret_isr=30, ret_iva=20)
+    _reportes(monkeypatch, ish_cfdi=250,     iva=1000, acreditable=200, ret_isr=30, ret_iva=20, isr_estimado=345.678)
 
     resumen = construir_resumen_fiscal_sat(db, empresa_id=1, mes=4, anio=2026)
 
-    assert resumen["totales"]["isr_a_cargo"] is None
-    assert resumen["totales"]["iva_a_cargo"] is None
-    assert resumen["totales"]["iva_a_favor"] is None
+    assert resumen["totales"]["isr_a_cargo"] == 345.68
+    assert resumen["impuestos"]["isr"]["origen"] == "estimado"
+    assert resumen["totales"]["iva_a_cargo"] == 780
+    assert resumen["totales"]["iva_a_favor"] == 0
+    assert resumen["impuestos"]["iva"]["origen"] == "estimado"
     assert resumen["totales"]["total_a_pagar"] is None
     assert resumen["totales"]["ish"] == 250
     assert resumen["totales"]["retenciones"] == 50

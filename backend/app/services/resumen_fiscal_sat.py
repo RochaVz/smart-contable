@@ -20,6 +20,7 @@ from app.models.fiscal import (
     TipoDeclaracionFiscal,
     TipoPeriodoFiscal,
 )
+from app.services.calculos_fiscales import calcular_isr_provisional
 from app.services.informes_contables import (
     generar_impuestos_acreditables,
     generar_impuestos_retenidos,
@@ -174,10 +175,30 @@ def construir_resumen_fiscal_sat(
     retenciones = generar_impuestos_retenidos(db, empresa_id, mes, anio)
 
     isr_a_cargo = _monto_declarado(isr_declarado, "monto_a_cargo")
+    isr_origen = "declaracion" if isr_declarado is not None else None
+    if isr_declarado is None:
+        # Sin declaración registrada: estimar el ISR provisional según el régimen.
+        isr_calculo = calcular_isr_provisional(db, empresa_id, mes, anio)
+        estimado = isr_calculo.get("isr_estimado")
+        if estimado is not None:
+            isr_a_cargo = round(float(estimado), 2)
+            isr_origen = "estimado"
     iva_a_cargo = _monto_declarado(iva_declarado, "monto_a_cargo")
     iva_a_favor = _monto_declarado(iva_declarado, "monto_a_favor")
     ret_isr = retenciones["total_isr_retenido"]
     ret_iva = retenciones["total_iva_retenido"]
+    iva_origen = "declaracion" if iva_declarado is not None else None
+    if iva_declarado is None:
+        # Sin declaración registrada: estimar IVA del periodo desde CFDI/pólizas.
+        neto = round(
+            float(trasladados["total_iva_trasladado"])
+            - float(acreditables["total_iva_acreditable"])
+            - float(ret_iva or 0),
+            2,
+        )
+        iva_a_cargo = max(neto, 0.0)
+        iva_a_favor = max(-neto, 0.0)
+        iva_origen = "estimado"
     ish = trasladados["total_impuestos_locales_cfdi"]
 
     impuestos_reg = impuestos_aplicables_regimen(rules)
@@ -218,7 +239,12 @@ def construir_resumen_fiscal_sat(
         },
         "impuestos": {
             "isr": {
-                "resumen": "Importe a cargo de la declaración fiscal registrada.",
+                "resumen": (
+                    "Importe a cargo de la declaración fiscal registrada."
+                    if isr_origen != "estimado"
+                    else "Estimado según el régimen fiscal (sin declaración registrada)."
+                ),
+                "origen": isr_origen,
                 "a_cargo": isr_a_cargo,
                 "aplica": flags.get("isr", True),
                 "detalle": (
@@ -231,7 +257,12 @@ def construir_resumen_fiscal_sat(
                 ),
             },
             "iva": {
-                "resumen": "Importe a cargo/a favor de la declaración fiscal registrada.",
+                "resumen": (
+                    "Importe a cargo/a favor de la declaración fiscal registrada."
+                    if iva_origen == "declaracion"
+                    else "Estimado: IVA trasladado - acreditable - retenido (sin declaración registrada)."
+                ),
+                "origen": iva_origen,
                 "a_cargo": iva_a_cargo,
                 "a_favor": iva_a_favor,
                 "aplica": flags.get("iva", True),

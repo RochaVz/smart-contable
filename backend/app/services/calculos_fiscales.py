@@ -256,7 +256,7 @@ _TABLA_RESICO_PF = (
     (Decimal("50000"), Decimal("1.10")),
     (Decimal("83333.33"), Decimal("1.50")),
     (Decimal("208333.33"), Decimal("2.00")),
-    (Decimal("3500000"), Decimal("2.50")),
+    (Decimal("291666.67"), Decimal("2.50")),
 )
 
 
