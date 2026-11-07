@@ -20,7 +20,6 @@ import ConfiguracionView from '../components/executive/ConfiguracionView';
 import BalancePanel from '../components/executive/BalancePanel';
 import useExecutiveSnapshot from '../hooks/useExecutiveSnapshot';
 import PolizasPanel from '../components/PolizasPanel';
-import ComisionesBancoPanel from '../components/ComisionesBancoPanel';
 import ConciliacionBancariaPanel from '../components/ConciliacionBancariaPanel';
 import InformesPanel from '../components/InformesPanel';
 import LocalConciliacionPanel from '../components/LocalConciliacionPanel';
@@ -1555,8 +1554,6 @@ const CompanyDetail = ({ vista = null }) => {
         return (
           <ConfiguracionView
             empresa={empresa}
-            empresaId={id}
-            esLocal={isLocalCompany}
             renderFuente={renderFuente}
           />
         );

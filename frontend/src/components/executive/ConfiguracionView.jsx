@@ -1,5 +1,4 @@
-import { Building2, Landmark, Scale } from 'lucide-react';
-import ComisionesBancoPanel from '../ComisionesBancoPanel';
+import { Building2, Scale } from 'lucide-react';
 
 const Seccion = ({ icono: Icon, titulo, descripcion, children }) => (
   <section className="sc-card space-y-4 p-5">
@@ -17,7 +16,7 @@ const Seccion = ({ icono: Icon, titulo, descripcion, children }) => (
 );
 
 /** Configuración del negocio: datos generales, régimen fiscal y comisiones bancarias. */
-export default function ConfiguracionView({ empresa, empresaId, esLocal, renderFuente }) {
+export default function ConfiguracionView({ empresa, renderFuente }) {
   return (
     <div className="space-y-6">
       <Seccion icono={Building2} titulo="Datos del negocio" descripcion="Identificación fiscal registrada en SmartContable">
@@ -39,12 +38,6 @@ export default function ConfiguracionView({ empresa, empresaId, esLocal, renderF
         {renderFuente({ tipo: 'fiscal', tab: 'config' })}
       </Seccion>
 
-      {/* Temporalmente oculto: Comisiones bancarias */}
-      {false && (
-        <Seccion icono={Landmark} titulo="Comisiones bancarias" descripcion="Configura las comisiones por banco antes de generar pólizas con tarjeta">
-          <ComisionesBancoPanel empresaId={empresaId} />
-        </Seccion>
-      )}
     </div>
   );
 }

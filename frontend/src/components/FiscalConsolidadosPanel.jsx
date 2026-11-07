@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Receipt, RefreshCw } from 'lucide-react';
+import { ChevronDown, Download, Loader2, Receipt, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import ImpuestosSatCards from './ImpuestosSatCards';
+import { downloadCsv } from '../utils/csv';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -32,9 +33,7 @@ const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeri
   const [loadingResumen, setLoadingResumen] = useState(false);
   const [bloquesAbiertos, setBloquesAbiertos] = useState({
     impuestos: true,
-    declaraciones: true,
-    resultados: true,
-    parseados: true,
+    parseados: false,
   });
 
   const toggleBloque = (id) => {
@@ -174,112 +173,103 @@ const FiscalConsolidadosPanel = ({ empresa, mes: mesProp, anio: anioProp, onPeri
   );
 };
 
-const ResultadosParseados = ({ data }) => {
+const ResultadosParseados = ({ data, open, onToggle }) => {
   const cfdis = [
     ...(data.iva?.cfdi_ingresos || []),
     ...(data.iva?.cfdi_egresos || []),
   ];
-  const isr = data.isr?.totales_periodo || {};
-  const iva = data.iva?.totales_periodo || {};
-  const retenciones = data.retenciones?.totales || {};
-  const ish = data.ish?.totales || {};
+  const periodo = data.isr?.periodo || data.iva?.periodo || {};
+  const filas = cfdis.map((cfdi) => ({
+    UUID: cfdi.uuid || '',
+    Tipo: cfdi.emitido_por_empresa ? 'Emitido' : 'Recibido',
+    Emisor: cfdi.nombre_emisor || cfdi.rfc_emisor || '',
+    Receptor: cfdi.nombre_receptor || cfdi.rfc_receptor || '',
+    Fecha: cfdi.fecha_emision ? String(cfdi.fecha_emision).slice(0, 10) : '',
+    Subtotal: cfdi.subtotal ?? '',
+    'IVA trasladado': cfdi.iva_trasladado ?? '',
+    'IVA retenido': cfdi.iva_retenido ?? '',
+    'ISR retenido': cfdi.isr_retenido ?? '',
+    'ISH / local': cfdi.impuestos_locales ?? '',
+    Total: cfdi.total ?? '',
+  }));
+
+  const descargar = () => {
+    const anio = periodo.anio || 'periodo';
+    const mes = periodo.mes ? `_${String(periodo.mes).padStart(2, '0')}` : '';
+    downloadCsv(`cfdi_${anio}${mes}.csv`, filas);
+  };
 
   return (
-    <div className="space-y-5">
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        Importes extraídos de los CFDI guardados para el periodo. Son un desglose informativo y no sustituyen una declaración presentada.
-      </p>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <ParsedTaxCard
-          title="ISR · CFDI"
-          rows={[
-            ['Ingresos', money(isr.ingresos_acumulados)],
-            ['Deducciones', money(isr.deducciones_acumuladas)],
-            ['Base gravable', money(isr.base_gravable)],
-            ['ISR retenido', money(isr.retenciones_isr)],
-          ]}
-        />
-        <ParsedTaxCard
-          title="IVA · CFDI"
-          rows={[
-            ['Trasladado', money(iva.iva_trasladado)],
-            ['Acreditable', money(iva.iva_acreditable)],
-            ['Retenido', money(iva.iva_retenido)],
-            ['Neto informativo', money(iva.iva_a_cargo)],
-          ]}
-        />
-        <ParsedTaxCard
-          title="Retenciones · CFDI"
-          rows={[
-            ['ISR retenido', money(retenciones.isr_retenido)],
-            ['IVA retenido', money(retenciones.iva_retenido)],
-            ['Total', money(retenciones.total_retenciones)],
-          ]}
-        />
-        <ParsedTaxCard
-          title="ISH · CFDI"
-          rows={[
-            ['Impuestos locales', money(ish.ish)],
-            ['CFDI con ISH', String(ish.cfdi_con_ish ?? 0)],
-          ]}
-        />
+    <section className="sc-card overflow-hidden">
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex min-w-0 items-center gap-2 text-left"
+        >
+          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+          <span>
+            <span className="block text-sm font-bold text-slate-900 dark:text-white">
+              CFDI incluidos ({cfdis.length})
+            </span>
+            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+              {open ? 'Ocultar CFDI' : 'Mostrar CFDI'} · solo lectura
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={descargar}
+          disabled={cfdis.length === 0}
+          title="Descargar CFDI en formato CSV"
+          className="btn-ui btn-ui--secondary btn-ui--sm inline-flex shrink-0 items-center gap-1.5"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Descargar CFDI
+        </button>
       </div>
-
-      {cfdis.length === 0 ? (
-        <p className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-4 text-sm text-slate-500 dark:text-slate-400">
-          No hay CFDI parseados para el periodo seleccionado.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">CFDI incluidos ({cfdis.length})</h3>
-          {cfdis.map((cfdi) => (
-            <article
-              key={cfdi.uuid || cfdi.id}
-              className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5"
-            >
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="break-all text-xs font-bold text-slate-900 dark:text-white">{cfdi.uuid || 'CFDI sin UUID'}</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {cfdi.emitido_por_empresa ? 'Emitido' : 'Recibido'} · {cfdi.nombre_emisor || cfdi.rfc_emisor || 'Emisor sin nombre'}
-                    {' → '}
-                    {cfdi.nombre_receptor || cfdi.rfc_receptor || 'Receptor sin nombre'}
-                  </p>
+      <div className={`grid transition-all duration-300 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="overflow-hidden">
+          <div className="space-y-3 border-t border-[color:var(--sc-divider)] p-4 sm:p-5">
+            {cfdis.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                No hay CFDI parseados para el periodo seleccionado.
+              </p>
+            ) : cfdis.map((cfdi, index) => (
+              <article
+                key={cfdi.uuid || cfdi.id || index}
+                className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5"
+              >
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="break-all text-xs font-bold text-slate-900 dark:text-white">{cfdi.uuid || 'CFDI sin UUID'}</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {cfdi.emitido_por_empresa ? 'Emitido' : 'Recibido'} · {cfdi.nombre_emisor || cfdi.rfc_emisor || 'Emisor sin nombre'}
+                      {' → '}
+                      {cfdi.nombre_receptor || cfdi.rfc_receptor || 'Receptor sin nombre'}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                    {cfdi.fecha_emision ? String(cfdi.fecha_emision).slice(0, 10) : 'Sin fecha'}
+                  </span>
                 </div>
-                <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
-                  {cfdi.fecha_emision ? String(cfdi.fecha_emision).slice(0, 10) : 'Sin fecha'}
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-                <ParsedAmount label="Subtotal" value={cfdi.subtotal} />
-                <ParsedAmount label="IVA trasladado" value={cfdi.iva_trasladado} />
-                <ParsedAmount label="IVA retenido" value={cfdi.iva_retenido} />
-                <ParsedAmount label="ISR retenido" value={cfdi.isr_retenido} />
-                <ParsedAmount label="ISH / local" value={cfdi.impuestos_locales} />
-                <ParsedAmount label="Total CFDI" value={cfdi.total} />
-              </div>
-            </article>
-          ))}
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+                  <ParsedAmount label="Subtotal" value={cfdi.subtotal} />
+                  <ParsedAmount label="IVA trasladado" value={cfdi.iva_trasladado} />
+                  <ParsedAmount label="IVA retenido" value={cfdi.iva_retenido} />
+                  <ParsedAmount label="ISR retenido" value={cfdi.isr_retenido} />
+                  <ParsedAmount label="ISH / local" value={cfdi.impuestos_locales} />
+                  <ParsedAmount label="Total CFDI" value={cfdi.total} />
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
-      )}
-    </div>
+      </div>
+    </section>
   );
 };
-
-const ParsedTaxCard = ({ title, rows }) => (
-  <div className="rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5">
-    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{title}</p>
-    <dl className="mt-3 space-y-2">
-      {rows.map(([label, value]) => (
-        <div key={label} className="flex items-start justify-between gap-2 text-xs">
-          <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
-          <dd className="text-right font-mono font-bold text-slate-900 dark:text-white">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  </div>
-);
 
 const ParsedAmount = ({ label, value }) => (
   <div className="min-w-0">
@@ -336,6 +326,8 @@ const ResumenSatPanel = ({ data, detalleFiscal, loading, abiertos, onToggleBloqu
   const declaracionesRegistradas = data.declaraciones_registradas || [];
   const obligaciones = data.obligaciones_regimen || {};
   const totales = data.totales || {};
+  const regimenClave = data.regimen?.clave || data.empresa?.regimen_fiscal || '';
+  const regimenNombre = data.regimen?.descripcion || (regimenClave ? `Régimen ${regimenClave}` : 'Sin régimen registrado');
 
   return (
     <div className="space-y-4">
@@ -347,83 +339,27 @@ const ResumenSatPanel = ({ data, detalleFiscal, loading, abiertos, onToggleBloqu
         open={abiertos?.impuestos ?? true}
         onToggle={() => onToggleBloque('impuestos')}
       >
-        <ImpuestosSatCards impuestos={impuestos} obligaciones={obligaciones} totales={totales} />
+        <ImpuestosSatCards
+          impuestos={impuestos}
+          obligaciones={obligaciones}
+          totales={totales}
+          detalleFiscal={detalleFiscal}
+          declaraciones={declaraciones}
+          declaracionesRegistradas={declaracionesRegistradas}
+          periodo={data.periodo}
+          regimenClave={regimenClave}
+          regimenNombre={regimenNombre}
+          tipoPersona={data.empresa?.tipo_persona}
+        />
       </ExpandBlock>
 
       {detalleFiscal && (
-        <ExpandBlock
-          id="parseados"
-          title="Resultados parseados de CFDI"
-          subtitle={`${(detalleFiscal.iva?.cfdi_ingresos?.length || 0) + (detalleFiscal.iva?.cfdi_egresos?.length || 0)} CFDI del periodo · solo lectura`}
-          open={abiertos?.parseados ?? true}
+        <ResultadosParseados
+          data={detalleFiscal}
+          open={abiertos?.parseados ?? false}
           onToggle={() => onToggleBloque('parseados')}
-        >
-          <ResultadosParseados data={detalleFiscal} />
-        </ExpandBlock>
+        />
       )}
-
-      <ExpandBlock
-        id="resultados"
-        title="Declaraciones registradas"
-        subtitle="Importes guardados en el sistema, sin recálculo"
-        open={abiertos?.resultados ?? true}
-        onToggle={() => onToggleBloque('resultados')}
-      >
-        {declaracionesRegistradas.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">No hay importes declarados registrados para este periodo.</p>
-        ) : (
-          <div className="space-y-2">
-            {declaracionesRegistradas.map((d) => (
-              <div key={d.id} className="flex flex-col gap-2 rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">{d.tipo.toUpperCase()}</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Estado: {d.estado} · versión {d.version}</p>
-                </div>
-                <div className="text-left sm:text-right">
-                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">A cargo: {money(d.monto_a_cargo)}</p>
-                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">A favor: {money(d.monto_a_favor)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </ExpandBlock>
-
-      {/* 2. Declaraciones y periodicidad */}
-      <ExpandBlock
-        id="declaraciones"
-        title="Declaraciones y periodicidad"
-        subtitle="Obligaciones y periodicidad del régimen fiscal"
-        open={abiertos?.declaraciones ?? true}
-        onToggle={() => onToggleBloque('declaraciones')}
-      >
-        {declaraciones.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">No hay declaraciones registradas para este régimen.</p>
-        ) : (
-          <div className="space-y-2">
-            {declaraciones.map((d) => (
-              <div
-                key={`${d.tipo}-${d.periodicidad}`}
-                className="flex flex-col gap-2 rounded-xl border border-[color:var(--sc-border)] bg-[color:var(--sc-soft)] p-3.5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">{d.tipo}</p>
-                    <span className="inline-flex rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">
-                      {d.periodicidad}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{d.descripcion}</p>
-                  <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{d.base_legal}</p>
-                </div>
-                <div className="text-left sm:text-right shrink-0">
-                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{d.periodo_corresponde || '—'}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </ExpandBlock>
 
     </div>
   );
